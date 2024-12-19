@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "relec-django"
+version = "0.1.0"
+description = "Django site for the Religious Ecologies data transcription."
+authors = ["Jason Heppler <jason.heppler@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "relec_django"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+django = "^5.1.4"
+django-allauth = "^65.3.0"
+django-unfold = "^0.43.0"
+psycopg2 = "^2.9.10"
+django-environ = "^0.11.2"
+django-simple-history = "^3.7.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.10.0"
+djhtml = "^3.0.7"
+pre-commit = "^4.0.1"
+django-debug-toolbar = "^4.4.6"
+
+
+[tool.poetry.group.data.dependencies]
+pandas = "^2.2.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
