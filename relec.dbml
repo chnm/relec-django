@@ -1,0 +1,279 @@
+Project "None" {
+  database_type: 'PostgreSQL'
+  Note: '''None
+  Last Updated At 01-22-2025 09:44PM UTC'''
+}
+
+Table census.CensusSchedule {
+  Note: '''
+This model serves as the primary record that ties together all related data
+for a specific schedule.
+
+
+*DB table: census_censusschedule*'''
+
+  id big_auto [pk, unique, not null]
+  resource_id integer [unique, not null]
+  denomination_id foreign_key [not null]
+  schedule_title char [not null]
+  schedule_id char [not null]
+  location_id foreign_key [default:`None`, not null]
+  datascribe_omeka_item_id integer [note: '''This record is read-only and not editable.''', not null]
+  datascribe_item_id integer [note: '''This record is read-only and not editable.''', not null]
+  datascribe_record_id integer [note: '''This record is read-only and not editable.''', not null]
+  sunday_school_num_officers_teachers positive_integer [not null]
+  sunday_school_num_scholars positive_integer [not null]
+  vbs_num_officers_teachers positive_integer [null]
+  vbs_num_scholars positive_integer [null]
+  parochial_num_administrators positive_integer [null]
+  parochial_num_elementary_teachers positive_integer [null]
+  parochial_num_secondary_teachers positive_integer [null]
+  parochial_num_elementary_scholars positive_integer [null]
+  parochial_num_secondary_scholars positive_integer [null]
+  expenses decimal [not null]
+  benevolences decimal [not null]
+  total_expenditures decimal [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (datascribe_omeka_item_id) [name: 'census_cens_datascr_d4a606_idx', type: btree]
+    (schedule_id) [name: 'census_cens_schedul_9fec28_idx', type: btree]
+    (denomination_id) [name: 'census_censusschedule_denomination_id_d14de22e', type: btree]
+    (location_id) [name: 'census_censusschedule_location_id_564eb8d2', type: btree]
+    (id) [pk, unique, name: 'census_censusschedule_pkey', type: btree]
+    (resource_id) [unique, name: 'census_censusschedule_resource_id_key', type: btree]
+  }
+}
+ref: census.CensusSchedule.denomination_id > census.Denomination.id
+ref: census.CensusSchedule.location_id > location.Location.id
+
+
+Table census.Church {
+  Note: '''
+Church(id, census_record, name, census_code, division, location, address, urban_rural_code, num_edifices, edifice_value, edifice_debt, has_pastors_residence, residence_value, residence_debt, created_at, updated_at)
+
+*DB table: census_church*'''
+
+  id big_auto [pk, unique, not null]
+  census_record_id one_to_one [unique, not null]
+  name char [not null]
+  census_code char [not null]
+  division char [not null]
+  location_id foreign_key [not null]
+  address char [null]
+  urban_rural_code char [not null]
+  num_edifices positive_integer [default:`0`, null]
+  edifice_value decimal [null]
+  edifice_debt decimal [null]
+  has_pastors_residence boolean [default:`False`, not null]
+  residence_value decimal [null]
+  residence_debt decimal [null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (census_record_id) [unique, name: 'census_church_census_record_id_key', type: btree]
+    (location_id) [name: 'census_church_location_id_d8105d32', type: btree]
+    (id) [pk, unique, name: 'census_church_pkey', type: btree]
+  }
+}
+ref: census.Church.census_record_id - census.CensusSchedule.id
+ref: census.Church.location_id > location.Location.id
+
+
+Table census.Clergy {
+  Note: '''
+Clergy(id, census_schedule, name, is_assistant, college, theological_seminary, num_other_churches_served, created_at, updated_at)
+
+*DB table: census_clergy*'''
+
+  id big_auto [pk, unique, not null]
+  census_schedule_id foreign_key [default:`None`, not null]
+  name char [not null]
+  is_assistant boolean [default:`False`, not null]
+  college char [null]
+  theological_seminary char [null]
+  num_other_churches_served positive_integer [default:`0`, not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (census_schedule_id) [name: 'census_clergy_census_schedule_id_dce6ff9c', type: btree]
+    (id) [pk, unique, name: 'census_clergy_pkey', type: btree]
+  }
+}
+ref: census.Clergy.census_schedule_id > census.CensusSchedule.id
+
+
+Table census.Denomination {
+  Note: '''
+This model represents a religious denomination.
+
+
+*DB table: census_denomination*'''
+
+  id auto [pk, unique, not null]
+  denomination_id char [unique, not null]
+  name char [not null]
+  family_census char [not null]
+  family_arda char [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (denomination_id) [unique, name: 'census_denomination_denomination_id_key', type: btree]
+    (id) [pk, unique, name: 'census_denomination_pkey', type: btree]
+  }
+}
+
+
+Table census.Membership {
+  Note: '''
+Membership(id, census_record, church, male_members, female_members, members_under_13, members_13_and_older, created_at, updated_at)
+
+*DB table: census_membership*'''
+
+  id big_auto [pk, unique, not null]
+  census_record_id one_to_one [unique, not null]
+  church_id one_to_one [unique, not null]
+  male_members positive_integer [default:`0`, not null]
+  female_members positive_integer [default:`0`, not null]
+  members_under_13 positive_integer [default:`0`, not null]
+  members_13_and_older positive_integer [default:`0`, not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (census_record_id) [unique, name: 'census_membership_census_record_id_key', type: btree]
+    (church_id) [unique, name: 'census_membership_church_id_key', type: btree]
+    (id) [pk, unique, name: 'census_membership_pkey', type: btree]
+  }
+}
+ref: census.Membership.census_record_id - census.CensusSchedule.id
+ref: census.Membership.church_id - census.Church.id
+
+
+Table location.City {
+  Note: '''
+City(id, name, state, county, created_at, updated_at)
+
+*DB table: location_city*'''
+
+  id big_auto [pk, unique, not null]
+  name char [not null]
+  state_id foreign_key [not null]
+  county_id foreign_key [null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (county_id) [name: 'location_city_county_id_bc77c754', type: btree]
+    (name,state_id) [unique, name: 'location_city_name_state_id_563582a3_uniq', type: btree]
+    (id) [pk, unique, name: 'location_city_pkey', type: btree]
+    (state_id) [name: 'location_city_state_id_40b2daab', type: btree]
+  }
+}
+ref: location.City.state_id > location.State.id
+ref: location.City.county_id > location.County.id
+
+
+Table location.County {
+  Note: '''
+County(id, name, state, created_at, updated_at)
+
+*DB table: location_county*'''
+
+  id big_auto [pk, unique, not null]
+  name char [not null]
+  state_id foreign_key [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (name,state_id) [unique, name: 'location_county_name_state_id_770bf1d2_uniq', type: btree]
+    (id) [pk, unique, name: 'location_county_pkey', type: btree]
+    (state_id) [name: 'location_county_state_id_913e20e3', type: btree]
+  }
+}
+ref: location.County.state_id > location.State.id
+
+
+
+Table location.Location {
+  Note: '''
+This model represents a geographic location, pulling from the Foreign Keys
+as necessary.
+
+
+*DB table: location_location*'''
+
+  id auto [pk, unique, not null]
+  place_id integer [not null]
+  state_id foreign_key [not null]
+  city_id foreign_key [not null]
+  county_id foreign_key [not null]
+  map_name char [not null]
+  county_ahcb char [not null]
+  lat float [not null]
+  lon float [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (city_id) [name: 'location_location_city_id_06b4fa33', type: btree]
+    (county_id) [name: 'location_location_county_id_df93ce71', type: btree]
+    (id) [pk, unique, name: 'location_location_pkey', type: btree]
+    (state_id) [name: 'location_location_state_id_eabeb0ac', type: btree]
+  }
+}
+ref: location.Location.state_id > location.State.id
+ref: location.Location.city_id > location.City.id
+ref: location.Location.county_id > location.County.id
+
+
+Table location.State {
+  Note: '''
+State(id, name, abbreviation, created_at, updated_at)
+
+*DB table: location_state*'''
+
+  id big_auto [pk, unique, not null]
+  name char [not null]
+  abbreviation char [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (id) [pk, unique, name: 'location_state_pkey', type: btree]
+  }
+}
+
+
+Table location.UnlistedLocation {
+  Note: '''
+For handling historical or unofficial place names that don't match
+standard geographic designations
+
+
+*DB table: location_unlistedlocation*'''
+
+  id big_auto [pk, unique, not null]
+  name char [not null]
+  state_id foreign_key [not null]
+  county_id foreign_key [null]
+  notes text [not null]
+  created_at date_time [not null]
+  updated_at date_time [not null]
+
+  indexes {
+    (county_id) [name: 'location_unlistedlocation_county_id_fbb7ceb4', type: btree]
+    (name,state_id) [unique, name: 'location_unlistedlocation_name_state_id_4a857036_uniq', type: btree]
+    (id) [pk, unique, name: 'location_unlistedlocation_pkey', type: btree]
+    (state_id) [name: 'location_unlistedlocation_state_id_c1e2ff5a', type: btree]
+  }
+}
+ref: location.UnlistedLocation.state_id > location.State.id
+ref: location.UnlistedLocation.county_id > location.County.id
+
+

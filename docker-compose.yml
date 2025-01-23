@@ -1,0 +1,53 @@
+---
+name: religious_ecologies
+
+services:
+  app:
+    build: .
+    image: "rrchnm/religious_ecologies"
+    ports:
+      - 8000:8000
+    volumes:
+      - dj-data:/app
+     #- .:/app
+    environment:
+      - DEBUG=True
+      - DJANGO_SECRET_KEY=thisisnotasecretkey
+      - DJANGO_ALLOWED_HOSTS=localhost
+      - DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=religious_ecologies
+      - DB_USER=religious_ecologies
+      - DB_PASSWORD=password
+      - ALLAUTH_GITHUB_CLIENT_ID=PLACEHOLDER
+      - ALLAUTH_GITHUB_CLIENT_SECRET=PLACEHOLDER
+      - OBJ_STORAGE=True
+      - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
+      - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
+      - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
+      - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+    command: >
+        sh -c "poetry run python3 manage.py migrate &&
+               poetry run python3 manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=religious_ecologies
+      - POSTGRES_USER=religious_ecologies
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_HOST=db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U religious_ecologies"]
+      interval: 2s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  dj-data:
+  pg-data:
