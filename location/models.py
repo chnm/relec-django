@@ -3,7 +3,7 @@ from simple_history.models import HistoricalRecords
 
 
 class State(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=500)
     abbreviation = models.CharField(max_length=2)
 
     # Record keeping
@@ -19,7 +19,7 @@ class State(models.Model):
 
 
 class County(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=500)
     state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="counties")
 
     # Record keeping
@@ -33,11 +33,11 @@ class County(models.Model):
         unique_together = ["name", "state"]
 
     def __str__(self):
-        return f"{self.name}, {self.state.abbreviation}"
+        return f"{self.name} county"
 
 
 class City(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=500)
     state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="cities")
     county = models.ForeignKey(
         County,
@@ -58,7 +58,7 @@ class City(models.Model):
         unique_together = ["name", "state"]
 
     def __str__(self):
-        return f"{self.name}, {self.state.abbreviation}"
+        return f"{self.name}"
 
 
 class UnlistedLocation(models.Model):
@@ -67,7 +67,7 @@ class UnlistedLocation(models.Model):
     standard geographic designations
     """
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=500)
     state = models.ForeignKey(
         State, on_delete=models.PROTECT, related_name="unlisted_locations"
     )
@@ -104,8 +104,8 @@ class Location(models.Model):
     state = models.ForeignKey(State, on_delete=models.CASCADE)
     city = models.ForeignKey(City, on_delete=models.CASCADE)
     county = models.ForeignKey(County, on_delete=models.CASCADE)
-    map_name = models.CharField(max_length=255)
-    county_ahcb = models.CharField(max_length=255)
+    map_name = models.CharField(max_length=500)
+    county_ahcb = models.CharField(max_length=500)
     lat = models.FloatField()
     lon = models.FloatField()
 
@@ -115,4 +115,4 @@ class Location(models.Model):
     history = HistoricalRecords()
 
     def __str__(self):
-        return f"{self.map_name}, {self.county} county, {self.state}"
+        return f"{self.map_name}, {self.county}, {self.state}"
