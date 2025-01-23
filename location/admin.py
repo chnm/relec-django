@@ -1,8 +1,7 @@
 from django.contrib import admin
-
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
-from location.models import Location, City, County, State
+from location.models import City, County, Location, State
 
 
 @admin.register(Location)

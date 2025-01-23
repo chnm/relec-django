@@ -5,20 +5,32 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('census', '0003_censusschedule_location_and_more'),
+        ("census", "0003_censusschedule_location_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='clergy',
-            name='census_schedule',
-            field=models.ForeignKey(default=None, on_delete=django.db.models.deletion.CASCADE, related_name='clergy', to='census.censusschedule'),
+            model_name="clergy",
+            name="census_schedule",
+            field=models.ForeignKey(
+                default=None,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="clergy",
+                to="census.censusschedule",
+            ),
         ),
         migrations.AddField(
-            model_name='historicalclergy',
-            name='census_schedule',
-            field=models.ForeignKey(blank=True, db_constraint=False, default=None, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='census.censusschedule'),
+            model_name="historicalclergy",
+            name="census_schedule",
+            field=models.ForeignKey(
+                blank=True,
+                db_constraint=False,
+                default=None,
+                null=True,
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                related_name="+",
+                to="census.censusschedule",
+            ),
         ),
     ]

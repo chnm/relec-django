@@ -4,40 +4,39 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('location', '0001_initial'),
+        ("location", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='city',
-            name='name',
+            model_name="city",
+            name="name",
             field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
-            model_name='county',
-            name='name',
+            model_name="county",
+            name="name",
             field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
-            model_name='historicalcity',
-            name='name',
+            model_name="historicalcity",
+            name="name",
             field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
-            model_name='historicalcounty',
-            name='name',
+            model_name="historicalcounty",
+            name="name",
             field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
-            model_name='historicalstate',
-            name='name',
+            model_name="historicalstate",
+            name="name",
             field=models.CharField(max_length=255),
         ),
         migrations.AlterField(
-            model_name='state',
-            name='name',
+            model_name="state",
+            name="name",
             field=models.CharField(max_length=255),
         ),
     ]

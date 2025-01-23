@@ -1,17 +1,9 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin
-from django.db.models import Sum, Count
+from django.db.models import Count, Sum
 from django.utils.html import format_html
-
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
-from .models import (
-    Denomination,
-    CensusSchedule,
-    Church,
-    Membership,
-    Clergy,
-)
+from .models import CensusSchedule, Church, Clergy, Denomination, Membership
 
 
 class ClergyInline(TabularInline):

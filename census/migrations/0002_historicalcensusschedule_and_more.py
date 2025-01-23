@@ -7,83 +7,141 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('census', '0001_initial'),
+        ("census", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='HistoricalCensusSchedule',
+            name="HistoricalCensusSchedule",
             fields=[
-                ('id', models.BigIntegerField(auto_created=True, blank=True, db_index=True, verbose_name='ID')),
-                ('resource_id', models.IntegerField(db_index=True)),
-                ('schedule_title', models.CharField(max_length=255)),
-                ('schedule_id', models.CharField(max_length=50)),
-                ('datascribe_omeka_item_id', models.IntegerField(help_text='This record is read-only and not editable.', verbose_name='DataScribe Omeka Item ID')),
-                ('datascribe_item_id', models.IntegerField(help_text='This record is read-only and not editable.', verbose_name='DataScribe Item ID')),
-                ('datascribe_record_id', models.IntegerField(help_text='This record is read-only and not editable.', verbose_name='DataScribe Record ID')),
-                ('sunday_school_num_officers_teachers', models.PositiveIntegerField()),
-                ('sunday_school_num_scholars', models.PositiveIntegerField()),
-                ('vbs_num_officers_teachers', models.PositiveIntegerField(null=True)),
-                ('vbs_num_scholars', models.PositiveIntegerField(null=True)),
-                ('parochial_num_administrators', models.PositiveIntegerField(null=True)),
-                ('parochial_num_elementary_teachers', models.PositiveIntegerField(null=True)),
-                ('parochial_num_secondary_teachers', models.PositiveIntegerField(null=True)),
-                ('parochial_num_elementary_scholars', models.PositiveIntegerField(null=True)),
-                ('parochial_num_secondary_scholars', models.PositiveIntegerField(null=True)),
-                ('expenses', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('benevolences', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('total_expenditures', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('created_at', models.DateTimeField(blank=True, editable=False)),
-                ('updated_at', models.DateTimeField(blank=True, editable=False)),
-                ('history_id', models.AutoField(primary_key=True, serialize=False)),
-                ('history_date', models.DateTimeField(db_index=True)),
-                ('history_change_reason', models.CharField(max_length=100, null=True)),
-                ('history_type', models.CharField(choices=[('+', 'Created'), ('~', 'Changed'), ('-', 'Deleted')], max_length=1)),
+                (
+                    "id",
+                    models.BigIntegerField(
+                        auto_created=True, blank=True, db_index=True, verbose_name="ID"
+                    ),
+                ),
+                ("resource_id", models.IntegerField(db_index=True)),
+                ("schedule_title", models.CharField(max_length=255)),
+                ("schedule_id", models.CharField(max_length=50)),
+                (
+                    "datascribe_omeka_item_id",
+                    models.IntegerField(
+                        help_text="This record is read-only and not editable.",
+                        verbose_name="DataScribe Omeka Item ID",
+                    ),
+                ),
+                (
+                    "datascribe_item_id",
+                    models.IntegerField(
+                        help_text="This record is read-only and not editable.",
+                        verbose_name="DataScribe Item ID",
+                    ),
+                ),
+                (
+                    "datascribe_record_id",
+                    models.IntegerField(
+                        help_text="This record is read-only and not editable.",
+                        verbose_name="DataScribe Record ID",
+                    ),
+                ),
+                ("sunday_school_num_officers_teachers", models.PositiveIntegerField()),
+                ("sunday_school_num_scholars", models.PositiveIntegerField()),
+                ("vbs_num_officers_teachers", models.PositiveIntegerField(null=True)),
+                ("vbs_num_scholars", models.PositiveIntegerField(null=True)),
+                (
+                    "parochial_num_administrators",
+                    models.PositiveIntegerField(null=True),
+                ),
+                (
+                    "parochial_num_elementary_teachers",
+                    models.PositiveIntegerField(null=True),
+                ),
+                (
+                    "parochial_num_secondary_teachers",
+                    models.PositiveIntegerField(null=True),
+                ),
+                (
+                    "parochial_num_elementary_scholars",
+                    models.PositiveIntegerField(null=True),
+                ),
+                (
+                    "parochial_num_secondary_scholars",
+                    models.PositiveIntegerField(null=True),
+                ),
+                ("expenses", models.DecimalField(decimal_places=2, max_digits=12)),
+                ("benevolences", models.DecimalField(decimal_places=2, max_digits=12)),
+                (
+                    "total_expenditures",
+                    models.DecimalField(decimal_places=2, max_digits=12),
+                ),
+                ("created_at", models.DateTimeField(blank=True, editable=False)),
+                ("updated_at", models.DateTimeField(blank=True, editable=False)),
+                ("history_id", models.AutoField(primary_key=True, serialize=False)),
+                ("history_date", models.DateTimeField(db_index=True)),
+                ("history_change_reason", models.CharField(max_length=100, null=True)),
+                (
+                    "history_type",
+                    models.CharField(
+                        choices=[("+", "Created"), ("~", "Changed"), ("-", "Deleted")],
+                        max_length=1,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'historical census schedule',
-                'verbose_name_plural': 'historical census schedules',
-                'ordering': ('-history_date', '-history_id'),
-                'get_latest_by': ('history_date', 'history_id'),
+                "verbose_name": "historical census schedule",
+                "verbose_name_plural": "historical census schedules",
+                "ordering": ("-history_date", "-history_id"),
+                "get_latest_by": ("history_date", "history_id"),
             },
             bases=(simple_history.models.HistoricalChanges, models.Model),
         ),
         migrations.RenameModel(
-            old_name='ReligiousCensusRecord',
-            new_name='CensusSchedule',
+            old_name="ReligiousCensusRecord",
+            new_name="CensusSchedule",
         ),
         migrations.RemoveField(
-            model_name='historicalreligiouscensusrecord',
-            name='denomination',
+            model_name="historicalreligiouscensusrecord",
+            name="denomination",
         ),
         migrations.RemoveField(
-            model_name='historicalreligiouscensusrecord',
-            name='history_user',
+            model_name="historicalreligiouscensusrecord",
+            name="history_user",
         ),
         migrations.RenameIndex(
-            model_name='censusschedule',
-            new_name='census_cens_schedul_9fec28_idx',
-            old_name='census_reli_schedul_855e64_idx',
+            model_name="censusschedule",
+            new_name="census_cens_schedul_9fec28_idx",
+            old_name="census_reli_schedul_855e64_idx",
         ),
         migrations.RenameIndex(
-            model_name='censusschedule',
-            new_name='census_cens_datascr_d4a606_idx',
-            old_name='census_reli_datascr_9e11fd_idx',
+            model_name="censusschedule",
+            new_name="census_cens_datascr_d4a606_idx",
+            old_name="census_reli_datascr_9e11fd_idx",
         ),
         migrations.AddField(
-            model_name='historicalcensusschedule',
-            name='denomination',
-            field=models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='census.denomination'),
+            model_name="historicalcensusschedule",
+            name="denomination",
+            field=models.ForeignKey(
+                blank=True,
+                db_constraint=False,
+                null=True,
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                related_name="+",
+                to="census.denomination",
+            ),
         ),
         migrations.AddField(
-            model_name='historicalcensusschedule',
-            name='history_user',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL),
+            model_name="historicalcensusschedule",
+            name="history_user",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.DeleteModel(
-            name='HistoricalReligiousCensusRecord',
+            name="HistoricalReligiousCensusRecord",
         ),
     ]

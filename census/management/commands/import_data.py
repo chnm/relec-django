@@ -1,10 +1,12 @@
+import csv
+import os
+from datetime import datetime
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
+
 from census.models import Denomination
-from location.models import State, County, City, Location
-import csv
-from datetime import datetime
-import os
+from location.models import City, County, Location, State
 
 STATE_MAPPING = {
     # Full names to abbreviations

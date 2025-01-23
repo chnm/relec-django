@@ -4,70 +4,69 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('location', '0002_alter_city_name_alter_county_name_and_more'),
+        ("location", "0002_alter_city_name_alter_county_name_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='city',
-            name='name',
+            model_name="city",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='county',
-            name='name',
+            model_name="county",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicalcity',
-            name='name',
+            model_name="historicalcity",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicalcounty',
-            name='name',
+            model_name="historicalcounty",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicallocation',
-            name='county_ahcb',
+            model_name="historicallocation",
+            name="county_ahcb",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicallocation',
-            name='map_name',
+            model_name="historicallocation",
+            name="map_name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicalstate',
-            name='name',
+            model_name="historicalstate",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='historicalunlistedlocation',
-            name='name',
+            model_name="historicalunlistedlocation",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='location',
-            name='county_ahcb',
+            model_name="location",
+            name="county_ahcb",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='location',
-            name='map_name',
+            model_name="location",
+            name="map_name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='state',
-            name='name',
+            model_name="state",
+            name="name",
             field=models.CharField(max_length=500),
         ),
         migrations.AlterField(
-            model_name='unlistedlocation',
-            name='name',
+            model_name="unlistedlocation",
+            name="name",
             field=models.CharField(max_length=500),
         ),
     ]
