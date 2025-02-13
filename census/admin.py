@@ -1,9 +1,13 @@
+from django import forms
 from django.contrib import admin
-from django.db.models import Count, Sum
+from django.contrib.admin.widgets import ForeignKeyRawIdWidget
+from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
-from .models import CensusSchedule, Church, Clergy, Denomination, Membership
+from .models import CensusSchedule, Church, Clergy, Denomination, Location, Membership
 
 
 class ClergyInline(TabularInline):
@@ -32,8 +36,12 @@ class CensusScheduleAdmin(ModelAdmin):
         "total_sunday_school",
         "total_expenditures",
     ]
-    list_filter = ["denomination", "location"]
+    list_filter = [
+        "denomination"
+    ]  # Removed location from list_filter as it might be too heavy
     search_fields = ["schedule_title", "schedule_id", "resource_id"]
+    # raw_id_fields = ("location",)  # Add this line to use raw_id_fields
+    autocomplete_fields = ["location"]
 
     readonly_fields = [
         "datascribe_omeka_item_id",
@@ -112,8 +120,13 @@ class ChurchAdmin(ModelAdmin):
         "total_value",
         "has_pastors_residence",
     ]
-    list_filter = ["division", "urban_rural_code", "has_pastors_residence", "location"]
+    list_filter = [
+        "division",
+        "urban_rural_code",
+        "has_pastors_residence",
+    ]
     search_fields = ["name", "census_code", "address"]
+    autocomplete_fields = ["location"]
 
     fieldsets = [
         (

@@ -6,6 +6,10 @@ from django.urls import include, path
 
 from religious_ecologies.views import index
 
+admin.site.site_header = "Religious Ecologies"
+admin.site.site_title = "Religious Ecologies Data Admin"
+admin.site.index_title = "Religious Ecologies Data Admin"
+
 urlpatterns = [
     path("", index, name="index"),
     path("admin/", admin.site.urls),
