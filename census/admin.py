@@ -34,7 +34,6 @@ class CensusScheduleAdmin(ModelAdmin):
         "denomination",
         "location",
         "total_sunday_school",
-        "total_expenditures",
     ]
     list_filter = [
         "denomination"
@@ -98,7 +97,6 @@ class CensusScheduleAdmin(ModelAdmin):
                 ]
             },
         ),
-        ("Finances", {"fields": ["expenses", "benevolences", "total_expenditures"]}),
     ]
     inlines = [ClergyInline]
 
@@ -142,6 +140,7 @@ class ChurchAdmin(ModelAdmin):
             "Parsonage",
             {"fields": ["has_pastors_residence", "residence_value", "residence_debt"]},
         ),
+        ("Finances", {"fields": ["expenses", "benevolences", "total_expenditures"]}),
     ]
 
     def total_value(self, obj):

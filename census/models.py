@@ -50,26 +50,6 @@ class CensusSchedule(models.Model):
         help_text="This record is read-only and not editable.",
     )
 
-    # Sunday school
-    sunday_school_num_officers_teachers = models.PositiveIntegerField()
-    sunday_school_num_scholars = models.PositiveIntegerField()
-
-    # Vacation Bible school
-    vbs_num_officers_teachers = models.PositiveIntegerField(null=True)
-    vbs_num_scholars = models.PositiveIntegerField(null=True)
-
-    # Parochial school
-    parochial_num_administrators = models.PositiveIntegerField(null=True)
-    parochial_num_elementary_teachers = models.PositiveIntegerField(null=True)
-    parochial_num_secondary_teachers = models.PositiveIntegerField(null=True)
-    parochial_num_elementary_scholars = models.PositiveIntegerField(null=True)
-    parochial_num_secondary_scholars = models.PositiveIntegerField(null=True)
-
-    # Finances
-    expenses = models.DecimalField(max_digits=12, decimal_places=2)
-    benevolences = models.DecimalField(max_digits=12, decimal_places=2)
-    total_expenditures = models.DecimalField(max_digits=12, decimal_places=2)
-
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -114,6 +94,11 @@ class Church(models.Model):
     residence_value = models.DecimalField(max_digits=12, decimal_places=2, null=True)
     residence_debt = models.DecimalField(max_digits=12, decimal_places=2, null=True)
 
+    # Finances
+    expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    benevolences = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_expenditures = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -137,6 +122,25 @@ class Membership(models.Model):
     female_members = models.PositiveIntegerField(default=0)
     members_under_13 = models.PositiveIntegerField(default=0)
     members_13_and_older = models.PositiveIntegerField(default=0)
+
+    # Sunday school
+    sunday_school_num_officers_teachers = models.PositiveIntegerField(default=0)
+    sunday_school_num_scholars = models.PositiveIntegerField(default=0)
+
+    # Vacation Bible school
+    vbs_num_officers_teachers = models.PositiveIntegerField(null=True, default=0)
+    vbs_num_scholars = models.PositiveIntegerField(null=True, default=0)
+
+    # Parochial school
+    parochial_num_administrators = models.PositiveIntegerField(null=True, default=0)
+    parochial_num_elementary_teachers = models.PositiveIntegerField(
+        null=True, default=0
+    )
+    parochial_num_secondary_teachers = models.PositiveIntegerField(null=True, default=0)
+    parochial_num_elementary_scholars = models.PositiveIntegerField(
+        null=True, default=0
+    )
+    parochial_num_secondary_scholars = models.PositiveIntegerField(null=True, default=0)
 
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
