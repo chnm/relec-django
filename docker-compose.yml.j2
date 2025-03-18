@@ -43,6 +43,7 @@ services:
     {% endfor %}
     {% endif %}
     {% endif %}
+
     depends_on:
       db:
         condition: service_healthy
