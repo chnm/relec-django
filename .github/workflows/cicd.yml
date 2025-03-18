@@ -18,13 +18,13 @@ jobs:
 
       django-context-root: "."
 
-      #website-devl-fqdn: "PLACEHOLDER"
-      #website-prod-fqdn: "PLACEHOLDER"
+      website-devl-fqdn: "dev.database.religiousecologies.org"
+      website-prod-fqdn: "dev.database.religiousecologies.org"
 
   deploy:
     uses: chnm/.github/.github/workflows/django--deploy.yml@main
     needs: [build-publish]
     secrets: inherit
     with:
-      #website-devl-fqdn: "PLACEHOLDER"
-      #website-prod-fqdn: "PLACEHOLDER"
+      website-devl-fqdn: "dev.database.religiousecologies.org"
+      website-prod-fqdn: "dev.database.religiousecologies.org"
