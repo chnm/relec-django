@@ -123,7 +123,7 @@ class Command(BaseCommand):
     def _create_membership(self, row, census_schedule, religious_body):
         return Membership.objects.create(
             census_record=census_schedule,
-            church=religious_body,
+            religious_body=religious_body,
             male_members=int(
                 self._clean_value(row["(1) Number of Members - Male"]) or 0
             ),
