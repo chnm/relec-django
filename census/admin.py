@@ -1,18 +1,29 @@
-from django import forms
 from django.contrib import admin
-from django.contrib.admin.widgets import ForeignKeyRawIdWidget
-from django.db.models import Count, Q, Sum
-from django.http import JsonResponse
-from django.urls import path, reverse
 from django.utils.html import format_html
-from unfold.admin import ModelAdmin, StackedInline, TabularInline
+from unfold.admin import ModelAdmin, StackedInline
 
-from .models import CensusSchedule, Church, Clergy, Denomination, Location, Membership
+from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
 
 
-class ClergyInline(TabularInline):
+class ClergyInline(StackedInline):
     model = Clergy
     extra = 1
+    tab = True
+
+
+class MembershipInline(StackedInline):
+    model = Membership
+    extra = 1
+    tab = True
+
+
+class ReligiousBodyInline(StackedInline):
+    model = ReligiousBody
+    raw_id_fields = [
+        "location",
+    ]
+    extra = 1
+    tab = True
 
 
 @admin.register(Denomination)
@@ -29,23 +40,18 @@ class DenominationAdmin(ModelAdmin):
 @admin.register(CensusSchedule)
 class CensusScheduleAdmin(ModelAdmin):
     list_display = [
-        "resource_id",
         "schedule_title",
-        "denomination",
-        "location",
-        "total_sunday_school",
+        "schedule_id",
+        "resource_id",
     ]
-    list_filter = [
-        "denomination"
-    ]  # Removed location from list_filter as it might be too heavy
     search_fields = ["schedule_title", "schedule_id", "resource_id"]
-    # raw_id_fields = ("location",)  # Add this line to use raw_id_fields
-    autocomplete_fields = ["location"]
 
     readonly_fields = [
         "datascribe_omeka_item_id",
         "datascribe_item_id",
         "datascribe_record_id",
+        "datascribe_original_image_path",
+        "omeka_storage_id",
     ]
 
     fieldsets = [
@@ -54,10 +60,10 @@ class CensusScheduleAdmin(ModelAdmin):
             {
                 "fields": [
                     "resource_id",
-                    "denomination",
                     "schedule_title",
                     "schedule_id",
-                    "location",
+                    "box",
+                    "notes",
                 ]
             },
         ),
@@ -68,57 +74,27 @@ class CensusScheduleAdmin(ModelAdmin):
                     "datascribe_omeka_item_id",
                     "datascribe_item_id",
                     "datascribe_record_id",
+                    "datascribe_original_image_path",
+                    "omeka_storage_id",
                 ],
-                "classes": ["collapse"],
-            },
-        ),
-        (
-            "Sunday School",
-            {
-                "fields": [
-                    "sunday_school_num_officers_teachers",
-                    "sunday_school_num_scholars",
-                ]
-            },
-        ),
-        (
-            "Vacation Bible School",
-            {"fields": ["vbs_num_officers_teachers", "vbs_num_scholars"]},
-        ),
-        (
-            "Parochial School",
-            {
-                "fields": [
-                    "parochial_num_administrators",
-                    "parochial_num_elementary_teachers",
-                    "parochial_num_secondary_teachers",
-                    "parochial_num_elementary_scholars",
-                    "parochial_num_secondary_scholars",
-                ]
             },
         ),
     ]
-    inlines = [ClergyInline]
-
-    def total_sunday_school(self, obj):
-        return obj.sunday_school_num_officers_teachers + obj.sunday_school_num_scholars
-
-    total_sunday_school.short_description = "Total Sunday School"
+    inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
 
     history_list_display = ["changed_fields"]
 
 
-@admin.register(Church)
-class ChurchAdmin(ModelAdmin):
+@admin.register(ReligiousBody)
+class ReligiousBodyAdmin(ModelAdmin):
     list_display = [
         "name",
         "census_code",
+        "denomination",
         "location",
-        "num_edifices",
-        "total_value",
-        "has_pastors_residence",
     ]
     list_filter = [
+        "denomination",
         "division",
         "urban_rural_code",
         "has_pastors_residence",
@@ -128,8 +104,16 @@ class ChurchAdmin(ModelAdmin):
 
     fieldsets = [
         (
-            "Church Information",
-            {"fields": ["census_record", "name", "census_code", "division"]},
+            "Religious Body Information",
+            {
+                "fields": [
+                    "denomination",
+                    "census_record",
+                    "name",
+                    "census_code",
+                    "division",
+                ]
+            },
         ),
         ("Location", {"fields": ["location", "address", "urban_rural_code"]}),
         (
@@ -157,12 +141,39 @@ class ChurchAdmin(ModelAdmin):
 @admin.register(Membership)
 class MembershipAdmin(ModelAdmin):
     list_display = [
-        "church",
+        "religious_body",
         "total_members",
         "male_members",
         "female_members",
         "members_under_13",
         "members_13_and_older",
+    ]
+    fieldsets = [
+        (
+            "Sunday School",
+            {
+                "fields": [
+                    "sunday_school_num_officers_teachers",
+                    "sunday_school_num_scholars",
+                ]
+            },
+        ),
+        (
+            "Vacation Bible School",
+            {"fields": ["vbs_num_officers_teachers", "vbs_num_scholars"]},
+        ),
+        (
+            "Parochial School",
+            {
+                "fields": [
+                    "parochial_num_administrators",
+                    "parochial_num_elementary_teachers",
+                    "parochial_num_secondary_teachers",
+                    "parochial_num_elementary_scholars",
+                    "parochial_num_secondary_scholars",
+                ]
+            },
+        ),
     ]
 
     readonly_fields = ["total_members"]
