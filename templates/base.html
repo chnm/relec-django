@@ -1,0 +1,80 @@
+{% load static tailwind_tags %}
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>{% block title %}Religious Ecologies{% endblock %}</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        {% tailwind_css %}
+        {% block extra_css %}{% endblock %}
+    </head>
+
+    <body class="bg-gray-50 font-serif leading-normal tracking-normal min-h-screen flex flex-col">
+        <!-- Navigation -->
+        <nav class="bg-indigo-700 text-white shadow-md">
+            <div class="container mx-auto px-4 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <a href="{% url 'index' %}" class="text-xl font-bold">Religious Ecologies</a>
+                    </div>
+                    <div class="hidden md:flex space-x-6">
+                        <a href="{% url 'index' %}" class="hover:text-indigo-200 transition duration-150">Home</a>
+                        <a href="{% url 'denomination_map' %}" class="hover:text-indigo-200 transition duration-150">Map</a>
+                        <a href="/admin/" class="hover:text-indigo-200 transition duration-150">Admin</a>
+                        <a href="/census/api/" class="hover:text-indigo-200 transition duration-150">API</a>
+                    </div>
+                    <!-- Mobile menu button -->
+                    <div class="md:hidden">
+                        <button id="mobile-menu-button" class="text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden">
+                <div class="px-4 py-2 space-y-1 bg-indigo-600">
+                    <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Home</a>
+                    <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Map</a>
+                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">About</a>
+                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Contact</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="container mx-auto px-4 py-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-100 border-t border-gray-200">
+            <div class="container mx-auto px-4 py-6">
+                <div class="flex flex-col md:flex-row justify-between">
+                    <div class="mb-4 md:mb-0">
+                        <h3 class="text-lg font-semibold mb-2">Religious Ecologies</h3>
+                        <p class="text-gray-600">Exploring the religious landscape of America</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600 text-sm">&copy; {% now "Y" %} Religious Ecologies. All rights reserved.</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- JavaScript for mobile menu toggle -->
+        <script>
+            document.getElementById('mobile-menu-button').addEventListener('click', function() {
+                document.getElementById('mobile-menu').classList.toggle('hidden');
+            });
+        </script>
+
+        {% block extra_js %}{% endblock %}
+    </body>
+</html>
