@@ -13,6 +13,7 @@ admin.site.index_title = "Religious Ecologies Data Admin"
 urlpatterns = [
     path("", index, name="index"),
     path("admin/", admin.site.urls),
+    path("census/", include("census.urls")),
     # allauth
     path("accounts/", include("allauth.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

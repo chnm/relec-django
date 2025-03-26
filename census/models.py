@@ -152,6 +152,11 @@ class ReligiousBody(models.Model):
         verbose_name = "Religious Body"
         verbose_name_plural = "Religious Body"
 
+        indexes = [
+            models.Index(fields=["denomination"]),
+            models.Index(fields=["location"]),
+        ]
+
 
 class Membership(models.Model):
     census_record = models.ForeignKey(
