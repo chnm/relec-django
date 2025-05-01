@@ -13,30 +13,30 @@ python = "^3.12"
 python-dotenv = "^1.0.1"
 daphne = "^4.1.2"
 whitenoise = "^6.8.2"
-django = "^5.1.4"
-django-environ = "^0.11.2"
+django = "^5.1.8"
+django-environ = "^0.12.0"
 # allauth
-django-allauth = {version="^65.3.1", extras=["github"]}
+django-allauth = {version="^65.7.0", extras=["github"]}
 
-django-tailwind = "^3.8.0"
+django-tailwind = "^4.0.1"
 
 # postgres
 psycopg2 = "^2.9.10"
 
 # obj storage
-django-storages = "^1.14.4"
-boto3 = "^1.35.94"
-django-unfold = "^0.45.0"
+django-storages = "^1.14.6"
+boto3 = "^1.38.6"
+django-unfold = "^0.55.3"
 django-simple-history = "^3.7.0"
 requests = "^2.32.3"
 django-dbml = "^0.10.1"
-djangorestframework = "^3.15.2"
+djangorestframework = "^3.16.0"
 django-filter = "^25.1"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.10.0"
+black = "^25.1.0"
 djhtml = "^3.0.7"
 pre-commit = "^4.0.1"
-django-debug-toolbar = "^4.4.6"
-pytest-django = "^4.9.0"
+django-debug-toolbar = "^5.2.0"
+pytest-django = "^4.11.1"
 pylint-django = "^2.6.1"
