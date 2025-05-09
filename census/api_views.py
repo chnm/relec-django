@@ -128,13 +128,17 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     print(f"Error applying bounds filter: {e}")
 
             try:
-                # Try to annotate total_members, but handle possible errors
+                # Try to annotate total_members, preferring the recorded total if available
                 queryset = queryset.annotate(
                     total_members=Coalesce(
+                        # First try to use the recorded total
+                        "membership__total_members_by_sex",
+                        # Then try to calculate from male/female components
                         Sum(
                             Coalesce("membership__male_members", 0)
                             + Coalesce("membership__female_members", 0)
                         ),
+                        # Default to 0 if none of the above is available
                         Value(0),
                         output_field=IntegerField(),
                     )

@@ -17,7 +17,7 @@ migrate :
 # Must proceed in this order:
 # 1. locations
 # 2. denominations
-# 3. Omeka data
+# 3. Omeka/DataScribe data
 locations :
 	poetry run python manage.py import_data --locations="../data/popplaces_1926.csv"
 

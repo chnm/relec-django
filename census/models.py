@@ -4,6 +4,32 @@ from simple_history.models import HistoricalRecords
 from location.models import Location
 
 
+def to_numeric(value, default=0):
+    """
+    Attempts to convert a value to a number.
+    Returns default if the value is None.
+    For use in data processing and calculations.
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def is_boolean_true(value):
+    """
+    Checks if a value represents a boolean true.
+    Returns True if the value is "Yes" or True, False otherwise.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() == "yes"
+    return False
+
+
 class Denomination(models.Model):
     """
     This model represents a religious denomination.
@@ -82,7 +108,7 @@ class ReligiousBody(models.Model):
     denomination = models.ForeignKey(
         Denomination,
         on_delete=models.PROTECT,
-        help_text="Selec the denomination associated with this religious body.",
+        help_text="Select the denomination associated with this religious body.",
         null=True,
     )
     name = models.CharField(
@@ -102,41 +128,84 @@ class ReligiousBody(models.Model):
         on_delete=models.CASCADE,
         blank=True,
         null=True,
-        help_text="Use the magnifying class to the right to search for a location. Do not manually edit this number.",
+        help_text="Use the magnifying glass to the right to search for a location. Do not manually edit this number.",
     )
     urban_rural_code = models.CharField(
         blank=True, null=True, max_length=50, verbose_name="Urban/rural code"
     )
 
     # Church property details
-    num_edifices = models.PositiveIntegerField(
-        default=0, blank=True, null=True, verbose_name="Number of edifices"
+    num_edifices = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Number of edifices",
+        help_text="Leave blank if information is missing or illegible",
     )
     edifice_value = models.DecimalField(
-        max_digits=12, decimal_places=2, blank=True, null=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Value of church edifices",
+        help_text="Leave blank if information is missing or illegible",
     )
     edifice_debt = models.DecimalField(
-        max_digits=12, decimal_places=2, blank=True, null=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Debt on church edifices",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Parsonage details
-    has_pastors_residence = models.BooleanField(default=False)
+    has_pastors_residence = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name="Ownership of pastor's residence",
+        help_text="Leave blank if information is missing or illegible",
+    )
     residence_value = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Value of pastor's residence",
+        help_text="Leave blank if information is missing or illegible",
     )
     residence_debt = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Debt on pastor's residence",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Finances
     expenses = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0, null=True, blank=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Expenses",
+        help_text="Leave blank if information is missing or illegible",
     )
     benevolences = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0, blank=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Benevolences",
+        help_text="Leave blank if information is missing or illegible",
     )
     total_expenditures = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0, blank=True
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name="Total annual expenditures",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Record keeping
@@ -167,48 +236,115 @@ class Membership(models.Model):
     religious_body = models.ForeignKey(
         "ReligiousBody", on_delete=models.CASCADE, related_name="membership", null=True
     )
-    male_members = models.PositiveIntegerField(default=0, verbose_name="Male Members")
-    female_members = models.PositiveIntegerField(
-        default=0, verbose_name="Female Members", null=True
+    male_members = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Male Members",
+        help_text="Leave blank if information is missing or illegible",
     )
-    members_under_13 = models.PositiveIntegerField(
-        default=0, verbose_name="Members Under 13", null=True
+    female_members = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Female Members",
+        help_text="Leave blank if information is missing or illegible",
     )
-    members_13_and_older = models.PositiveIntegerField(
-        default=0, verbose_name="Members 13 and Older", null=True
+    total_members_by_sex = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Total Members by Sex",
+        help_text="Leave blank if information is missing or illegible",
+    )
+    members_under_13 = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Members Under 13",
+        help_text="Leave blank if information is missing or illegible",
+    )
+    members_13_and_older = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Members 13 and Older",
+        help_text="Leave blank if information is missing or illegible",
+    )
+    total_members_by_age = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Total Members by Age",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Sunday school
-    sunday_school_num_officers_teachers = models.PositiveIntegerField(
-        default=0, verbose_name="Number of Officers/Teachers", null=True
+    sunday_school_num_officers_teachers = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Sunday Schools - Number of Officers/Teachers",
+        help_text="Leave blank if information is missing or illegible",
     )
-    sunday_school_num_scholars = models.PositiveIntegerField(
-        default=0, verbose_name="Number of Scholars", null=True
+    sunday_school_num_scholars = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Sunday Schools - Number of Scholars",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Vacation Bible school
-    vbs_num_officers_teachers = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Officers/Teachers"
+    vbs_num_officers_teachers = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Vacation Bible Schools - Number of Officers/Teachers",
+        help_text="Leave blank if information is missing or illegible",
     )
-    vbs_num_scholars = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Scholars"
+    vbs_num_scholars = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Vacation Bible Schools - Number of Scholars",
+        help_text="Leave blank if information is missing or illegible",
+    )
+
+    # Weekday religious school fields
+    weekday_num_officers_teachers = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Week-day Religious Schools - Number of Officers/Teachers",
+        help_text="Leave blank if information is missing or illegible",
+    )
+    weekday_num_scholars = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Week-day Religious Schools - Number of Scholars",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     # Parochial school
-    parochial_num_administrators = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Administrators"
+    parochial_num_administrators = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Parochial Schools - Number of Administrators",
+        help_text="Leave blank if information is missing or illegible",
     )
-    parochial_num_elementary_teachers = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Elementary Teachers"
+    parochial_num_elementary_teachers = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Parochial Schools - Number of Elementary Teachers",
+        help_text="Leave blank if information is missing or illegible",
     )
-    parochial_num_secondary_teachers = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Secondary Teachers"
+    parochial_num_secondary_teachers = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Parochial Schools - Number of Secondary Teachers",
+        help_text="Leave blank if information is missing or illegible",
     )
-    parochial_num_elementary_scholars = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Elementary Scholars"
+    parochial_num_elementary_scholars = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Parochial Schools - Number of Elementary Scholars",
+        help_text="Leave blank if information is missing or illegible",
     )
-    parochial_num_secondary_scholars = models.PositiveIntegerField(
-        null=True, default=0, verbose_name="Number of Secondary Scholars"
+    parochial_num_secondary_scholars = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Parochial Schools - Number of Secondary Scholars",
+        help_text="Leave blank if information is missing or illegible",
     )
 
     def __str__(self):
@@ -231,11 +367,35 @@ class Clergy(models.Model):
         related_name="clergy",
         default=None,
     )
-    name = models.CharField(max_length=255)
+    name = models.CharField(
+        max_length=255,
+        help_text="The name of the clergy person. Leave blank if information is missing or illegible.",
+    )
     is_assistant = models.BooleanField(default=False)
-    college = models.CharField(max_length=255, blank=True, null=True)
-    theological_seminary = models.CharField(max_length=255, blank=True, null=True)
-    num_other_churches_served = models.PositiveIntegerField(default=0, null=True)
+    college = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="The college attended by the clergy person. Leave blank if information is missing or illegible.",
+    )
+    theological_seminary = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="The theological seminary attended by the clergy person. Leave blank if information is missing or illegible.",
+    )
+    num_other_churches_served = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Number of other churches served",
+        help_text="Leave blank if information is missing or illegible",
+    )
+    serving_congregation = models.BooleanField(
+        blank=True,
+        null=True,
+        verbose_name="Pastor serving congregation",
+        help_text="Whether the pastor is serving the congregation. Leave blank if information is missing or illegible.",
+    )
 
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)

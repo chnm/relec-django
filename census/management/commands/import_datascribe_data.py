@@ -1,4 +1,6 @@
 import csv
+import os
+from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -16,7 +18,7 @@ from location.models import Location
 
 
 class Command(BaseCommand):
-    help = "Import census data from CSV file"
+    help = "Import DataScribe census data from CSV file"
 
     def add_arguments(self, parser):
         parser.add_argument("csv_file", type=str, help="Path to the CSV file")
@@ -24,136 +26,131 @@ class Command(BaseCommand):
             "--limit", type=int, help="Limit the number of records to import", default=0
         )
         parser.add_argument(
-            "--overwrite",
+            "--reset",
             action="store_true",
-            help="Overwrite existing records",
+            help="Delete existing records before import",
             default=False,
         )
 
+    def setup_error_log(self):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+        return open(f"{log_dir}/datascribe_import_errors_{timestamp}.log", "w")
+
     def handle(self, *args, **options):
+        self.error_log = self.setup_error_log()
         count = 0
         limit = options["limit"]
-        overwrite = options["overwrite"]
+        reset = options["reset"]
 
-        with open(options["csv_file"], "r") as file:
-            reader = csv.DictReader(file)
+        try:
+            # Reset the database if requested
+            if reset:
+                self.stdout.write("Deleting existing records...")
+                Clergy.objects.all().delete()
+                Membership.objects.all().delete()
+                ReligiousBody.objects.all().delete()
+                CensusSchedule.objects.all().delete()
+                self.stdout.write("Database reset complete.")
 
-            for row in reader:
-                try:
-                    with transaction.atomic():
-                        self.stdout.write(f"\nProcessing row {row['resource_id']}")
+            with open(options["csv_file"], "r") as file:
+                reader = csv.DictReader(file)
 
-                        # Check if record already exists and skip if not overwriting
-                        if (
-                            not overwrite
-                            and CensusSchedule.objects.filter(
-                                resource_id=int(row["resource_id"])
-                            ).exists()
-                        ):
+                total_rows = (
+                    sum(1 for _ in open(options["csv_file"], "r")) - 1
+                )  # Subtract header
+                self.stdout.write(f"Found {total_rows} rows in the CSV file.")
+
+                for row in reader:
+                    try:
+                        with transaction.atomic():
+                            resource_id = row["resource_id"]
                             self.stdout.write(
-                                f"Skipping existing record {row['resource_id']}"
-                            )
-                            continue
-
-                        # Create or update CensusSchedule
-                        census_schedule = self._create_census_schedule(row)
-
-                        # Create or update Clergy if present
-                        if (
-                            self._has_value(row.get("(25b) Name of Pastor"))
-                            or row.get("(25b) Name of Pastor") == ILLEGIBLE
-                        ):
-                            self._create_clergy(
-                                row, census_schedule, is_assistant=False
+                                f"\nProcessing row {resource_id} ({count + 1}/{total_rows})"
                             )
 
-                        # Create or update Assistant Clergy if present
-                        assistant_pastors = row.get(
-                            "(26) Number of Assistant Pastors", "0"
-                        )
-                        if (
-                            assistant_pastors != "0"
-                            and assistant_pastors != MISSING
-                            and assistant_pastors != ""
-                        ):
-                            self._create_clergy(row, census_schedule, is_assistant=True)
+                            # Create CensusSchedule
+                            census_schedule = self._create_census_schedule(row)
 
-                        count += 1
-                        self.stdout.write(
-                            self.style.SUCCESS(
-                                f"Successfully processed row {row['resource_id']}"
+                            # Create Clergy if present
+                            if (
+                                row.get("(25b) Name of Pastor")
+                                and row.get("(25b) Name of Pastor") != ""
+                            ):
+                                self._create_clergy(
+                                    row, census_schedule, is_assistant=False
+                                )
+
+                            # Create Assistant Clergy if present
+                            assistant_pastors = row.get(
+                                "(26) Number of Assistant Pastors", "0"
                             )
-                        )
+                            if (
+                                assistant_pastors != "0"
+                                and assistant_pastors != MISSING
+                                and assistant_pastors != ""
+                            ):
+                                self._create_clergy(
+                                    row, census_schedule, is_assistant=True
+                                )
 
-                except Exception as e:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            f"Error processing row {row['resource_id']}: {str(e)}"
-                        )
-                    )
-                    continue
+                            count += 1
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"Successfully processed row {resource_id}"
+                                )
+                            )
 
-                if limit > 0 and count >= limit:
-                    self.stdout.write(
-                        self.style.SUCCESS(f"Reached import limit of {limit} records.")
-                    )
-                    break
+                            if limit > 0 and count >= limit:
+                                self.stdout.write(
+                                    self.style.SUCCESS(
+                                        f"Reached import limit of {limit} records."
+                                    )
+                                )
+                                break
+
+                    except Exception as e:
+                        self.log_error(
+                            f"Error processing row {row.get('resource_id', 'unknown')}: {str(e)}"
+                        )
+                        continue
 
             self.stdout.write(
                 self.style.SUCCESS(f"Import completed. Processed {count} records.")
             )
 
-    def _has_value(self, value):
-        """Check if a value is present and neither MISSING nor ILLEGIBLE"""
-        if not value or value.strip() == "" or value.upper() == "NULL":
-            return False
-        if value == MISSING:
-            return False
-        return True
+        finally:
+            self.error_log.close()
 
-    def _clean_value(self, value):
-        """Clean a value from the CSV, handling NULL values"""
-        if not value or value.strip() == "" or value.upper() == "NULL":
-            return None
-        return value.strip()
+    def log_error(self, message):
+        self.error_log.write(f"{datetime.now()}: {message}\n")
+        self.stdout.write(self.style.WARNING(message))
 
     def _create_census_schedule(self, row):
         # Get or create the schedule
-        try:
-            schedule = CensusSchedule.objects.get(resource_id=int(row["resource_id"]))
-            self.stdout.write(
-                f"Census schedule {row['resource_id']} already exists, updating..."
-            )
-
-            # Update existing schedule
-            schedule.schedule_title = row["schedule_title"]
-            schedule.schedule_id = row["schedule_id"]
-            schedule.datascribe_omeka_item_id = int(row["datascribe_omeka_item_id"])
-            schedule.datascribe_item_id = int(row["datascribe_item_id"])
-            schedule.datascribe_record_id = int(row["datascribe_record_id"])
-            if "datascribe_original_image_path" in row:
-                schedule.datascribe_original_image_path = row[
-                    "datascribe_original_image_path"
-                ]
-            if "omeka_storage_id" in row:
-                schedule.omeka_storage_id = row["omeka_storage_id"]
-            schedule.save()
-            return schedule
-
-        except CensusSchedule.DoesNotExist:
-            # Create new schedule
-            return CensusSchedule.objects.create(
-                resource_id=int(row["resource_id"]),
-                schedule_title=row["schedule_title"],
-                schedule_id=row["schedule_id"],
-                datascribe_omeka_item_id=int(row["datascribe_omeka_item_id"]),
-                datascribe_item_id=int(row["datascribe_item_id"]),
-                datascribe_record_id=int(row["datascribe_record_id"]),
-                datascribe_original_image_path=row.get(
+        resource_id = int(row["resource_id"])
+        census_schedule, created = CensusSchedule.objects.update_or_create(
+            resource_id=resource_id,
+            defaults={
+                "schedule_title": row["schedule_title"],
+                "schedule_id": row["schedule_id"],
+                "datascribe_omeka_item_id": int(row["datascribe_omeka_item_id"]),
+                "datascribe_item_id": int(row["datascribe_item_id"]),
+                "datascribe_record_id": int(row["datascribe_record_id"]),
+                "datascribe_original_image_path": row.get(
                     "datascribe_original_image_path", ""
                 ),
-                omeka_storage_id=row.get("omeka_storage_id", ""),
-            )
+                "omeka_storage_id": row.get("omeka_storage_id", ""),
+            },
+        )
+
+        if created:
+            self.stdout.write(f"Created new census schedule {resource_id}")
+        else:
+            self.stdout.write(f"Updated existing census schedule {resource_id}")
+
+        return census_schedule
 
     def _create_religious_body(self, row, census_schedule):
         # Try to find existing religious body for this census schedule
@@ -164,6 +161,9 @@ class Command(BaseCommand):
             )
         except ReligiousBody.DoesNotExist:
             religious_body = ReligiousBody(census_record=census_schedule)
+            self.stdout.write(
+                f"Creating new religious body for census schedule {census_schedule.resource_id}"
+            )
 
         # Find denomination by denomination_id if available
         if row.get("denomination_id"):
@@ -180,9 +180,13 @@ class Command(BaseCommand):
                 )
 
         # Find location by place_id if it exists
-        if self._clean_value(row.get("(d, e, f) Location")) and row.get(
-            "(d, e, f) Location"
-        ) not in [MISSING, ILLEGIBLE]:
+        if row.get("(d, e, f) Location") and row.get("(d, e, f) Location") not in [
+            MISSING,
+            ILLEGIBLE,
+            "",
+            "NULL",
+            None,
+        ]:
             try:
                 location = Location.objects.get(place_id=row["(d, e, f) Location"])
                 religious_body.location = location
@@ -194,11 +198,11 @@ class Command(BaseCommand):
                 )
 
         # Map data from row to model fields
-        religious_body.name = self._clean_value(row.get("(c) Local Church Name"))
+        religious_body.name = row.get("(c) Local Church Name", "")
         religious_body.census_code = row.get("Census Code", "")
         religious_body.division = row.get("(b) Division", "")
-        religious_body.address = self._clean_value(row.get("Address"))
-        religious_body.urban_rural_code = self._clean_value(row.get("Urban/Rural Code"))
+        religious_body.address = row.get("Address", "")
+        religious_body.urban_rural_code = row.get("Urban/Rural Code", "")
 
         # Handle special values for fields
         religious_body.num_edifices = row.get("(7) Number of Church Edifices", "")
@@ -230,6 +234,9 @@ class Command(BaseCommand):
         except Membership.DoesNotExist:
             membership = Membership(
                 census_record=census_schedule, religious_body=religious_body
+            )
+            self.stdout.write(
+                f"Creating new membership for census schedule {census_schedule.resource_id}"
             )
 
         # Map data from row to model fields
@@ -292,32 +299,27 @@ class Command(BaseCommand):
 
     def _create_clergy(self, row, census_schedule, is_assistant=False):
         if is_assistant:
-            name = self._clean_value(row.get("Name of Assistant Pastor"))
-            college = self._clean_value(
-                row.get("(30) Name of College - Assistant Pastor")
-            )
-            seminary = self._clean_value(
-                row.get("(31) Name of Theological Seminary - Assistant Pastor")
+            name = row.get("Name of Assistant Pastor", "")
+            college = row.get("(30) Name of College - Assistant Pastor", "")
+            seminary = row.get(
+                "(31) Name of Theological Seminary - Assistant Pastor", ""
             )
             num_churches = None
             serving_congregation = None
         else:
-            name = self._clean_value(row.get("(25b) Name of Pastor"))
-            college = self._clean_value(row.get("(28) Name of College - Pastor"))
-            seminary = self._clean_value(
-                row.get("(29) Name of Theological Seminary - Pastor")
-            )
+            name = row.get("(25b) Name of Pastor", "")
+            college = row.get("(28) Name of College - Pastor", "")
+            seminary = row.get("(29) Name of Theological Seminary - Pastor", "")
             num_churches = row.get(
                 "(27) Number of Other Churches Served by Pastors", ""
             )
             serving_congregation = row.get("(25a) Pastor Serving Congregation", "")
 
-        # If name is ILLEGIBLE, we still want to create the record
+        # Skip empty names (unless ILLEGIBLE)
         if not name and name != ILLEGIBLE:
             return None
 
         # Look for existing clergy for this census schedule and assistant status
-        clergy = None
         try:
             # Filter by census schedule and assistant status
             existing_clergy = Clergy.objects.filter(
@@ -336,6 +338,9 @@ class Command(BaseCommand):
                     census_schedule=census_schedule,
                     name=name or ILLEGIBLE,
                     is_assistant=is_assistant,
+                )
+                self.stdout.write(
+                    f"Creating new clergy for census schedule {census_schedule.resource_id}"
                 )
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"Error retrieving clergy: {str(e)}"))

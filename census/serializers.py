@@ -86,10 +86,21 @@ class MembershipSerializer(serializers.ModelSerializer):
         fields = [
             "male_members",
             "female_members",
+            "total_members_by_sex",
             "members_under_13",
             "members_13_and_older",
+            "total_members_by_age",
             "sunday_school_num_officers_teachers",
             "sunday_school_num_scholars",
+            "vbs_num_officers_teachers",
+            "vbs_num_scholars",
+            "weekday_num_officers_teachers",
+            "weekday_num_scholars",
+            "parochial_num_administrators",
+            "parochial_num_elementary_teachers",
+            "parochial_num_secondary_teachers",
+            "parochial_num_elementary_scholars",
+            "parochial_num_secondary_scholars",
         ]
 
 
@@ -110,11 +121,18 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "location_details",
             "denomination_details",
             "address",
+            "urban_rural_code",
             "membership_details",
             "total_members",
             "num_edifices",
             "edifice_value",
+            "edifice_debt",
+            "has_pastors_residence",
+            "residence_value",
+            "residence_debt",
             "expenses",
+            "benevolences",
+            "total_expenditures",
             "pastors",
         ]
 
@@ -122,10 +140,27 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         try:
             membership = Membership.objects.filter(religious_body=obj).first()
             if membership:
+                # Handle NULL values properly
+                male = membership.male_members or 0
+                female = membership.female_members or 0
+
+                # Use recorded total if available, otherwise calculate
+                if membership.total_members_by_sex is not None:
+                    total = membership.total_members_by_sex
+                else:
+                    total = male + female
+
                 return {
-                    "male_members": membership.male_members,
-                    "female_members": membership.female_members,
-                    "total": membership.male_members + membership.female_members,
+                    "male_members": male,
+                    "female_members": female,
+                    "total": total,
+                    "members_under_13": membership.members_under_13 or 0,
+                    "members_13_and_older": membership.members_13_and_older or 0,
+                    "total_by_age": membership.total_members_by_age
+                    or (
+                        (membership.members_under_13 or 0)
+                        + (membership.members_13_and_older or 0)
+                    ),
                 }
         except Exception as e:
             import logging
@@ -139,7 +174,14 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         try:
             membership = Membership.objects.filter(religious_body=obj).first()
             if membership:
-                return membership.male_members + membership.female_members
+                # Use recorded total if available
+                if membership.total_members_by_sex is not None:
+                    return membership.total_members_by_sex
+
+                # Otherwise calculate from male/female counts
+                male = membership.male_members or 0
+                female = membership.female_members or 0
+                return male + female
         except Exception as e:
             import logging
 
@@ -151,10 +193,19 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     def get_pastors(self, obj):
         try:
             clergy = obj.census_record.clergy.filter(is_assistant=False).first()
-            return clergy.name if clergy else ""
+            if clergy:
+                return {
+                    "name": clergy.name,
+                    "is_assistant": clergy.is_assistant,
+                    "college": clergy.college,
+                    "theological_seminary": clergy.theological_seminary,
+                    "num_other_churches_served": clergy.num_other_churches_served,
+                    "serving_congregation": clergy.serving_congregation,
+                }
+            return None
         except Exception as e:
             import logging
 
             logger = logging.getLogger(__name__)
             logger.error(f"Error getting pastor for {obj}: {e}")
-            return ""
+            return None

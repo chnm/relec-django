@@ -102,12 +102,13 @@ class ReligiousBodyAdmin(ModelAdmin):
         "census_code",
         "denomination",
         "location",
+        "has_residence_display",
+        "total_value",
     ]
     list_filter = [
         "denomination",
         "division",
         "urban_rural_code",
-        "has_pastors_residence",
     ]
     search_fields = ["name", "census_code", "address"]
     autocomplete_fields = ["location"]
@@ -138,12 +139,21 @@ class ReligiousBodyAdmin(ModelAdmin):
     ]
 
     def total_value(self, obj):
-        edifice = obj.edifice_value or 0
-        residence = obj.residence_value or 0
-        total = edifice + residence
-        return format_html("${:,.2f}", total)
+        try:
+            edifice = float(obj.edifice_value or 0)
+            residence = float(obj.residence_value or 0)
+            total = edifice + residence
+            return format_html("${:,.2f}", total)
+        except (ValueError, TypeError):
+            return "Cannot calculate"
 
     total_value.short_description = "Total Property Value"
+
+    def has_residence_display(self, obj):
+        return obj.has_pastors_residence
+
+    has_residence_display.short_description = "Has Pastor's Residence"
+    has_residence_display.boolean = True
 
     history_list_display = ["changed_fields"]
 
@@ -152,13 +162,26 @@ class ReligiousBodyAdmin(ModelAdmin):
 class MembershipAdmin(ModelAdmin):
     list_display = [
         "religious_body",
-        "total_members",
+        "total_members_display",
         "male_members",
         "female_members",
         "members_under_13",
         "members_13_and_older",
     ]
     fieldsets = [
+        (
+            "Membership Counts",
+            {
+                "fields": [
+                    "male_members",
+                    "female_members",
+                    "total_members_by_sex",
+                    "members_under_13",
+                    "members_13_and_older",
+                    "total_members_by_age",
+                ]
+            },
+        ),
         (
             "Sunday School",
             {
@@ -171,6 +194,10 @@ class MembershipAdmin(ModelAdmin):
         (
             "Vacation Bible School",
             {"fields": ["vbs_num_officers_teachers", "vbs_num_scholars"]},
+        ),
+        (
+            "Weekday Religious School",
+            {"fields": ["weekday_num_officers_teachers", "weekday_num_scholars"]},
         ),
         (
             "Parochial School",
@@ -186,12 +213,20 @@ class MembershipAdmin(ModelAdmin):
         ),
     ]
 
-    readonly_fields = ["total_members"]
+    readonly_fields = ["total_members_display"]
 
-    def total_members(self, obj):
-        return obj.male_members + obj.female_members
+    def total_members_display(self, obj):
+        if obj.total_members_by_sex is not None:
+            return obj.total_members_by_sex
 
-    total_members.short_description = "Total Members"
+        try:
+            male = int(obj.male_members or 0)
+            female = int(obj.female_members or 0)
+            return male + female if male + female else "-"
+        except (ValueError, TypeError):
+            return "-"
+
+    total_members_display.short_description = "Total Members"
 
     history_list_display = ["changed_fields"]
 
@@ -201,6 +236,7 @@ class ClergyAdmin(ModelAdmin):
     list_display = [
         "name",
         "is_assistant",
+        "serving_congregation_display",
         "college",
         "theological_seminary",
         "num_other_churches_served",
@@ -209,9 +245,18 @@ class ClergyAdmin(ModelAdmin):
     search_fields = ["name", "college", "theological_seminary"]
 
     fieldsets = [
-        ("Basic Information", {"fields": ["name", "is_assistant"]}),
+        (
+            "Basic Information",
+            {"fields": ["name", "is_assistant", "serving_congregation"]},
+        ),
         ("Education", {"fields": ["college", "theological_seminary"]}),
         ("Service Details", {"fields": ["num_other_churches_served"]}),
     ]
+
+    def serving_congregation_display(self, obj):
+        return obj.serving_congregation
+
+    serving_congregation_display.short_description = "Serving Congregation"
+    serving_congregation_display.boolean = True
 
     history_list_display = ["changed_fields"]
