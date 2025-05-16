@@ -36,10 +36,11 @@ class Denomination(models.Model):
     """
 
     id = models.AutoField(primary_key=True)
-    denomination_id = models.CharField(max_length=50, unique=True)
+    denomination_id = models.CharField(max_length=50, unique=True, null=True)
     name = models.CharField(max_length=255)
-    family_census = models.CharField(max_length=255)
-    family_arda = models.CharField(max_length=255)
+    short_name = models.CharField(max_length=255, null=True)
+    family_census = models.CharField(null=True, max_length=255)
+    family_relec = models.CharField(null=True, max_length=255)
 
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
