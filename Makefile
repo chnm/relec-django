@@ -19,10 +19,10 @@ migrate :
 # 2. denominations
 # 3. Omeka/DataScribe data
 locations :
-	poetry run python manage.py import_data --locations="../data/popplaces_1926.csv"
+	poetry run python manage.py sync_locations
 
 denominations :
-	poetry run python manage.py import_data --denominations="../data/denominations.csv"
+	poetry run python manage.py sync_denominations
 
 omeka :
 	echo "Not set up yet!"
