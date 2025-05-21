@@ -77,7 +77,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class DenominationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Denomination
-        fields = ["id", "denomination_id", "name", "family_census", "family_arda"]
+        fields = ["id", "denomination_id", "name", "family_census", "family_relec"]
 
 
 class MembershipSerializer(serializers.ModelSerializer):

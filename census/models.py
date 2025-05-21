@@ -119,8 +119,8 @@ class ReligiousBody(models.Model):
         blank=True,
         null=True,
     )
-    census_code = models.CharField(max_length=50)
-    division = models.CharField(max_length=100)
+    census_code = models.CharField(null=True, blank=True, max_length=50)
+    division = models.CharField(null=True, blank=True, max_length=100)
 
     # Location fields
     address = models.CharField(max_length=255, null=True, blank=True)
@@ -164,7 +164,7 @@ class ReligiousBody(models.Model):
         null=True,
         blank=True,
         verbose_name="Ownership of pastor's residence",
-        help_text="Leave blank if information is missing or illegible",
+        help_text="Set to Unknown if missing, illegible, or unknown.",
     )
     residence_value = models.DecimalField(
         max_digits=12,
