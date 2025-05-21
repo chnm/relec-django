@@ -10,7 +10,9 @@ class Command(BaseCommand):
     help = "Update CensusSchedule records with additional metadata"
 
     def add_arguments(self, parser):
-        parser.add_argument("csv_file", type=str, help="Path to the schedule CSV file")
+        parser.add_argument(
+            "--csv_file", type=str, help="Path to the schedule CSV file"
+        )
 
     def handle(self, *args, **options):
         with open(options["csv_file"], "r") as file:

@@ -1,13 +1,12 @@
 import csv
 import os
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from census.models import (
-    ILLEGIBLE,
-    MISSING,
     CensusSchedule,
     Clergy,
     Denomination,
@@ -16,12 +15,66 @@ from census.models import (
 )
 from location.models import Location
 
+# Constants for special values in the data
+MISSING = "MISSING"
+ILLEGIBLE = "ILLEGIBLE"
+NULL = "NULL"
+
+
+def clean_value(value, convert_to_numeric=False):
+    """
+    Clean a value from the input data
+
+    Args:
+        value (str): The value to clean
+        convert_to_numeric (bool, optional): Whether to attempt numeric conversion. Defaults to False.
+
+    Returns:
+        int, Decimal, str, or None: The cleaned value or None if it's a special value
+    """
+    if value in [MISSING, ILLEGIBLE, NULL, "", None]:
+        return None
+
+    # If we don't need numeric conversion, just return the string
+    if not convert_to_numeric:
+        return value
+
+    # If requested, try to convert to numeric
+    # First try integer
+    try:
+        if str(value).isdigit() or (
+            str(value).startswith("-") and str(value)[1:].isdigit()
+        ):
+            return int(value)
+    except (ValueError, TypeError):
+        pass
+
+    # Then try decimal
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        # If all conversion attempts fail, return string value
+        return value
+
+
+def clean_numeric_value(value):
+    """
+    Convert string value to appropriate numeric type or None
+
+    Args:
+        value (str): The value to convert
+
+    Returns:
+        int, Decimal, or None: The converted value or None if it's a special value
+    """
+    return clean_value(value, convert_to_numeric=True)
+
 
 class Command(BaseCommand):
     help = "Import DataScribe census data from CSV file"
 
     def add_arguments(self, parser):
-        parser.add_argument("csv_file", type=str, help="Path to the CSV file")
+        parser.add_argument("--csv_file", type=str, help="Path to the CSV file")
         parser.add_argument(
             "--limit", type=int, help="Limit the number of records to import", default=0
         )
@@ -77,9 +130,11 @@ class Command(BaseCommand):
                             if (
                                 row.get("(25b) Name of Pastor")
                                 and row.get("(25b) Name of Pastor") != ""
+                                and row.get("(25b) Name of Pastor") != NULL
                             ):
                                 self._create_clergy(
-                                    row, census_schedule, is_assistant=False
+                                    row,
+                                    census_schedule,
                                 )
 
                             # Create Assistant Clergy if present
@@ -89,10 +144,15 @@ class Command(BaseCommand):
                             if (
                                 assistant_pastors != "0"
                                 and assistant_pastors != MISSING
+                                and assistant_pastors != NULL
                                 and assistant_pastors != ""
+                                and row.get("Name of Assistant Pastor")
+                                and row.get("Name of Assistant Pastor")
+                                not in ["", NULL]
                             ):
                                 self._create_clergy(
-                                    row, census_schedule, is_assistant=True
+                                    row,
+                                    census_schedule,
                                 )
 
                             count += 1
@@ -184,7 +244,7 @@ class Command(BaseCommand):
             MISSING,
             ILLEGIBLE,
             "",
-            "NULL",
+            NULL,
             None,
         ]:
             try:
@@ -197,28 +257,48 @@ class Command(BaseCommand):
                     )
                 )
 
-        # Map data from row to model fields
-        religious_body.name = row.get("(c) Local Church Name", "")
-        religious_body.census_code = row.get("Census Code", "")
-        religious_body.division = row.get("(b) Division", "")
-        religious_body.address = row.get("Address", "")
-        religious_body.urban_rural_code = row.get("Urban/Rural Code", "")
+        # Map data from row to model fields, using clean_value for strings
+        religious_body.name = clean_value(row.get("(c) Local Church Name", ""))
+        religious_body.census_code = clean_value(row.get("Census Code", ""))
+        religious_body.division = clean_value(row.get("(b) Division", ""))
+        religious_body.address = clean_value(row.get("Address", ""))
+        religious_body.urban_rural_code = clean_value(row.get("Urban/Rural Code", ""))
 
-        # Handle special values for fields
-        religious_body.num_edifices = row.get("(7) Number of Church Edifices", "")
-        religious_body.edifice_value = row.get("(8) Value of Church Edifices", "")
-        religious_body.edifice_debt = row.get("(9) Debt on Church Edifices", "")
-        religious_body.has_pastors_residence = row.get(
-            "(10) Ownership of Pastor's Residence", ""
+        # Handle numeric fields with clean_numeric_value
+        religious_body.num_edifices = clean_numeric_value(
+            row.get("(7) Number of Church Edifices", "")
         )
-        religious_body.residence_value = row.get("(11) Value of Pastor's Residence", "")
-        religious_body.residence_debt = row.get("(12) Debt on Pastor's Residence", "")
+        religious_body.edifice_value = clean_numeric_value(
+            row.get("(8) Value of Church Edifices", "")
+        )
+        religious_body.edifice_debt = clean_numeric_value(
+            row.get("(9) Debt on Church Edifices", "")
+        )
+
+        # Handle has_pastors_residence field (convert "Yes"/"No"/"Missing"/"Illegible"/blank to True/False/None)
+        pastors_residence = row.get("(10) Ownership of Pastor's Residence", "")
+        if pastors_residence == "Yes":
+            religious_body.has_pastors_residence = True
+        elif pastors_residence == "No":
+            religious_body.has_pastors_residence = False
+        else:
+            # For "Missing", "Illegible", blank or any other value
+            religious_body.has_pastors_residence = None
+
+        religious_body.residence_value = clean_numeric_value(
+            row.get("(11) Value of Pastor's Residence", "")
+        )
+        religious_body.residence_debt = clean_numeric_value(
+            row.get("(12) Debt on Pastor's Residence", "")
+        )
 
         # Financial fields
-        religious_body.expenses = row.get("(13) Expenses", "")
-        religious_body.benevolences = row.get("(14) Benevolences", "")
-        religious_body.total_expenditures = row.get(
-            "(15) Total Annual Expenditures", ""
+        religious_body.expenses = clean_numeric_value(row.get("(13) Expenses", ""))
+        religious_body.benevolences = clean_numeric_value(
+            row.get("(14) Benevolences", "")
+        )
+        religious_body.total_expenditures = clean_numeric_value(
+            row.get("(15) Total Annual Expenditures", "")
         )
 
         religious_body.save()
@@ -239,84 +319,121 @@ class Command(BaseCommand):
                 f"Creating new membership for census schedule {census_schedule.resource_id}"
             )
 
-        # Map data from row to model fields
-        membership.male_members = row.get("(1) Number of Members - Male", "")
-        membership.female_members = row.get("(2) Number of Members - Female", "")
-        membership.total_members_by_sex = row.get(
-            "(3) Total Number of Members by Sex", ""
+        # Map data from row to model fields using clean_numeric_value
+        membership.male_members = clean_numeric_value(
+            row.get("(1) Number of Members - Male", "")
         )
-        membership.members_under_13 = row.get("(4) Number of Members - Under 13", "")
-        membership.members_13_and_older = row.get(
-            "(5) Number of Members - 13 and Older", ""
+        membership.female_members = clean_numeric_value(
+            row.get("(2) Number of Members - Female", "")
         )
-        membership.total_members_by_age = row.get(
-            "(6) Total Number of Members by Age", ""
+        membership.total_members_by_sex = clean_numeric_value(
+            row.get("(3) Total Number of Members by Sex", "")
+        )
+        membership.members_under_13 = clean_numeric_value(
+            row.get("(4) Number of Members - Under 13", "")
+        )
+        membership.members_13_and_older = clean_numeric_value(
+            row.get("(5) Number of Members - 13 and Older", "")
+        )
+        membership.total_members_by_age = clean_numeric_value(
+            row.get("(6) Total Number of Members by Age", "")
         )
 
         # Sunday school data
-        membership.sunday_school_num_officers_teachers = row.get(
-            "(16) Sunday Schools - Number of Officers and Teachers", ""
+        membership.sunday_school_num_officers_teachers = clean_numeric_value(
+            row.get("(16) Sunday Schools - Number of Officers and Teachers", "")
         )
-        membership.sunday_school_num_scholars = row.get(
-            "(17) Sunday Schools - Number of Scholars", ""
+        membership.sunday_school_num_scholars = clean_numeric_value(
+            row.get("(17) Sunday Schools - Number of Scholars", "")
         )
 
         # Vacation Bible School data
-        membership.vbs_num_officers_teachers = row.get(
-            "(18) Vacation Bible Schools - Number of Officers and Teachers", ""
+        membership.vbs_num_officers_teachers = clean_numeric_value(
+            row.get("(18) Vacation Bible Schools - Number of Officers and Teachers", "")
         )
-        membership.vbs_num_scholars = row.get(
-            "(19) Vacation Bible Schools - Number of Scholars", ""
+        membership.vbs_num_scholars = clean_numeric_value(
+            row.get("(19) Vacation Bible Schools - Number of Scholars", "")
         )
 
         # Weekday Religious School data
-        membership.weekday_num_officers_teachers = row.get(
-            "(20) Week-day Religious Schools - Number of Officers and Teachers", ""
+        membership.weekday_num_officers_teachers = clean_numeric_value(
+            row.get(
+                "(20) Week-day Religious Schools - Number of Officers and Teachers", ""
+            )
         )
-        membership.weekday_num_scholars = row.get(
-            "(21) Week-day Religious Schools - Number of Scholars", ""
+        membership.weekday_num_scholars = clean_numeric_value(
+            row.get("(21) Week-day Religious Schools - Number of Scholars", "")
         )
 
         # Parochial School data
-        membership.parochial_num_administrators = row.get(
-            "(22) Parochial Schools - Number of Administrators", ""
+        membership.parochial_num_administrators = clean_numeric_value(
+            row.get("(22) Parochial Schools - Number of Administrators", "")
         )
-        membership.parochial_num_elementary_teachers = row.get(
-            "(23a) Parochial Schools - Number of Elementary Teachers", ""
+        membership.parochial_num_elementary_teachers = clean_numeric_value(
+            row.get("(23a) Parochial Schools - Number of Elementary Teachers", "")
         )
-        membership.parochial_num_secondary_teachers = row.get(
-            "(23b) Parochial Schools - Number of Secondary Teachers", ""
+        membership.parochial_num_secondary_teachers = clean_numeric_value(
+            row.get("(23b) Parochial Schools - Number of Secondary Teachers", "")
         )
-        membership.parochial_num_elementary_scholars = row.get(
-            "(24a) Parochial Schools - Number of Elementary Scholars", ""
+        membership.parochial_num_elementary_scholars = clean_numeric_value(
+            row.get("(24a) Parochial Schools - Number of Elementary Scholars", "")
         )
-        membership.parochial_num_secondary_scholars = row.get(
-            "(24b) Parochial Schools - Number of Secondary Scholars", ""
+        membership.parochial_num_secondary_scholars = clean_numeric_value(
+            row.get("(24b) Parochial Schools - Number of Secondary Scholars", "")
         )
 
         membership.save()
         return membership
 
-    def _create_clergy(self, row, census_schedule, is_assistant=False):
-        if is_assistant:
-            name = row.get("Name of Assistant Pastor", "")
-            college = row.get("(30) Name of College - Assistant Pastor", "")
-            seminary = row.get(
-                "(31) Name of Theological Seminary - Assistant Pastor", ""
-            )
-            num_churches = None
-            serving_congregation = None
-        else:
-            name = row.get("(25b) Name of Pastor", "")
-            college = row.get("(28) Name of College - Pastor", "")
-            seminary = row.get("(29) Name of Theological Seminary - Pastor", "")
-            num_churches = row.get(
-                "(27) Number of Other Churches Served by Pastors", ""
-            )
-            serving_congregation = row.get("(25a) Pastor Serving Congregation", "")
+    def _create_clergy(self, row, census_schedule):
+        # Determine if this is for primary pastor or assistant
+        is_assistant = False
+        if "(26) Number of Assistant Pastors" in row and row.get(
+            "(26) Number of Assistant Pastors"
+        ) not in ["0", "", MISSING, NULL]:
+            is_assistant = True
 
-        # Skip empty names (unless ILLEGIBLE)
-        if not name and name != ILLEGIBLE:
+        # Get the appropriate field values based on whether this is a pastor or assistant
+        if is_assistant:
+            raw_name = row.get("Name of Assistant Pastor", "")
+            serving_congregation = None  # Assistants don't have this field
+            college = clean_value(
+                row.get("(30) Name of College - Assistant Pastor", "")
+            )
+            seminary = clean_value(
+                row.get("(31) Name of Theological Seminary - Assistant Pastor", "")
+            )
+        else:
+            raw_name = row.get("(25b) Name of Pastor", "")
+            serving_congregation = row.get("(25a) Pastor Serving Congregation", "")
+            college = clean_value(row.get("(28) Name of College - Pastor", ""))
+            seminary = clean_value(
+                row.get("(29) Name of Theological Seminary - Pastor", "")
+            )
+
+        # Get cleaned name (for name we want to preserve ILLEGIBLE to indicate that there was a pastor)
+        name = raw_name
+        if raw_name in [MISSING, NULL, "", None]:
+            name = None
+
+        # Convert serving_congregation to Boolean if it's "Yes" or "No"
+        if serving_congregation == "Yes":
+            serving_congregation = True
+        elif serving_congregation == "No":
+            serving_congregation = False
+        else:
+            serving_congregation = None
+
+        # Get the number of other churches served using our helper
+        num_churches = clean_numeric_value(
+            row.get("(27) Number of Other Churches Served by Pastors", "")
+        )
+
+        # Skip empty names (if name is None, we should skip)
+        if name is None:
+            self.stdout.write(
+                f"Skipping clergy creation for schedule {census_schedule.resource_id} - no name provided"
+            )
             return None
 
         # Look for existing clergy for this census schedule and assistant status
@@ -336,7 +453,7 @@ class Command(BaseCommand):
                 # Create new if none exists
                 clergy = Clergy(
                     census_schedule=census_schedule,
-                    name=name or ILLEGIBLE,
+                    name=name,  # Name is already cleaned
                     is_assistant=is_assistant,
                 )
                 self.stdout.write(
@@ -347,18 +464,21 @@ class Command(BaseCommand):
             # Create new if error occurs
             clergy = Clergy(
                 census_schedule=census_schedule,
-                name=name or ILLEGIBLE,
+                name=name,  # Name is already cleaned
                 is_assistant=is_assistant,
             )
 
         # Update clergy details
-        clergy.name = name or ILLEGIBLE
+        clergy.name = name  # Name should already be properly cleaned
         clergy.college = college
         clergy.theological_seminary = seminary
         clergy.num_other_churches_served = num_churches
-
-        if not is_assistant:
-            clergy.serving_congregation = serving_congregation
+        clergy.serving_congregation = serving_congregation
 
         clergy.save()
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Successfully created/updated clergy {clergy.name} for schedule {census_schedule.resource_id}"
+            )
+        )
         return clergy
