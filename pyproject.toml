@@ -5,7 +5,6 @@ description = "Religious Ecologies: Django project for the Religious Ecologies p
 authors = ["Jason Heppler <jheppler@gmu.edu>"]
 license = "Mozilla Public License"
 readme = "README.md"
-#requires-python = ">=3.12"
 packages = [{include = "religious_ecologies"}]
 
 [tool.poetry.dependencies]
@@ -15,14 +14,9 @@ daphne = "^4.1.2"
 whitenoise = "^6.8.2"
 django = "^5.1.4"
 django-environ = "^0.11.2"
-# allauth
 django-allauth = {version="^65.3.1", extras=["github"]}
 
 django-tailwind = "^3.8.0"
-
-# postgres
-
-# obj storage
 django-storages = "^1.14.4"
 boto3 = "^1.35.94"
 django-unfold = "^0.45.0"
@@ -40,3 +34,68 @@ pre-commit = "^4.0.1"
 django-debug-toolbar = "^4.4.6"
 pytest-django = "^4.9.0"
 pylint-django = "^2.6.1"
+
+# [tool.ruff]
+# # Use PEP8 line-length
+# line-length = 79
+# # Exclude common paths
+# exclude = [
+#     ".git",
+#     ".tox",
+#     ".venv",
+#     "docs",
+#     "requirements",
+#     "node_modules",
+#     "site",
+#     "venv",
+#
+#     # And directories in cfgov that don't have python files to lint
+#     "__pycache__",
+#     "templates",
+#
+#     # Generated migration files will throw errors. We need to find a way
+#     # to exclude django-generated migrations while including
+#     # manually-written migrations.
+#     "*/migrations/*.py",
+#]
+#
+#[tool.ruff.lint]
+# ignore = [
+#     # Assigned Lambdas are fine.
+#     "E731",
+#
+#     # B905 checks for a `strict=` parameter on calls to `zip()`, but that
+#     # parameter isn't available on Python < 3.10.
+#     "B905"
+# ]
+# select = [
+#     # pycodestyle
+#     "E",
+#     # pyflakes
+#     "F",
+#     # flake8-bugbear
+#     "B",
+#     # pyupgrade
+#     "UP",
+#     # flake8-simplify
+#     "SIM",
+#     # isort
+#     "I",
+# ]
+#
+# [tool.ruff.lint.isort.sections]
+# "django" = ["django"]
+# "wagtail" = ["wagtail"]
+#
+# [tool.ruff.lint.isort]
+# lines-after-imports = 2
+# known-third-party = ["jinja2"]
+# section-order = [
+#     "future",
+#     "standard-library",
+#     "django",
+#     "wagtail",
+#     "third-party",
+#     "first-party",
+#     "local-folder",
+# ]
