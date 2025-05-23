@@ -14,16 +14,16 @@ def map_view(request):
         .distinct()
         .order_by("family_census")
     )
-    arda_families = (
-        Denomination.objects.values_list("family_arda", flat=True)
+    relec_families = (
+        Denomination.objects.values_list("family_relec", flat=True)
         .distinct()
-        .order_by("family_arda")
+        .order_by("family_relec")
     )
 
     context = {
         "denominations": denominations,
         "census_families": census_families,
-        "arda_families": arda_families,
+        "relec_families": relec_families,
     }
 
     return render(request, "census/map.html", context)

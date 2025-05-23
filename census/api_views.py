@@ -19,7 +19,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Denomination.objects.all().order_by("name")
     serializer_class = DenominationSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["family_census", "family_arda"]
+    filterset_fields = ["family_census", "family_relec"]
     search_fields = ["name"]
 
     @action(detail=False, methods=["get"])
@@ -30,10 +30,10 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
             .distinct()
             .order_by("family_census")
         )
-        arda_families = (
-            Denomination.objects.values_list("family_arda", flat=True)
+        relec_families = (
+            Denomination.objects.values_list("family_relec", flat=True)
             .distinct()
-            .order_by("family_arda")
+            .order_by("family_relec")
         )
 
         # Count denominations in each family for display purposes
@@ -50,7 +50,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
                     for family in census_families
                     if family
                 ],
-                "arda_families": list(arda_families),
+                "relec_families": list(relec_families),
             }
         )
 
@@ -128,13 +128,17 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     print(f"Error applying bounds filter: {e}")
 
             try:
-                # Try to annotate total_members, but handle possible errors
+                # Try to annotate total_members, preferring the recorded total if available
                 queryset = queryset.annotate(
                     total_members=Coalesce(
+                        # First try to use the recorded total
+                        "membership__total_members_by_sex",
+                        # Then try to calculate from male/female components
                         Sum(
                             Coalesce("membership__male_members", 0)
                             + Coalesce("membership__female_members", 0)
                         ),
+                        # Default to 0 if none of the above is available
                         Value(0),
                         output_field=IntegerField(),
                     )
