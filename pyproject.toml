@@ -10,29 +10,29 @@ packages = [{include = "religious_ecologies"}]
 [tool.poetry.dependencies]
 python = "^3.12"
 python-dotenv = "^1.0.1"
-daphne = "^4.1.2"
+daphne = "^4.2.0"
 whitenoise = "^6.8.2"
-django = "^5.1.4"
-django-environ = "^0.11.2"
-django-allauth = {version="^65.3.1", extras=["github"]}
+django = "^5.2.1"
+django-environ = "^0.12.0"
+django-allauth = {version="^65.8.1", extras=["github"]}
 
-django-tailwind = "^3.8.0"
-django-storages = "^1.14.4"
-boto3 = "^1.35.94"
-django-unfold = "^0.45.0"
+django-tailwind = "^4.0.1"
+django-storages = "^1.14.6"
+boto3 = "^1.38.27"
+django-unfold = "^0.59.0"
 django-simple-history = "^3.7.0"
 requests = "^2.32.3"
 django-dbml = "^0.10.1"
-djangorestframework = "^3.15.2"
+djangorestframework = "^3.16.0"
 django-filter = "^25.1"
 psycopg2 = "^2.9.10"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.10.0"
-djhtml = "^3.0.7"
+black = "^25.1.0"
+djhtml = "^3.0.8"
 pre-commit = "^4.0.1"
-django-debug-toolbar = "^4.4.6"
-pytest-django = "^4.9.0"
+django-debug-toolbar = "^5.2.0"
+pytest-django = "^4.11.1"
 pylint-django = "^2.6.1"
 
 # [tool.ruff]
