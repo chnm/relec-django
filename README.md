@@ -1,3 +1,3 @@
 # Religious Ecologies
 
-Django project for the Religious Ecologies project.
+Django application for the Religious Ecologies project.
