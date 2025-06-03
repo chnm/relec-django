@@ -23,7 +23,7 @@ def sync_locations(modeladmin, request, queryset):
 
     try:
         # Fetch data from API
-        response = requests.get("https://data.chnm/relcensus/cities", timeout=30)
+        response = requests.get("https://data.chnm.org/relcensus/cities", timeout=30)
         response.raise_for_status()
         locations_data = response.json()
 
@@ -69,7 +69,7 @@ def sync_locations(modeladmin, request, queryset):
     except RequestException as e:
         modeladmin.message_user(
             request,
-            f"Connection error: {str(e)}. Make sure the API server is running at http://localhost:8090",
+            f"Connection error: {str(e)}. Make sure the API server is running at https://data.chnm.org",
             level=messages.ERROR,
         )
     finally:
