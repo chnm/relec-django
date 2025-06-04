@@ -70,7 +70,7 @@ def sync_denominations(modeladmin, request, queryset):
     success_count = 0
 
     try:
-        # Fetch data from API with increased timeout and retry strategy
+        # Fetch data from API
         session = get_requests_session()
         response = session.get(
             "https://data.chnm.org/relcensus/denominations", timeout=120
