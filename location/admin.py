@@ -3,13 +3,29 @@ import os
 
 import requests
 from django.contrib import admin, messages
+from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from unfold.admin import ModelAdmin
+from urllib3.util.retry import Retry
 
 from location.models import Location
 
 
-@admin.action(description="Sync locations from API")
+def get_requests_session(retries=3, backoff_factor=0.3):
+    """Configure a requests session with retries and backoff"""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+@admin.action(description="Fetch locations from Apiary")
 def sync_locations(modeladmin, request, queryset):
     """Custom admin action to sync locations from the API."""
     # Setup error logging
@@ -22,8 +38,9 @@ def sync_locations(modeladmin, request, queryset):
     success_count = 0
 
     try:
-        # Fetch data from API
-        response = requests.get("https://data.chnm/relcensus/cities", timeout=30)
+        # Fetch data from API with increased timeout and retry strategy
+        session = get_requests_session()
+        response = session.get("https://data.chnm/relcensus/cities", timeout=120)
         response.raise_for_status()
         locations_data = response.json()
 

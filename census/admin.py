@@ -5,10 +5,27 @@ import requests
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from unfold.admin import ModelAdmin, StackedInline
+from urllib3.util.retry import Retry
 
 from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+
+
+def get_requests_session(retries=3, backoff_factor=0.3):
+    """Configure a requests session with retries and backoff"""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
 
 # The following applies Unfold to the User model
 admin.site.unregister(User)
@@ -40,7 +57,7 @@ class ReligiousBodyInline(StackedInline):
     tab = True
 
 
-@admin.action(description="Sync denominations from API")
+@admin.action(description="Fetch denominations from Apiary")
 def sync_denominations(modeladmin, request, queryset):
     """Custom admin action to sync denominations from the API."""
     # Setup error logging
@@ -53,9 +70,10 @@ def sync_denominations(modeladmin, request, queryset):
     success_count = 0
 
     try:
-        # Fetch data from API
-        response = requests.get(
-            "https://data.chnm.org/relcensus/denominations", timeout=30
+        # Fetch data from API with increased timeout and retry strategy
+        session = get_requests_session()
+        response = session.get(
+            "https://data.chnm.org/relcensus/denominations", timeout=120
         )
         response.raise_for_status()
         denominations_data = response.json()
