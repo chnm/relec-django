@@ -56,9 +56,10 @@ class MapMarkerSerializer(serializers.ModelSerializer):
 
 
 class LocationSerializer(serializers.ModelSerializer):
-    state_name = serializers.CharField(source="state.name", read_only=True)
-    county_name = serializers.CharField(source="county.name", read_only=True)
-    city_name = serializers.CharField(source="city.name", read_only=True)
+    # Direct mapping to string fields in the Location model
+    state_name = serializers.CharField(source="state", read_only=True)
+    county_name = serializers.CharField(source="county", read_only=True)
+    city_name = serializers.CharField(source="city", read_only=True)
 
     class Meta:
         model = Location
