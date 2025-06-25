@@ -126,6 +126,16 @@ class Command(BaseCommand):
                             # Create CensusSchedule
                             census_schedule = self._create_census_schedule(row)
 
+                            # Create ReligiousBody
+                            religious_body = self._create_religious_body(
+                                row, census_schedule
+                            )
+
+                            # Create Membership
+                            self._create_membership(
+                                row, census_schedule, religious_body
+                            )
+
                             # Create Clergy if present
                             if (
                                 row.get("(25b) Name of Pastor")

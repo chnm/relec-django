@@ -71,10 +71,8 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = (
-        ReligiousBody.objects.all()
-        .select_related("location", "denomination", "census_record")
-        .prefetch_related("census_record__clergy")
+    queryset = ReligiousBody.objects.all().select_related(
+        "location", "denomination", "census_record"
     )
     serializer_class = ReligiousBodySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
