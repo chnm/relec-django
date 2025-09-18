@@ -85,10 +85,19 @@ class CensusSchedule(models.Model):
         verbose_name="Omeka Storage ID",
     )
 
+    # Image fields
+    original_image = models.ImageField(
+        upload_to="census_images/originals/",
+        blank=True,
+        null=True,
+        verbose_name="Original Census Schedule Image",
+        help_text="High-resolution image of the original census schedule",
+    )
+
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    history = HistoricalRecords()
+    history = HistoricalRecords(excluded_fields=["original_image"])
 
     class Meta:
         indexes = [

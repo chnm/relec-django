@@ -69,10 +69,13 @@ INSTALLED_APPS = [
     "django_filters",
     # obj storage
     "storages",
+    # image processing
+    "easy_thumbnails",
     # local apps
     "religious_ecologies",
     "census",
     "location",
+    "pages",
 ]
 
 MIDDLEWARE = [
@@ -112,6 +115,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # pages context processor for navigation
+                "pages.views.nav_pages_context",
             ],
         },
     },
@@ -224,3 +229,13 @@ else:
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Easy Thumbnails Configuration
+THUMBNAIL_ALIASES = {
+    "": {
+        "admin_thumbnail": {"size": (100, 75), "crop": True},
+        "small": {"size": (200, 150), "crop": True},
+        "medium": {"size": (400, 300), "crop": False},
+        "large": {"size": (800, 600), "crop": False},
+    },
+}

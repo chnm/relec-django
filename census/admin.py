@@ -144,6 +144,7 @@ class CensusScheduleAdmin(ModelAdmin):
         "schedule_title",
         "schedule_id",
         "resource_id",
+        # "image_thumbnail",
     ]
     search_fields = ["schedule_title", "schedule_id", "resource_id"]
 
@@ -153,6 +154,7 @@ class CensusScheduleAdmin(ModelAdmin):
         "datascribe_record_id",
         "datascribe_original_image_path",
         "omeka_storage_id",
+        # "image_preview",
     ]
 
     fieldsets = [
@@ -165,6 +167,15 @@ class CensusScheduleAdmin(ModelAdmin):
                     "schedule_id",
                     "box",
                     "notes",
+                ]
+            },
+        ),
+        (
+            "Image",
+            {
+                "fields": [
+                    "original_image",
+                    # "image_preview",
                 ]
             },
         ),
@@ -182,6 +193,38 @@ class CensusScheduleAdmin(ModelAdmin):
         ),
     ]
     inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
+
+    # def image_thumbnail(self, obj):
+    #     """Display small thumbnail in list view"""
+    #     if obj.original_image:
+    #         try:
+    #             return format_html(
+    #                 '<img src="{}" style="width: 50px; height: 38px; object-fit: cover;" />',
+    #                 obj.admin_thumbnail.url
+    #             )
+    #         except:
+    #             return "Image error"
+    #     return "No image"
+    # image_thumbnail.short_description = "Image"
+
+    # def image_preview(self, obj):
+    #     """Display medium-sized preview in detail view"""
+    #     if obj.original_image:
+    #         try:
+    #             return format_html(
+    #                 '<img src="{}" style="max-width: 400px; max-height: 300px;" /><br>'
+    #                 '<a href="{}" target="_blank">View full size</a>',
+    #                 obj.thumbnail_medium.url,
+    #                 obj.original_image.url
+    #             )
+    #         except:
+    #             return format_html(
+    #                 '<a href="{}" target="_blank">View image</a><br>'
+    #                 '(Thumbnail generation failed)',
+    #                 obj.original_image.url
+    #             )
+    #     return "No image uploaded"
+    # image_preview.short_description = "Image Preview"
 
     history_list_display = ["changed_fields"]
 
