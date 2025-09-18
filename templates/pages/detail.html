@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ page.title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .page-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        .page-content h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .page-content h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #111827;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .page-content h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #374151;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .page-content p {
+            margin-bottom: 1rem;
+            line-height: 1.7;
+            color: #374151;
+        }
+
+        .page-content ul,
+        .page-content ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+
+        .page-content li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+            color: #374151;
+        }
+
+        .page-content a {
+            color: #0060b1;
+            text-decoration: underline;
+            transition: color 0.2s ease;
+        }
+
+        .page-content a:hover {
+            color: #004d91;
+        }
+
+        .page-content blockquote {
+            border-left: 4px solid #0060b1;
+            padding-left: 1rem;
+            margin: 1.5rem 0;
+            font-style: italic;
+            color: #6b7280;
+        }
+
+        .page-content img {
+            max-width: 100%;
+            height: auto;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .page-content table {
+            width: 100%;
+            margin: 1.5rem 0;
+            border-collapse: collapse;
+        }
+
+        .page-content th,
+        .page-content td {
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            text-align: left;
+        }
+
+        .page-content th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .page-content code {
+            background-color: #f1f5f9;
+            color: #1e293b;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .page-content pre {
+            background-color: #1e293b;
+            color: #f1f5f9;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+        }
+
+        .page-content pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+
+        @media (max-width: 768px) {
+            .page-content {
+                padding: 1rem;
+            }
+
+            .page-content h1 {
+                font-size: 2rem;
+            }
+
+            .page-content h2 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <article class="page-content font-body">
+        <header class="mb-8">
+            <h1 class="font-heading">{{ page.title }}</h1>
+            {% if page.meta_description %}
+                <p class="text-lg text-content-secondary italic">{{ page.meta_description }}</p>
+            {% endif %}
+        </header>
+
+        <div class="prose max-w-none">
+            {{ page.content|safe }}
+        </div>
+
+        {% if user.is_staff %}
+            <footer class="mt-12 pt-6 border-t border-gray-200">
+                <div class="text-sm text-content-tertiary">
+                    <p>
+                        <strong>Admin:</strong>
+                        <a href="{% url 'admin:pages_page_change' page.id %}" class="text-religious-primary hover:text-primary-700">
+                            Edit this page
+                        </a>
+                        | Last updated: {{ page.updated_at|date:"F j, Y g:i A" }}
+                    </p>
+                </div>
+            </footer>
+        {% endif %}
+    </article>
+{% endblock %}

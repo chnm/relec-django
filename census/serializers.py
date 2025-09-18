@@ -55,6 +55,116 @@ class MapMarkerSerializer(serializers.ModelSerializer):
         return "Unknown"
 
 
+class DemographicsMapSerializer(serializers.ModelSerializer):
+    """
+    Extended serializer for demographics map that includes detailed membership data.
+    """
+
+    # Location data
+    lat = serializers.SerializerMethodField()
+    lon = serializers.SerializerMethodField()
+
+    # Denomination data
+    family = serializers.SerializerMethodField()
+    denomination_name = serializers.SerializerMethodField()
+
+    # Demographics data
+    total_members = serializers.IntegerField(default=0)
+    male_members = serializers.SerializerMethodField()
+    female_members = serializers.SerializerMethodField()
+    members_under_13 = serializers.SerializerMethodField()
+    members_13_and_older = serializers.SerializerMethodField()
+
+    # Educational program data
+    sunday_school_scholars = serializers.SerializerMethodField()
+    parochial_elementary_scholars = serializers.SerializerMethodField()
+    parochial_secondary_scholars = serializers.SerializerMethodField()
+    weekday_scholars = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReligiousBody
+        fields = [
+            "id",
+            "name",
+            "lat",
+            "lon",
+            "family",
+            "denomination_name",
+            "total_members",
+            "male_members",
+            "female_members",
+            "members_under_13",
+            "members_13_and_older",
+            "sunday_school_scholars",
+            "parochial_elementary_scholars",
+            "parochial_secondary_scholars",
+            "weekday_scholars",
+        ]
+
+    def get_lat(self, obj):
+        if obj.location:
+            return obj.location.lat
+        return None
+
+    def get_lon(self, obj):
+        if obj.location:
+            return obj.location.lon
+        return None
+
+    def get_family(self, obj):
+        if obj.denomination:
+            return obj.denomination.family_census
+        return "Unknown"
+
+    def get_denomination_name(self, obj):
+        if obj.denomination:
+            return obj.denomination.name
+        return "Unknown"
+
+    def _get_membership(self, obj):
+        """Helper method to get membership data, cached for efficiency"""
+        if not hasattr(obj, "_cached_membership"):
+            try:
+                obj._cached_membership = Membership.objects.filter(
+                    religious_body=obj
+                ).first()
+            except Exception:
+                obj._cached_membership = None
+        return obj._cached_membership
+
+    def get_male_members(self, obj):
+        membership = self._get_membership(obj)
+        return membership.male_members if membership else 0
+
+    def get_female_members(self, obj):
+        membership = self._get_membership(obj)
+        return membership.female_members if membership else 0
+
+    def get_members_under_13(self, obj):
+        membership = self._get_membership(obj)
+        return membership.members_under_13 if membership else 0
+
+    def get_members_13_and_older(self, obj):
+        membership = self._get_membership(obj)
+        return membership.members_13_and_older if membership else 0
+
+    def get_sunday_school_scholars(self, obj):
+        membership = self._get_membership(obj)
+        return membership.sunday_school_num_scholars if membership else 0
+
+    def get_parochial_elementary_scholars(self, obj):
+        membership = self._get_membership(obj)
+        return membership.parochial_num_elementary_scholars if membership else 0
+
+    def get_parochial_secondary_scholars(self, obj):
+        membership = self._get_membership(obj)
+        return membership.parochial_num_secondary_scholars if membership else 0
+
+    def get_weekday_scholars(self, obj):
+        membership = self._get_membership(obj)
+        return membership.weekday_num_scholars if membership else 0
+
+
 class LocationSerializer(serializers.ModelSerializer):
     # Direct mapping to string fields in the Location model
     state_name = serializers.CharField(source="state", read_only=True)

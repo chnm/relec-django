@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from .filters import ReligiousBodyFilter
 from .models import Denomination, ReligiousBody
 from .serializers import (
+    DemographicsMapSerializer,
     DenominationSerializer,
     MapMarkerSerializer,
     ReligiousBodySerializer,
@@ -162,6 +163,96 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             import traceback
 
             print(f"Exception in map_data: {e}")
+            print(traceback.format_exc())
+            return Response(
+                {"error": str(e), "traceback": traceback.format_exc()}, status=500
+            )
+
+    @action(detail=False, methods=["get"])
+    def demographics_data(self, request):
+        """Enhanced geodata endpoint for demographics map display with membership data"""
+        try:
+            # Start with base queryset - only select what we need for demographics
+            queryset = (
+                ReligiousBody.objects.filter(location__isnull=False)
+                .select_related("location", "denomination")
+                .prefetch_related("membership")
+            )
+
+            # Apply filtering with explicit logging and error handling
+            if "family_census" in request.query_params:
+                family_census = request.query_params.get("family_census")
+                print(f"Filtering by family_census: {family_census}")
+                try:
+                    queryset = queryset.filter(
+                        denomination__family_census=family_census
+                    )
+                except Exception as e:
+                    print(f"Error filtering by family_census: {e}")
+                    # Continue with unfiltered queryset instead of failing
+
+            # Add denomination filtering
+            if "denomination" in request.query_params:
+                denomination_id = request.query_params.get("denomination")
+                print(f"Filtering by denomination_id: {denomination_id}")
+                try:
+                    queryset = queryset.filter(denomination_id=denomination_id)
+                except Exception as e:
+                    print(f"Error filtering by denomination_id: {e}")
+                    # Continue with previously filtered queryset
+
+            # Add bounds filtering if present
+            if "bounds" in request.query_params:
+                bounds = request.query_params.get("bounds")
+                try:
+                    south, west, north, east = map(float, bounds.split(","))
+                    queryset = queryset.filter(
+                        location__lat__gte=south,
+                        location__lat__lte=north,
+                        location__lon__gte=west,
+                        location__lon__lte=east,
+                    )
+                    print(f"Applied bounds filter: {bounds}")
+                except Exception as e:
+                    print(f"Error applying bounds filter: {e}")
+
+            try:
+                # Try to annotate total_members, preferring the recorded total if available
+                queryset = queryset.annotate(
+                    total_members=Coalesce(
+                        # First try to use the recorded total
+                        "membership__total_members_by_sex",
+                        # Then try to calculate from male/female components
+                        Sum(
+                            Coalesce("membership__male_members", 0)
+                            + Coalesce("membership__female_members", 0)
+                        ),
+                        # Default to 0 if none of the above is available
+                        Value(0),
+                        output_field=IntegerField(),
+                    )
+                )
+            except Exception as e:
+                print(f"Error annotating total_members: {e}")
+                # If annotation fails, fall back to a simpler query
+                queryset = queryset.annotate(
+                    total_members=Value(0, output_field=IntegerField())
+                )
+
+            # Add a reasonable limit to prevent overloading
+            queryset = queryset[:2000]
+
+            # Use the demographics serializer
+            serializer = DemographicsMapSerializer(queryset, many=True)
+            data = serializer.data
+
+            print(f"Returning {len(data)} demographics map markers")
+            return Response(data)
+
+        except Exception as e:
+            import traceback
+
+            print(f"Exception in demographics_data: {e}")
             print(traceback.format_exc())
             return Response(
                 {"error": str(e), "traceback": traceback.format_exc()}, status=500

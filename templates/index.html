@@ -1,24 +1,413 @@
 {% extends "base.html" %}
 {% load static %}
-{% load static tailwind_tags %}
 
-{% load socialaccount %}
+{% block title %}Religious Ecologies - Mapping American Religious History{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .section-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .content-section {
+            padding: 4rem 0;
+        }
+
+        .image-placeholder {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 0.875rem;
+            border-radius: 8px;
+            min-height: 300px;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.75rem 2rem;
+            background-color: #0060b1;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: 2px solid #0060b1;
+        }
+
+        .cta-button:hover {
+            background-color: #004d91;
+            border-color: #004d91;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 96, 177, 0.2);
+        }
+
+        .cta-button-outline {
+            background-color: transparent;
+            color: #0060b1;
+            border: 2px solid #0060b1;
+        }
+
+        .cta-button-outline:hover {
+            background-color: #0060b1;
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 2rem 1rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0060b1;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .partner-logos {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 2rem;
+            align-items: center;
+            margin-top: 3rem;
+        }
+
+        .partner-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            min-height: 80px;
+            color: #9ca3af;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .newsletter-signup {
+            background: #0060b1;
+            color: white;
+            padding: 3rem 0;
+            margin-top: 4rem;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 1rem;
+            max-width: 400px;
+            margin: 1.5rem auto 0;
+        }
+
+        .newsletter-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 6px;
+            placeholder-color: rgba(255, 255, 255, 0.7);
+        }
+
+        .newsletter-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .newsletter-button {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            color: #0060b1;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .newsletter-button:hover {
+            background: #f1f5f9;
+        }
+
+    /* YouTube Video Styling */
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
-    <h1 class="text-3xl font-bold mb-4">Religious Ecologies Data Dashboard</h1>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="section-container py-16">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h1 class="text-4xl lg:text-5xl font-bold text-content-primary mb-6 font-heading">
+                        Mapping America's Religious Landscape
+                    </h1>
+                    <p class="text-xl text-content-secondary mb-8 leading-relaxed">
+                        The Religious Ecologies project creates new datasets and digital maps to document and analyze the complex religious environments of American communities from 1850 to the present.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <a href="{% url 'denomination_map' %}" class="cta-button">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                            </svg>
+                            Map of Denominations
+                        </a>
+                        <a href="{% url 'demographics_map' %}" class="cta-button">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Map of Demographics
+                        </a>
+                    </div>
 
-    <div class="container mx-auto justify-items-center">
-        {% if user.is_authenticated %}
-            <p>You are currently logged in as:</p>
-            <p>Username: {{ user.username }}</p>
-            <p>Email: {{ user.email }}</>
-            <a href="{% url 'account_logout' %}">Logout</a>
-        {% else %}
-            <a class="p-2 text-blue-500 rounded-md border" href="{% url 'account_login' %}">Login</a>
-            <a class="p-2 text-blue-500 rounded-md border" href="{% url 'account_signup' %}">Signup</a>
-            <a class="p-2 text-blue-500 rounded-md border" href="{% provider_login_url 'github' %}">Sign Up with GitHub</a> <!-- new -->
-            <a class="p-2 text-blue-500 rounded-md border" href="{% provider_login_url 'github' %}">Sign Up with Google</a> <!-- new -->
-        {% endif %}
-    </div>
-{% endblock content %}
-</body>
-</html>
+                    <!-- Browse Options -->
+                    <div class="mt-6 pt-6 border-t border-gray-200">
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <a href="{% url 'census_browser' %}" class="cta-button-outline cta-button">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                                </svg>
+                                Records
+                            </a>
+                            <a href="{% url 'locations_browse' %}" class="cta-button-outline cta-button">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                Locations
+                            </a>
+                            <a href="{% url 'denominations_browse' %}" class="cta-button-outline cta-button">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                                Denominations
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="order-first lg:order-last">
+                    <div class="rounded-lg overflow-hidden shadow-lg">
+                        <img src="{% static 'images/are-2.jpg' %}"
+                             alt="A schedule filled out by an Adventist congregation in rural North Carolina in 1926"
+                             class="w-full h-auto">
+                        <div class="p-4 bg-white">
+                            <p class="text-sm text-content-tertiary italic">
+                                A schedule filled out by an Adventist congregation in rural North Carolina in 1926.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics -->
+    <section class="bg-surface-secondary py-16">
+        <div class="section-container">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-content-primary mb-6 font-heading">
+                    1926 U.S. Census of Religious Bodies
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                    <div class="stat-card">
+                        <span class="stat-number">{{ total_schedules|floatformat:0 }}</span>
+                        <div class="stat-label">Schedules Digitized</div>
+                        <div class="text-sm text-content-tertiary mt-2">{{ completion_percentage }}% Complete</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{{ total_denominations }}</span>
+                        <div class="stat-label">Denominations</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{{ total_counties|floatformat:0 }}</span>
+                        <div class="stat-label">Counties</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 25 Tables -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
+                <!-- Top Denominations -->
+                <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                    <div class="bg-religious-primary text-white px-6 py-4">
+                        <h3 class="text-lg font-semibold">Top 25 Denominations by Schedule Count</h3>
+                    </div>
+                    <div class="overflow-auto max-h-96">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-content-secondary">Denomination</th>
+                                    <th class="px-4 py-3 text-right text-sm font-medium text-content-secondary">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                {% for denomination in top_denominations %}
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-4 py-3">
+                                            <a href="{% url 'census_browser' %}?denomination={{ denomination.id }}"
+                                               class="text-religious-primary hover:text-primary-700 font-medium">
+                                                {{ denomination.name }}
+                                            </a>
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-medium">{{ denomination.schedule_count }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top Counties -->
+                <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                    <div class="bg-religious-primary text-white px-6 py-4">
+                        <h3 class="text-lg font-semibold">Top 25 Counties by Schedule Count</h3>
+                    </div>
+                    <div class="overflow-auto max-h-96">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-content-secondary">County, State</th>
+                                    <th class="px-4 py-3 text-right text-sm font-medium text-content-secondary">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                {% for county in top_counties %}
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-4 py-3">
+                                            <a href="{% url 'census_browser' %}?location={{ county.location__state }}"
+                                               class="text-religious-primary hover:text-primary-700 font-medium">
+                                                {{ county.location__county }}, {{ county.location__state }}
+                                            </a>
+                                        </td>
+                                        <td class="px-4 py-3 text-right font-medium">{{ county.schedule_count }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Religious Ecologies Section -->
+    <section class="content-section bg-white">
+        <div class="section-container">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h2 class="text-3xl font-bold text-content-primary mb-6 font-heading">
+                        Why "Religious Ecologies"?
+                    </h2>
+                    <p class="text-lg text-content-secondary mb-6 leading-relaxed">
+                        American communities have always been shaped by diverse and evolving religious environments.
+                        Rather than focusing on individual denominations in isolation, the Religious Ecologies project
+                        documents the complex interactions between different faith traditions, institutions, and practices
+                        that together form the religious landscape of American places.
+                    </p>
+                    <p class="text-content-secondary mb-8 leading-relaxed">
+                        Our approach reveals how religious communities influenced one another, competed for adherents,
+                        and adapted to local social and economic conditions. This ecological perspective provides
+                        new insights into American religious history and its relationship to broader patterns of
+                        social change.
+                    </p>
+                </div>
+                <div>
+                    <div class="rounded-lg overflow-hidden shadow-lg">
+                        <img src="{% static 'images/are-1.jpg' %}"
+                             alt="Congregation Sha'arai Shomayim, Mobile, Alabama"
+                             class="w-full h-auto">
+                        <div class="p-4 bg-white">
+                            <p class="text-sm text-content-tertiary italic">
+                                Congregation Sha'arai Shomayim, Mobile, Alabama, c. 1910.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Newsletter Signup -->
+    <section class="newsletter-signup">
+        <div class="section-container text-center">
+            <h2 class="text-3xl font-bold mb-4 font-heading">Stay Up to Date</h2>
+            <p class="text-xl opacity-90 mb-6">
+                Get the latest updates on new datasets, features, and research findings.
+            </p>
+            <form class="newsletter-form">
+                <input type="email" placeholder="Enter your email address" class="newsletter-input" required>
+                <button type="submit" class="newsletter-button">Subscribe</button>
+            </form>
+            <p class="text-sm opacity-75 mt-4">
+                We respect your privacy. Unsubscribe at any time.
+            </p>
+        </div>
+    </section>
+
+    <!-- Partners -->
+    <section class="content-section bg-surface-secondary">
+        <div class="section-container text-center">
+            <div class="partner-logos">
+                <div class="partner-logo">
+                    <img src="{% static 'images/rrchnm-logo-3.png' %}"
+                         alt="Roy Rosenzweig Center for History and New Media"
+                         class="max-h-16 w-auto">
+                </div>
+                <div class="partner-logo">
+                    <img src="{% static 'images/gmu-logo-2.png' %}"
+                         alt="George Mason University"
+                         class="max-h-16 w-auto">
+                </div>
+                <div class="partner-logo">
+                    <img src="{% static 'images/NEH-Preferred-Seal.png' %}"
+                         alt="National Endowment for the Humanities"
+                         class="max-h-16 w-auto">
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}
