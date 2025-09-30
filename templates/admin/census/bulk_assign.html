@@ -1,0 +1,238 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col flex-1 p-6">
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+            <p class="mt-2 text-gray-600">
+                Assign users and update status for the selected {{ objects|length }} census schedule{{ objects|length|pluralize }}.
+            </p>
+        </div>
+
+        {% if objects %}
+            <form method="post" action="" class="space-y-6">
+                {% csrf_token %}
+
+            <!-- Selected Records Summary -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 class="text-lg font-medium text-blue-800 mb-3">
+                        Selected Records ({{ objects|length }})
+                    </h3>
+                    <div class="max-h-40 overflow-y-auto">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {% for obj in objects %}
+                                <div class="text-sm text-blue-700 bg-blue-100 rounded px-2 py-1">
+                                    {{ obj.schedule_id }} - {{ obj.schedule_title|truncatechars:30 }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Assignment Form -->
+                <div class="bg-white shadow-sm border border-gray-200 rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-800 mb-4">Assignment Options</h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Transcriber Assignment -->
+                        <div>
+                            <label for="{{ form.transcriber.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                Assign Transcriber
+                            </label>
+                            {{ form.transcriber }}
+                            {% if form.transcriber.queryset.count == 0 %}
+                                <p class="mt-1 text-xs text-amber-600">No users in Transcribers group. Add users to the group first.</p>
+                            {% else %}
+                                <p class="mt-1 text-xs text-gray-500">{{ form.transcriber.queryset.count }} transcriber(s) available</p>
+                            {% endif %}
+                            {% if form.transcriber.help_text %}
+                                <p class="mt-1 text-xs text-gray-500">{{ form.transcriber.help_text }}</p>
+                            {% endif %}
+                            {% if form.transcriber.errors %}
+                                {% for error in form.transcriber.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                    <!-- Reviewer Assignment -->
+                        <div>
+                            <label for="{{ form.reviewer.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                Assign Reviewer
+                            </label>
+                            {{ form.reviewer }}
+                            {% if form.reviewer.queryset.count == 0 %}
+                                <p class="mt-1 text-xs text-amber-600">No users in Reviewers group. Add users to the group first.</p>
+                            {% else %}
+                                <p class="mt-1 text-xs text-gray-500">{{ form.reviewer.queryset.count }} reviewer(s) available</p>
+                            {% endif %}
+                            {% if form.reviewer.help_text %}
+                                <p class="mt-1 text-xs text-gray-500">{{ form.reviewer.help_text }}</p>
+                            {% endif %}
+                            {% if form.reviewer.errors %}
+                                {% for error in form.reviewer.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                    <!-- Status Update -->
+                        <div>
+                            <label for="{{ form.status.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                Update Status
+                            </label>
+                            {{ form.status }}
+                            {% if form.status.help_text %}
+                                <p class="mt-1 text-xs text-gray-500">{{ form.status.help_text }}</p>
+                            {% endif %}
+                            {% if form.status.errors %}
+                                {% for error in form.status.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                <!-- Warning Box -->
+                    <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-yellow-800">
+                                    Important Notes
+                                </h3>
+                                <div class="mt-2 text-sm text-yellow-700">
+                                    <ul class="list-disc pl-5 space-y-1">
+                                        <li>Only fields with selections will be updated</li>
+                                        <li>Existing assignments will be overwritten if new ones are selected</li>
+                                        <li>Status changes affect all selected records</li>
+                                        <li>This action cannot be undone</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Form Actions -->
+                <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <a href="{% url 'admin:census_censusschedule_changelist' %}"
+                       class="button secondary" style="text-decoration: none;">
+                        ← Cancel
+                    </a>
+
+                    <div class="flex space-x-3">
+                        <button type="submit" name="apply" value="Apply"
+                                class="button primary">
+                            Apply Bulk Assignment
+                        </button>
+                    </div>
+                </div>
+            </form>
+        {% else %}
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800">
+                            No Records Selected
+                        </h3>
+                        <div class="mt-2 text-sm text-yellow-700">
+                            <p>No census schedules were selected for bulk assignment. Please go back and select records to modify.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <a href="{% url 'admin:census_censusschedule_changelist' %}"
+                       class="button primary" style="text-decoration: none;">
+                        ← Back to Census Schedules
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <style>
+/* Style the form select elements to match Unfold theme */
+        select {
+            appearance: none;
+            background-color: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            color: #374151;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            width: 100%;
+        }
+
+        select:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            border-color: #0060b1;
+            box-shadow: 0 0 0 3px rgba(0, 96, 177, 0.1);
+        }
+
+/* Override button styles to ensure visibility using Religious Ecologies blue */
+        .button.primary,
+        button.button.primary {
+            background-color: #0060b1 !important;
+            color: white !important;
+            border: 1px solid #0060b1 !important;
+            padding: 0.5rem 1.5rem !important;
+            border-radius: 0.375rem !important;
+            font-weight: 500 !important;
+            text-decoration: none !important;
+            display: inline-block !important;
+            cursor: pointer !important;
+        }
+
+        .button.primary:hover,
+        button.button.primary:hover {
+            background-color: #0052a3 !important;
+            border-color: #0052a3 !important;
+        }
+
+        .button.secondary {
+            background-color: #6b7280 !important;
+            color: white !important;
+            border: 1px solid #6b7280 !important;
+            padding: 0.5rem 1rem !important;
+            border-radius: 0.375rem !important;
+            font-weight: 500 !important;
+            text-decoration: none !important;
+            display: inline-block !important;
+            cursor: pointer !important;
+        }
+
+        .button.secondary:hover {
+            background-color: #374151 !important;
+            border-color: #374151 !important;
+        }
+
+/* Ensure all buttons are visible regardless of Unfold overrides */
+        button[type="submit"],
+        input[type="submit"],
+        a.button {
+            min-height: 36px !important;
+            line-height: 1.5 !important;
+            font-size: 14px !important;
+        }
+    </style>
+{% endblock %}
