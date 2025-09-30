@@ -186,9 +186,14 @@
                     <h1 class="text-4xl lg:text-5xl font-bold text-content-primary mb-6 font-heading">
                         Mapping America's Religious Landscape
                     </h1>
-                    <p class="text-xl text-content-secondary mb-8 leading-relaxed">
-                        The Religious Ecologies project creates new datasets and digital maps to document and analyze the complex religious environments of American communities from 1850 to the present.
+                    <p class="text-lg text-content-secondary mb-8 leading-relaxed">
+                        In the nineteenth century, the U.S. government collected data about churches as part of its decennial population census, but when Congress created the Census Bureau as a permanent agency in 1902, it authorized it to undertake a separate decennial survey of “religious bodies.” Every ten years from 1906 to 1946, the U.S. Census Bureau surveyed congregations, synagogues, and other religious groups in the United States.
                     </p>
+
+                    <p class="text-lg text-content-secondary mb-8 leading-relaxed">
+                        While the Census Bureau published summary reports from that data, the forms (or schedules) filled out by each congregation have not been widely used. Only the schedules from the 1926 Census survive, housed in a collection at the National Archives and Records Administration in Washington, DC.
+                    </p>
+
                     <div class="flex flex-col sm:flex-row gap-4">
                         <a href="{% url 'denomination_map' %}" class="cta-button">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,7 +261,6 @@
                     <div class="stat-card">
                         <span class="stat-number">{{ total_schedules|floatformat:0 }}</span>
                         <div class="stat-label">Schedules Digitized</div>
-                        <div class="text-sm text-content-tertiary mt-2">{{ completion_percentage }}% Complete</div>
                     </div>
                     <div class="stat-card">
                         <span class="stat-number">{{ total_denominations }}</span>

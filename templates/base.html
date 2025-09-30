@@ -30,8 +30,6 @@
                         <a href="{% url 'denomination_map' %}" class="hover:text-primary-200 transition duration-150">Denomination Map</a>
                         <a href="{% url 'demographics_map' %}" class="hover:text-primary-200 transition duration-150">Demographic Map</a>
                         <a href="{% url 'census_browser' %}" class="hover:text-primary-200 transition duration-150">Browse Records</a>
-                        <a href="/admin/" class="hover:text-primary-200 transition duration-150">Admin</a>
-                        <a href="/census/api/" class="hover:text-primary-200 transition duration-150">API</a>
                     </div>
                     <!-- Mobile menu button -->
                     <div class="md:hidden">
@@ -74,7 +72,11 @@
                     </div>
 
                     <div>
-
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Quick Links</h4>
+                        <div><a href="/census/api/" class="text-religious-primary hover:text-primary-700 transition-colors">API</a></div>
+                        <div><a href="{% url 'locations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Locations</a></div>
+                        <div><a href="{% url 'denominations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Denominations</a></div>
+                        <div><a href="{% url 'census_browser' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Records</a></div>
                     </div>
 
                     <div>

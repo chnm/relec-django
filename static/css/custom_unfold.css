@@ -1,0 +1,178 @@
+/* Custom Religious Ecologies theme colors for Unfold */
+
+:root {
+  /* Override Unfold's primary color variables with Religious Ecologies blue */
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #0060b1; /* Base blue */
+  --primary-600: #0052a3;
+  --primary-700: #004494;
+  --primary-800: #003685;
+  --primary-900: #002876;
+  --primary-950: #001a5e;
+
+  /* Also override the CSS custom properties that Unfold uses */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #0060b1;
+  --color-primary-600: #0052a3;
+  --color-primary-700: #004494;
+  --color-primary-800: #003685;
+  --color-primary-900: #002876;
+  --color-primary-950: #001a5e;
+}
+
+/* Override specific Unfold elements that might still use purple */
+.bg-primary-500 {
+  background-color: #0060b1 !important;
+}
+
+.text-primary-500 {
+  color: #0060b1 !important;
+}
+
+.border-primary-500 {
+  border-color: #0060b1 !important;
+}
+
+/* Button overrides */
+.btn-primary,
+button[type="submit"],
+input[type="submit"],
+.button.primary {
+  background-color: #0060b1 !important;
+  border-color: #0060b1 !important;
+  color: white !important;
+}
+
+.btn-primary:hover,
+button[type="submit"]:hover,
+input[type="submit"]:hover,
+.button.primary:hover {
+  background-color: #0052a3 !important;
+  border-color: #0052a3 !important;
+}
+
+/* Link colors */
+a {
+  color: #0060b1;
+}
+
+a:hover {
+  color: #0052a3;
+}
+
+/* Navigation and sidebar active states */
+.bg-primary {
+  background-color: #0060b1 !important;
+}
+
+/* Form controls focus states */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #0060b1 !important;
+  box-shadow: 0 0 0 3px rgba(0, 96, 177, 0.1) !important;
+}
+
+/* Badge colors */
+.badge-primary {
+  background-color: #0060b1 !important;
+}
+
+/* Progress bars */
+.progress-bar-primary {
+  background-color: #0060b1 !important;
+}
+
+/* Checkbox and radio button colors */
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background-color: #0060b1 !important;
+  border-color: #0060b1 !important;
+}
+
+/* Sidebar navigation active/hover states */
+.sidebar-item.active,
+.sidebar-item:hover {
+  background-color: rgba(0, 96, 177, 0.1) !important;
+}
+
+.sidebar-item.active a,
+.sidebar-item:hover a {
+  color: #0060b1 !important;
+}
+
+/* Tab navigation */
+.nav-tabs .nav-link.active {
+  color: #0060b1 !important;
+  border-bottom-color: #0060b1 !important;
+}
+
+/* Pagination */
+.pagination .page-link {
+  color: #0060b1 !important;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: #0060b1 !important;
+  border-color: #0060b1 !important;
+}
+
+/* Override any remaining purple references */
+[class*="purple"],
+[class*="violet"],
+[style*="purple"],
+[style*="violet"] {
+  color: #0060b1 !important;
+  background-color: transparent;
+}
+
+[style*="background-color: purple"],
+[style*="background-color: violet"] {
+  background-color: #0060b1 !important;
+}
+
+/* Specific Unfold admin overrides */
+.unfold-sidebar-item.active {
+  background-color: rgba(0, 96, 177, 0.1) !important;
+}
+
+.unfold-sidebar-item.active .unfold-sidebar-link {
+  color: #0060b1 !important;
+}
+
+/* Action buttons in admin */
+.unfold-btn-primary {
+  background-color: #0060b1 !important;
+  border-color: #0060b1 !important;
+}
+
+.unfold-btn-primary:hover {
+  background-color: #0052a3 !important;
+  border-color: #0052a3 !important;
+}
+
+/* Tables and data display */
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 96, 177, 0.05);
+}
+
+/* Make sure our bulk assignment form buttons use the right colors too */
+.bg-blue-600,
+.hover\\:bg-blue-700:hover {
+  background-color: #0060b1 !important;
+}
+
+.hover\\:bg-blue-700:hover {
+  background-color: #0052a3 !important;
+}
+
+/* Sidebar highlighting is now handled correctly with distinct URLs */
+/* No additional sidebar CSS rules needed */
