@@ -105,23 +105,33 @@ class CensusSchedule(models.Model):
 
     # Reference fields from original system
     datascribe_omeka_item_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Omeka Item ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_item_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Item ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_record_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Record ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_original_image_path = models.CharField(
         max_length=255,
+        blank=True,
+        null=True,
         verbose_name="DataScribe Original Image Path",
     )
     omeka_storage_id = models.CharField(
         max_length=255,
+        blank=True,
+        null=True,
         verbose_name="Omeka Storage ID",
     )
 
