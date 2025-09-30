@@ -3,27 +3,33 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>{% block title %}Religious Ecologies{% endblock %}</title>
+        <title>{% block title %}American Religious Ecologies{% endblock %}</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+        <!-- Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500;600;700&family=Quattrocento:wght@400;700&display=swap" rel="stylesheet">
+
         {% tailwind_css %}
         {% block extra_css %}{% endblock %}
     </head>
 
-    <body class="bg-gray-50 font-serif leading-normal tracking-normal min-h-screen flex flex-col">
+    <body class="bg-surface-secondary font-body leading-normal tracking-normal min-h-screen flex flex-col">
         <!-- Navigation -->
-        <nav class="bg-indigo-700 text-white shadow-md">
+        <nav class="bg-religious-primary text-white shadow-religious">
             <div class="container mx-auto px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
-                        <a href="{% url 'index' %}" class="text-xl font-bold">Religious Ecologies</a>
+                        <a href="{% url 'index' %}" class="text-2xl font-bold">American Religious Ecologies</a>
                     </div>
                     <div class="hidden md:flex space-x-6">
-                        <a href="{% url 'index' %}" class="hover:text-indigo-200 transition duration-150">Home</a>
-                        <a href="{% url 'denomination_map' %}" class="hover:text-indigo-200 transition duration-150">Map</a>
-                        <a href="/admin/" class="hover:text-indigo-200 transition duration-150">Admin</a>
-                        <a href="/census/api/" class="hover:text-indigo-200 transition duration-150">API</a>
+                        <a href="{% url 'index' %}" class="hover:text-primary-200 transition duration-150">Home</a>
+                        <a href="{% url 'denomination_map' %}" class="hover:text-primary-200 transition duration-150">Denomination Map</a>
+                        <a href="{% url 'demographics_map' %}" class="hover:text-primary-200 transition duration-150">Demographic Map</a>
+                        <a href="{% url 'census_browser' %}" class="hover:text-primary-200 transition duration-150">Browse Records</a>
                     </div>
                     <!-- Mobile menu button -->
                     <div class="md:hidden">
@@ -37,11 +43,12 @@
             </div>
             <!-- Mobile menu -->
             <div id="mobile-menu" class="hidden md:hidden">
-                <div class="px-4 py-2 space-y-1 bg-indigo-600">
-                    <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Home</a>
-                    <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Map</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">About</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Contact</a>
+                <div class="px-4 py-2 space-y-1 bg-primary-600">
+                    <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Home</a>
+                    <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Map</a>
+                    <a href="{% url 'census_browser' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Browse Records</a>
+                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">About</a>
+                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Contact</a>
                 </div>
             </div>
         </nav>
@@ -54,15 +61,50 @@
         </main>
 
         <!-- Footer -->
-        <footer class="bg-gray-100 border-t border-gray-200">
-            <div class="container mx-auto px-4 py-6">
-                <div class="flex flex-col md:flex-row justify-between">
-                    <div class="mb-4 md:mb-0">
-                        <h3 class="text-lg font-semibold mb-2">Religious Ecologies</h3>
-                        <p class="text-gray-600">Exploring the religious landscape of America</p>
-                    </div>
+        <footer class="bg-surface-tertiary border-t border-gray-200">
+            <div class="container mx-auto px-4 py-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div>
-                        <p class="text-gray-600 text-sm">&copy; {% now "Y" %} Religious Ecologies. All rights reserved.</p>
+                        <h3 class="text-lg font-semibold mb-2 text-content-primary font-heading">American Religious Ecologies</h3>
+                        <p class="text-content-secondary mb-4">Exploring the religious landscape of America</p>
+                        <p class="text-content-tertiary text-sm">Roy Rosenzweig Center for History and New Media</p>
+                        <p class="text-content-tertiary text-sm">George Mason University</p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Quick Links</h4>
+                        <div><a href="/census/api/" class="text-religious-primary hover:text-primary-700 transition-colors">API</a></div>
+                        <div><a href="{% url 'locations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Locations</a></div>
+                        <div><a href="{% url 'denominations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Denominations</a></div>
+                        <div><a href="{% url 'census_browser' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Records</a></div>
+                    </div>
+
+                    <div>
+                        {% load socialaccount %}
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Account</h4>
+                        {% if user.is_authenticated %}
+                            <div class="text-sm space-y-2">
+                                <p class="text-content-secondary">Welcome, {{ user.username }}!</p>
+                                <div><a href="{% url 'account_logout' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Logout</a></div>
+                            </div>
+                        {% else %}
+                            <div class="space-y-2 text-sm">
+                                <div><a href="{% url 'account_login' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Login</a></div>
+                                <div><a href="{% url 'account_signup' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Sign Up</a></div>
+                                {% comment %}
+                                <div class="pt-2 border-t border-gray-300">
+                                    <div><a href="{% provider_login_url 'github' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Sign in with GitHub</a></div>
+                                    <div><a href="{% provider_login_url 'google' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Sign in with Google</a></div>
+                                </div>
+                                {% endcomment %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-300 pt-6 mt-8">
+                    <div class="flex flex-col md:flex-row justify-between items-center text-sm text-content-tertiary">
+                        <p class="mt-2 md:mt-0"><a href="https://religiousecologies.org/">American Religious Ecologies</a> is generously funded in part by the <a href="https://www.neh.gov/">National Endowment for the Humanities</a> and developed by the <a href="https://rrchnm.org/">Roy Rosenzweig Center for History and New Media</a> at <a href="https://gmu.edu">George Mason University</a>. All of the census schedules on this website are in the public domain.</p>
                     </div>
                 </div>
             </div>
