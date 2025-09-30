@@ -239,3 +239,172 @@ THUMBNAIL_ALIASES = {
         "large": {"size": (800, 600), "crop": False},
     },
 }
+
+# Django Unfold Configuration
+UNFOLD = {
+    "SITE_TITLE": "Religious Ecologies",
+    "SITE_HEADER": "",
+    "SITE_URL": "/",
+    "SITE_ICON": {
+        "light": lambda request: "/static/images/logo.svg",
+        "dark": lambda request: "/static/images/logo.svg",
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": "Dashboard",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Overview",
+                        "icon": "dashboard",
+                        "link": lambda request: "/admin/",
+                    },
+                ],
+            },
+            {
+                "title": "Data Quality",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Schedule ID Gaps",
+                        "icon": "dangerous",
+                        "link": lambda request: "/admin/census/censusschedule/schedule-gap-analysis/",
+                    },
+                    {
+                        "title": "Missing Counties",
+                        "icon": "place",
+                        "link": lambda request: "/admin/census/censusschedule/missing-county-analysis/",
+                    },
+                ],
+            },
+            {
+                "title": "Transcription Project",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Census Schedules",
+                        "icon": "description",
+                        "link": lambda request: "/admin/census/censusschedule/",
+                    },
+                    {
+                        "title": "Religious Bodies",
+                        "icon": "account_balance",
+                        "link": lambda request: "/admin/census/religiousbody/",
+                    },
+                    {
+                        "title": "Membership Data",
+                        "icon": "people",
+                        "link": lambda request: "/admin/census/membership/",
+                    },
+                    {
+                        "title": "Clergy Information",
+                        "icon": "person",
+                        "link": lambda request: "/admin/census/clergy/",
+                    },
+                ],
+            },
+            {
+                "title": "Reference Data",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Denominations",
+                        "icon": "category",
+                        "link": lambda request: "/admin/census/denomination/",
+                    },
+                    {
+                        "title": "Locations",
+                        "icon": "place",
+                        "link": lambda request: "/admin/location/location/",
+                    },
+                ],
+            },
+            {
+                "title": "Content Management",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Pages",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/page/",
+                    },
+                ],
+            },
+            {
+                "title": "System Administration",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Users",
+                        "icon": "person",
+                        "link": lambda request: "/admin/auth/user/",
+                    },
+                    {
+                        "title": "Groups",
+                        "icon": "group",
+                        "link": lambda request: "/admin/auth/group/",
+                    },
+                    {
+                        "title": "User Sessions",
+                        "icon": "vpn_key",
+                        "link": lambda request: "/admin/sessions/session/",
+                    },
+                ],
+            },
+        ],
+    },
+    "TABS": [
+        {
+            "models": [
+                "census.censusschedule",
+                "census.religiousbody",
+                "census.membership",
+                "census.clergy",
+            ],
+            "items": [
+                {
+                    "title": "Census Schedules",
+                    "link": lambda request: "/admin/census/censusschedule/",
+                },
+                {
+                    "title": "Religious Bodies",
+                    "link": lambda request: "/admin/census/religiousbody/",
+                },
+                {
+                    "title": "Membership",
+                    "link": lambda request: "/admin/census/membership/",
+                },
+                {
+                    "title": "Clergy",
+                    "link": lambda request: "/admin/census/clergy/",
+                },
+            ],
+        }
+    ],
+    "COLORS": {
+        "primary": {
+            "50": "#eff6ff",
+            "100": "#dbeafe",
+            "200": "#bfdbfe",
+            "300": "#93c5fd",
+            "400": "#60a5fa",
+            "500": "#0060b1",  # RelEco blue
+            "600": "#0052a3",
+            "700": "#004494",
+            "800": "#003685",
+            "900": "#002876",
+            "950": "#001a5e",
+        }
+    },
+    "STYLES": [
+        lambda request: "css/custom_unfold.css",
+    ],
+}
