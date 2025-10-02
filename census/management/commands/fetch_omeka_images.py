@@ -102,10 +102,8 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Using delay of {delay}s between requests")
 
-        # Get CensusSchedule records with Omeka item IDs
-        queryset = CensusSchedule.objects.exclude(
-            datascribe_omeka_item_id__isnull=True
-        ).order_by("id")
+        # Get all CensusSchedule records (will skip those without Omeka IDs during processing)
+        queryset = CensusSchedule.objects.all().order_by("id")
 
         if start_from:
             queryset = queryset.filter(id__gte=start_from)
@@ -192,6 +190,13 @@ class Command(BaseCommand):
     def process_schedule(self, schedule, dry_run=False, force=False, delay=0.5):
         """Process a single CensusSchedule record"""
         omeka_item_id = schedule.datascribe_omeka_item_id
+
+        # Skip records without Omeka item IDs and log for manual review
+        if not omeka_item_id:
+            self.logger.info(
+                f"Schedule {schedule.id} has no Omeka item ID - skipping (needs manual review)"
+            )
+            return "skipped"
 
         # Rate limiting - delay between requests
         if delay > 0:
