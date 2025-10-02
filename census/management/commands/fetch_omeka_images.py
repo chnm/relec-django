@@ -102,7 +102,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Using delay of {delay}s between requests")
 
-        # Get all CensusSchedule records (will skip those without Omeka IDs during processing)
+        # Get all CensusSchedule records (using resource_id as Omeka item ID)
         queryset = CensusSchedule.objects.all().order_by("id")
 
         if start_from:
@@ -189,12 +189,12 @@ class Command(BaseCommand):
 
     def process_schedule(self, schedule, dry_run=False, force=False, delay=0.5):
         """Process a single CensusSchedule record"""
-        omeka_item_id = schedule.datascribe_omeka_item_id
+        omeka_item_id = schedule.resource_id
 
-        # Skip records without Omeka item IDs and log for manual review
+        # Skip records without resource IDs (this should be rare since resource_id is required)
         if not omeka_item_id:
             self.logger.info(
-                f"Schedule {schedule.id} has no Omeka item ID - skipping (needs manual review)"
+                f"Schedule {schedule.id} has no resource ID - skipping (needs manual review)"
             )
             return "skipped"
 
@@ -210,13 +210,17 @@ class Command(BaseCommand):
         # Fetch item data from Omeka API
         item_data = self.fetch_omeka_item(omeka_item_id)
         if not item_data:
-            self.logger.error(f"Could not fetch item data for Omeka ID {omeka_item_id}")
+            self.logger.error(
+                f"Could not fetch item data for resource ID {omeka_item_id}"
+            )
             return "error"
 
         # Get media IDs from item
         media_ids = self.extract_media_ids(item_data)
         if not media_ids:
-            self.logger.warning(f"No media found for Omeka item {omeka_item_id}")
+            self.logger.warning(
+                f"No media found for Omeka item with resource ID {omeka_item_id}"
+            )
             return "skipped"
 
         # Process the first media item (assuming one image per item)
