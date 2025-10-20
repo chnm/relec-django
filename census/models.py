@@ -153,6 +153,14 @@ class CensusSchedule(models.Model):
         indexes = [
             models.Index(fields=["schedule_id"]),
             models.Index(fields=["datascribe_omeka_item_id"]),
+            models.Index(fields=["transcription_status"]),
+            models.Index(fields=["assigned_transcriber"]),
+            models.Index(fields=["assigned_reviewer"]),
+            # Composite index for common filter combinations
+            models.Index(
+                fields=["transcription_status", "assigned_transcriber"],
+                name="census_status_transcriber_idx",
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -302,6 +310,12 @@ class ReligiousBody(models.Model):
         indexes = [
             models.Index(fields=["denomination"]),
             models.Index(fields=["location"]),
+            models.Index(fields=["census_record"]),
+            # Composite index for common queries
+            models.Index(
+                fields=["census_record", "denomination"],
+                name="census_rb_census_denom_idx",
+            ),
         ]
 
 
@@ -428,14 +442,24 @@ class Membership(models.Model):
     def __str__(self):
         return str(self.religious_body)
 
-    class Meta:
-        verbose_name = "Membership"
-        verbose_name_plural = "Membership"
-
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = "Membership"
+        verbose_name_plural = "Membership"
+
+        indexes = [
+            models.Index(fields=["census_record"]),
+            models.Index(fields=["religious_body"]),
+            # Composite index for common queries
+            models.Index(
+                fields=["census_record", "religious_body"],
+                name="census_mem_census_rb_idx",
+            ),
+        ]
 
 
 class Clergy(models.Model):
@@ -485,3 +509,8 @@ class Clergy(models.Model):
 
     class Meta:
         verbose_name_plural = "Clergy"
+
+        indexes = [
+            models.Index(fields=["census_schedule"]),
+            models.Index(fields=["is_assistant"]),
+        ]

@@ -193,14 +193,31 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 
 class ClergyInline(StackedInline):
     model = Clergy
-    extra = 1
+    extra = 0  # Changed from 1 to 0 to reduce initial queries
     tab = True
+    show_change_link = (
+        True  # Add link to edit in separate page instead of loading all data
+    )
+
+    def get_queryset(self, request):
+        """Optimize queries for clergy inline"""
+        qs = super().get_queryset(request)
+        return qs.select_related("census_schedule")
 
 
 class MembershipInline(StackedInline):
     model = Membership
-    extra = 1
+    extra = 0  # Changed from 1 to 0 to reduce initial queries
     tab = True
+    autocomplete_fields = ["religious_body"]
+    show_change_link = (
+        True  # Add link to edit in separate page instead of loading all data
+    )
+
+    def get_queryset(self, request):
+        """Optimize queries for membership inline"""
+        qs = super().get_queryset(request)
+        return qs.select_related("census_record", "religious_body")
 
 
 class ReligiousBodyInline(StackedInline):
@@ -208,8 +225,28 @@ class ReligiousBodyInline(StackedInline):
     raw_id_fields = [
         "location",
     ]
-    extra = 1
+    autocomplete_fields = ["denomination"]
+    extra = 0  # Changed from 1 to 0 to reduce initial queries
     tab = True
+    show_change_link = (
+        True  # Add link to edit in separate page instead of loading all data
+    )
+
+    def get_queryset(self, request):
+        """Optimize queries for religious body inline"""
+        qs = super().get_queryset(request)
+        return qs.select_related("census_record", "denomination", "location")
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Cache denomination queryset to avoid repeated database hits"""
+        if db_field.name == "denomination":
+            # Cache the queryset to prevent multiple loads
+            if not hasattr(self, "_denomination_queryset"):
+                self._denomination_queryset = Denomination.objects.all().order_by(
+                    "name"
+                )
+            kwargs["queryset"] = self._denomination_queryset
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.action(description="Fetch denominations from Apiary")
@@ -284,13 +321,23 @@ def sync_denominations(modeladmin, request, queryset):
 @admin.register(Denomination)
 class DenominationAdmin(ModelAdmin):
     list_display = ["name", "denomination_id", "family_census", "family_relec"]
-    search_fields = ["name", "denomination_id"]
+    search_fields = ["name", "denomination_id", "family_census", "family_relec"]
     ordering = ["name"]
     list_filter = ["family_census", "family_relec"]
     actions = [sync_denominations]
 
     # Add history view
     history_list_display = ["changed_fields"]
+
+    def get_search_results(self, request, queryset, search_term):
+        """Optimize autocomplete search"""
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
+        # Limit autocomplete results for performance
+        if "autocomplete" in request.path:
+            queryset = queryset[:50]
+        return queryset, use_distinct
 
 
 # Status change actions
@@ -843,8 +890,21 @@ class CensusScheduleAdmin(ModelAdmin):
     transcription_status_display.short_description = "Status"
 
     def get_queryset(self, request):
-        """Filter records based on user permissions"""
+        """Filter records based on user permissions and optimize queries"""
         qs = super().get_queryset(request)
+
+        # Optimize foreign key lookups
+        qs = qs.select_related("assigned_transcriber", "assigned_reviewer")
+
+        # Prefetch related inlines to reduce queries
+        qs = qs.prefetch_related(
+            "church_details",
+            "church_details__denomination",
+            "church_details__location",
+            "membership_details",
+            "membership_details__religious_body",
+            "clergy",
+        )
 
         # If user is ONLY in Transcribers group (student transcriber), only show their assigned records
         # Superusers and users in multiple groups (like admins) see all records
@@ -869,10 +929,11 @@ class CensusScheduleAdmin(ModelAdmin):
         """Auto-set status when students save their work"""
         if request.user.groups.filter(name="Transcribers").exists():
             # If student is saving and there are related objects, mark as needs review
+            # Use count() instead of exists() to utilize prefetched data
             if change and (
-                obj.church_details.exists()
-                or obj.membership_details.exists()
-                or obj.clergy.exists()
+                obj.church_details.count() > 0
+                or obj.membership_details.count() > 0
+                or obj.clergy.count() > 0
             ):
                 obj.transcription_status = "needs_review"
 
@@ -926,6 +987,11 @@ class ClergyAdmin(ModelAdmin):
     list_filter = ["is_assistant"]
     search_fields = ["name", "college", "theological_seminary"]
 
+    def get_queryset(self, request):
+        """Optimize queries for list display"""
+        qs = super().get_queryset(request)
+        return qs.select_related("census_schedule")
+
     fieldsets = [
         (
             "Basic Information",
@@ -962,6 +1028,22 @@ class ReligiousBodyAdmin(ModelAdmin):
     ]
     search_fields = ["name", "denomination__name", "census_record__schedule_title"]
     raw_id_fields = ["location"]
+    autocomplete_fields = ["denomination"]
+
+    def get_queryset(self, request):
+        """Optimize queries for list display"""
+        qs = super().get_queryset(request)
+        return qs.select_related("denomination", "census_record", "location")
+
+    def get_search_results(self, request, queryset, search_term):
+        """Optimize autocomplete search"""
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
+        # Limit autocomplete results for performance
+        if "autocomplete" in request.path:
+            queryset = queryset[:50]
+        return queryset, use_distinct
 
     fieldsets = [
         (
@@ -1026,6 +1108,11 @@ class MembershipAdmin(ModelAdmin):
     ]
     list_filter = ["census_record__transcription_status"]
     search_fields = ["religious_body__name", "census_record__schedule_title"]
+
+    def get_queryset(self, request):
+        """Optimize queries for list display"""
+        qs = super().get_queryset(request)
+        return qs.select_related("religious_body", "census_record")
 
     fieldsets = [
         (
