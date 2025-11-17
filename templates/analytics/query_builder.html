@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | American Religious Ecologies{% endblock %}
+
+{% block content %}
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-6">
+            <a href="{% url 'analytics:home' %}" class="text-religious-primary hover:text-primary-700">&larr; Back to Analytics Home</a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
+            <p class="text-content-secondary mb-6">
+                Build advanced queries to filter and explore the census data. Results can be viewed on-screen or exported to CSV/JSON formats.
+            </p>
+
+            <form method="get" action="{% url 'analytics:run_query' %}" id="queryForm">
+            <!-- Denomination Filter with Tabs -->
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-content-primary mb-3">Filter by Denomination</label>
+
+                <!-- Tab Navigation -->
+                    <div class="border-b border-gray-200 mb-4">
+                        <nav class="-mb-px flex space-x-4" role="tablist">
+                            <button type="button"
+                                    class="tab-button py-2 px-4 border-b-2 font-medium text-sm transition-colors"
+                                    data-tab="census-family"
+                                    onclick="switchTab(event, 'census-family')">
+                                Census Families
+                            </button>
+                            <button type="button"
+                                    class="tab-button py-2 px-4 border-b-2 font-medium text-sm transition-colors"
+                                    data-tab="relec-family"
+                                    onclick="switchTab(event, 'relec-family')">
+                                Religious Ecologies Families
+                            </button>
+                            <button type="button"
+                                    class="tab-button py-2 px-4 border-b-2 font-medium text-sm transition-colors"
+                                    data-tab="individual"
+                                    onclick="switchTab(event, 'individual')">
+                                Individual Denominations
+                            </button>
+                        </nav>
+                    </div>
+
+                <!-- Tab Content -->
+                <!-- Census Family Tab -->
+                    <div id="census-family-content" class="tab-content">
+                        <p class="text-sm text-content-secondary mb-2">Filter by original census family groupings</p>
+                        <select name="family_census" multiple size="10" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            {% for family in family_census_list %}
+                                <option value="{{ family }}">{{ family }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-content-tertiary mt-1">Hold Ctrl (Cmd on Mac) to select multiple families</p>
+                    </div>
+
+                <!-- Religious Ecologies Family Tab -->
+                    <div id="relec-family-content" class="tab-content hidden">
+                        <p class="text-sm text-content-secondary mb-2">Filter by Religious Ecologies research family groupings</p>
+                        <select name="family_relec" multiple size="10" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            {% for family in family_relec_list %}
+                                <option value="{{ family }}">{{ family }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-content-tertiary mt-1">Hold Ctrl (Cmd on Mac) to select multiple families</p>
+                    </div>
+
+                <!-- Individual Denominations Tab -->
+                    <div id="individual-content" class="tab-content hidden">
+                        <p class="text-sm text-content-secondary mb-2">Filter by specific denominations (grouped by family)</p>
+                        <select name="denomination" multiple size="10" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            {% for family, denoms in denominations_by_family.items %}
+                                <optgroup label="{{ family }}">
+                                    {% for denom in denoms %}
+                                        <option value="{{ denom.id }}">{{ denom.name }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-content-tertiary mt-1">Hold Ctrl (Cmd on Mac) to select multiple denominations</p>
+                    </div>
+                </div>
+
+            <!-- Location Filters -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="state" class="block text-sm font-semibold text-content-primary mb-2">State</label>
+                        <select name="state" id="state" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            <option value="">-- All States --</option>
+                            {% for state in states %}
+                                <option value="{{ state }}">{{ state }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="county" class="block text-sm font-semibold text-content-primary mb-2">County</label>
+                        <input type="text" name="county" id="county" placeholder="Enter county name" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                    </div>
+
+                    <div>
+                        <label for="city" class="block text-sm font-semibold text-content-primary mb-2">City</label>
+                        <input type="text" name="city" id="city" placeholder="Enter city name" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                    </div>
+                </div>
+
+            <!-- Transcription Status Filter -->
+                <div class="mb-6">
+                    <label for="transcription_status" class="block text-sm font-semibold text-content-primary mb-2">Transcription Status</label>
+                    <select name="transcription_status" id="transcription_status" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                        <option value="">-- All Statuses --</option>
+                        {% for value, label in transcription_statuses %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+            <!-- Data Completeness Filters -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="has_membership" class="block text-sm font-semibold text-content-primary mb-2">Has Membership Data</label>
+                        <select name="has_membership" id="has_membership" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            <option value="">-- Any --</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="has_clergy" class="block text-sm font-semibold text-content-primary mb-2">Has Clergy Data</label>
+                        <select name="has_clergy" id="has_clergy" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                            <option value="">-- Any --</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div>
+
+            <!-- Property Value Range -->
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-content-primary mb-2">Edifice Value Range</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <input type="number" name="min_edifice_value" id="min_edifice_value" placeholder="Minimum value" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                        </div>
+                        <div>
+                            <input type="number" name="max_edifice_value" id="max_edifice_value" placeholder="Maximum value" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Export Format Selection -->
+                <div class="mb-6">
+                    <label for="format" class="block text-sm font-semibold text-content-primary mb-2">Output Format</label>
+                    <select name="format" id="format" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
+                        <option value="html">View on page (limited to 100 results)</option>
+                        <option value="csv">Export to CSV</option>
+                        <option value="json">Export to JSON</option>
+                    </select>
+                </div>
+
+            <!-- Buttons -->
+                <div class="flex gap-4">
+                    <button type="submit" class="bg-religious-primary text-white px-6 py-3 rounded font-semibold hover:bg-primary-700 transition-colors">
+                        Run Query
+                    </button>
+                    <button type="reset" class="bg-gray-200 text-gray-700 px-6 py-3 rounded font-semibold hover:bg-gray-300 transition-colors">
+                        Reset Form
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    <!-- Help Section -->
+        <div class="mt-8 bg-blue-50 rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-content-primary mb-3">Query Tips</h3>
+            <ul class="space-y-2 text-sm text-content-secondary">
+                <li><strong>Denomination families:</strong> Use "Census Families" for original census groupings (e.g., "Baptist bodies") or "Religious Ecologies Families" for research-based groupings (e.g., "Baptist", "Catholic")</li>
+                <li><strong>Individual denominations:</strong> Select specific denominations when you need precise filtering (e.g., "Southern Baptist Convention" instead of all Baptist bodies)</li>
+                <li><strong>Multiple selections:</strong> Hold Ctrl (Cmd on Mac) to select multiple items in any dropdown. You can combine filters across tabs.</li>
+                <li><strong>Filter combination:</strong> All selected filters are combined (AND logic for different filter types, OR logic within denomination selections)</li>
+                <li><strong>Location:</strong> You can filter by state, county, and/or city</li>
+                <li><strong>Export limits:</strong> CSV and JSON exports include all matching results (not limited to 100)</li>
+                <li><strong>Admin links:</strong> Exported data includes direct links to edit records in Django admin</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+    // Tab switching functionality
+        function switchTab(event, tabName) {
+            event.preventDefault();
+
+        // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+
+        // Remove active state from all buttons
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                button.classList.remove('border-religious-primary', 'text-religious-primary');
+                button.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            });
+
+        // Show selected tab content
+            const selectedContent = document.getElementById(tabName + '-content');
+            if (selectedContent) {
+                selectedContent.classList.remove('hidden');
+            }
+
+        // Add active state to clicked button
+            const clickedButton = event.currentTarget;
+            clickedButton.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            clickedButton.classList.add('border-religious-primary', 'text-religious-primary');
+        }
+
+    // Initialize first tab as active on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstButton = document.querySelector('.tab-button');
+            if (firstButton) {
+                firstButton.classList.add('border-religious-primary', 'text-religious-primary');
+                firstButton.classList.remove('border-transparent', 'text-gray-500');
+            }
+        });
+    </script>
+{% endblock %}

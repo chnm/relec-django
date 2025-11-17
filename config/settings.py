@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "census",
     "location",
     "pages",
+    "analytics",
 ]
 
 MIDDLEWARE = [
@@ -263,6 +264,38 @@ UNFOLD = {
                         "title": "Overview",
                         "icon": "dashboard",
                         "link": lambda request: "/admin/",
+                    },
+                ],
+            },
+            {
+                "title": "Analytics & Reporting",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Analytics Home",
+                        "icon": "analytics",
+                        "link": lambda request: "/analytics/",
+                    },
+                    {
+                        "title": "Query Builder",
+                        "icon": "search",
+                        "link": lambda request: "/analytics/query/",
+                    },
+                    {
+                        "title": "Denomination Analysis",
+                        "icon": "bar_chart",
+                        "link": lambda request: "/analytics/analysis/denominations/",
+                    },
+                    {
+                        "title": "Location Analysis",
+                        "icon": "map",
+                        "link": lambda request: "/analytics/analysis/locations/",
+                    },
+                    {
+                        "title": "Data Completeness",
+                        "icon": "checklist",
+                        "link": lambda request: "/analytics/analysis/completeness/",
                     },
                 ],
             },

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | American Religious Ecologies{% endblock %}
+
+{% block content %}
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-6">
+            <a href="{% url 'analytics:home' %}" class="text-religious-primary hover:text-primary-700">&larr; Back to Analytics Home</a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
+            <p class="text-content-secondary mb-6">
+                Review data completeness metrics across the entire dataset. This helps identify which schedules need additional transcription work.
+            </p>
+
+        <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                    <div class="text-sm text-content-secondary mb-1">Religious Bodies</div>
+                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.religious_bodies.percentage }}%</div>
+                    <div class="text-sm text-content-tertiary">{{ completeness.religious_bodies.count }} of {{ total_schedules }} schedules</div>
+                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.religious_bodies.percentage }}%"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                    <div class="text-sm text-content-secondary mb-1">Membership Data</div>
+                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.membership.percentage }}%</div>
+                    <div class="text-sm text-content-tertiary">{{ completeness.membership.count }} of {{ total_schedules }} schedules</div>
+                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.membership.percentage }}%"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                    <div class="text-sm text-content-secondary mb-1">Clergy Data</div>
+                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.clergy.percentage }}%</div>
+                    <div class="text-sm text-content-tertiary">{{ completeness.clergy.count }} of {{ total_schedules }} schedules</div>
+                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.clergy.percentage }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Location Data -->
+            <div class="border-t border-gray-200 pt-6">
+                <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Location Data Completeness</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Has Location</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.location.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.location.count }} religious bodies have location data</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.location.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Has County</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.county.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.county.count }} religious bodies have county data</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.county.percentage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Action Items -->
+            <div class="mt-8 bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                <h3 class="text-lg font-semibold text-content-primary mb-2">Find Incomplete Records</h3>
+                <p class="text-sm text-content-secondary mb-3">Use the query builder to find schedules that need additional data:</p>
+                <div class="flex flex-wrap gap-2">
+                    <a href="{% url 'analytics:run_query' %}?has_membership=no" class="bg-white px-4 py-2 rounded shadow text-sm hover:bg-gray-50 transition-colors">
+                        Missing Membership Data
+                    </a>
+                    <a href="{% url 'analytics:run_query' %}?has_clergy=no" class="bg-white px-4 py-2 rounded shadow text-sm hover:bg-gray-50 transition-colors">
+                        Missing Clergy Data
+                    </a>
+                    <a href="{% url 'analytics:query_builder' %}" class="bg-religious-primary text-white px-4 py-2 rounded text-sm hover:bg-primary-700 transition-colors">
+                        Custom Query
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
