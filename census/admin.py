@@ -1028,7 +1028,14 @@ class ReligiousBodyAdmin(ModelAdmin):
     ]
     search_fields = ["name", "denomination__name", "census_record__schedule_title"]
     raw_id_fields = ["location"]
-    autocomplete_fields = ["denomination"]
+    autocomplete_fields = ["denomination", "census_record"]
+
+    readonly_fields = [
+        "geocode_status",
+        "geocoded_at",
+        "created_at",
+        "updated_at",
+    ]
 
     def get_queryset(self, request):
         """Optimize queries for list display"""
@@ -1066,6 +1073,18 @@ class ReligiousBodyAdmin(ModelAdmin):
                     "location",
                     "urban_rural_code",
                 ]
+            },
+        ),
+        (
+            "Geocoding (Auto-populated)",
+            {
+                "fields": [
+                    "latitude",
+                    "longitude",
+                    "geocode_status",
+                    "geocoded_at",
+                ],
+                "classes": ["collapse"],
             },
         ),
         (
@@ -1184,5 +1203,19 @@ class MembershipAdmin(ModelAdmin):
             },
         ),
     ]
+
+    def geocode_status_display(self, obj):
+        """Display geocoding status with color coding."""
+        if obj.geocode_status == "success":
+            return "✓ Geocoded"
+        elif obj.geocode_status == "failed":
+            return "✗ Failed"
+        elif obj.geocode_status == "pending":
+            return "⏳ Pending"
+        elif obj.geocode_status == "skipped":
+            return "− Skipped"
+        return "− Not Attempted"
+
+    geocode_status_display.short_description = "Geocode Status"
 
     history_list_display = ["changed_fields"]

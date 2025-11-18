@@ -410,3 +410,7 @@ UNFOLD = {
         lambda request: "css/custom_unfold.css",
     ],
 }
+
+# Geocoding settings
+# ------------------------------------------------------------------------------
+GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
