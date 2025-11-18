@@ -215,3 +215,138 @@ class ClergyAdmin(ModelAdmin):
     serving_congregation_display.boolean = True
 
     history_list_display = ["changed_fields"]
+
+
+@admin.register(ReligiousBody)
+class ReligiousBodyAdmin(ModelAdmin):
+    """
+    Admin interface for Religious Body records with geocoding support.
+    """
+
+    list_display = [
+        "name",
+        "denomination",
+        "address",
+        "location",
+        "latitude",
+        "longitude",
+    ]
+
+    list_filter = [
+        "geocode_status",
+        ("location__state", admin.EmptyFieldListFilter),
+    ]
+
+    search_fields = [
+        "name",
+        "address",
+        "denomination__name",
+        "location__city",
+        "location__county",
+        "location__state",
+    ]
+
+    raw_id_fields = ["location", "census_record", "denomination"]
+
+    readonly_fields = [
+        "geocode_status",
+        "geocoded_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = [
+        (
+            "Basic Information",
+            {
+                "fields": [
+                    "census_record",
+                    "name",
+                    "denomination",
+                    "census_code",
+                    "division",
+                ]
+            },
+        ),
+        (
+            "Location & Address",
+            {
+                "fields": [
+                    "address",
+                    "location",
+                    "urban_rural_code",
+                ]
+            },
+        ),
+        (
+            "Geocoding (Auto-populated)",
+            {
+                "fields": [
+                    "latitude",
+                    "longitude",
+                    "geocode_status",
+                    "geocoded_at",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+        (
+            "Church Property",
+            {
+                "fields": [
+                    "num_edifices",
+                    "edifice_value",
+                    "edifice_debt",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+        (
+            "Parsonage",
+            {
+                "fields": [
+                    "has_pastors_residence",
+                    "residence_value",
+                    "residence_debt",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+        (
+            "Finances",
+            {
+                "fields": [
+                    "expenses",
+                    "benevolences",
+                    "total_expenditures",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+        (
+            "Record Information",
+            {
+                "fields": [
+                    "created_at",
+                    "updated_at",
+                ],
+                "classes": ["collapse"],
+            },
+        ),
+    ]
+
+    def geocode_status_display(self, obj):
+        """Display geocoding status with color coding."""
+        if obj.geocode_status == "success":
+            return "✓ Geocoded"
+        elif obj.geocode_status == "failed":
+            return "✗ Failed"
+        elif obj.geocode_status == "pending":
+            return "⏳ Pending"
+        elif obj.geocode_status == "skipped":
+            return "− Skipped"
+        return "− Not Attempted"
+
+    geocode_status_display.short_description = "Geocode Status"
+
+    history_list_display = ["changed_fields"]
