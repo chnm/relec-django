@@ -1,7 +1,3 @@
-#site-name {
-  display: none;
-}
-
 :root {
   /* Override Unfold's primary color variables with Religious Ecologies blue */
   --primary-50: #eff6ff;

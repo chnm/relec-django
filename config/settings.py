@@ -245,12 +245,8 @@ THUMBNAIL_ALIASES = {
 # Django Unfold Configuration
 UNFOLD = {
     "SITE_TITLE": "Religious Ecologies",
-    "SITE_HEADER": "",
+    "SITE_HEADER": "Religious Ecologies",
     "SITE_URL": "/",
-    "SITE_ICON": {
-        "light": lambda request: "/static/images/logo.svg",
-        "dark": lambda request: "/static/images/logo.svg",
-    },
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
