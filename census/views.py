@@ -57,6 +57,11 @@ def demographics_map_view(request):
     return render(request, "census/demographics_map.html", context)
 
 
+def denomination_geojson_map_view(request):
+    """Render the GeoJSON map test view for denominations by populated place"""
+    return render(request, "census/denomination_geojson_map.html")
+
+
 def census_browser_view(request):
     """Render the census records browser with filtering and pagination"""
 

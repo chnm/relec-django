@@ -67,6 +67,10 @@ INSTALLED_APPS = [
     # rest framework
     "rest_framework",
     "django_filters",
+    # django-tables2
+    "django_tables2",
+    # cors headers
+    "corsheaders",
     # obj storage
     "storages",
     # image processing
@@ -83,6 +87,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -246,12 +251,12 @@ THUMBNAIL_ALIASES = {
 # Django Unfold Configuration
 UNFOLD = {
     "SITE_TITLE": "Religious Ecologies",
-    "SITE_HEADER": "",
+    "SITE_HEADER": "Religious Ecologies",
     "SITE_URL": "/",
-    "SITE_ICON": {
-        "light": lambda request: "/static/images/logo.svg",
-        "dark": lambda request: "/static/images/logo.svg",
-    },
+    # "SITE_ICON": {
+    #     "light": lambda request: "/static/images/logo.svg",
+    #     "dark": lambda request: "/static/images/logo.svg",
+    # },
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
@@ -296,23 +301,6 @@ UNFOLD = {
                         "title": "Data Completeness",
                         "icon": "checklist",
                         "link": lambda request: "/analytics/analysis/completeness/",
-                    },
-                ],
-            },
-            {
-                "title": "Data Quality",
-                "separator": True,
-                "collapsible": True,
-                "items": [
-                    {
-                        "title": "Schedule ID Gaps",
-                        "icon": "dangerous",
-                        "link": lambda request: "/admin/census/censusschedule/schedule-gap-analysis/",
-                    },
-                    {
-                        "title": "Missing Counties",
-                        "icon": "place",
-                        "link": lambda request: "/admin/census/censusschedule/missing-county-analysis/",
                     },
                 ],
             },
@@ -443,3 +431,17 @@ UNFOLD = {
         lambda request: "css/custom_unfold.css",
     ],
 }
+
+# CORS Configuration
+# ------------------------------------------------------------------------------
+# Allow requests from Hugo development server
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:1313",
+    "http://127.0.0.1:1313",
+]
+
+# Allow credentials (cookies, authorization headers, etc.)
+CORS_ALLOW_CREDENTIALS = True
+
+# Allow all headers for development
+CORS_ALLOW_ALL_ORIGINS = False  # Keep this False for security
