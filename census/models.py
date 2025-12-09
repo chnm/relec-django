@@ -1,8 +1,13 @@
+import logging
+
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 from location.models import Location
+
+logger = logging.getLogger(__name__)
 
 
 def to_numeric(value, default=0):
@@ -220,6 +225,39 @@ class ReligiousBody(models.Model):
         blank=True, null=True, max_length=50, verbose_name="Urban/rural code"
     )
 
+    # Geocoding fields for specific address
+    latitude = models.FloatField(
+        blank=True,
+        null=True,
+        verbose_name="Latitude",
+        help_text="Automatically geocoded from address. Leave blank to auto-geocode on save.",
+    )
+    longitude = models.FloatField(
+        blank=True,
+        null=True,
+        verbose_name="Longitude",
+        help_text="Automatically geocoded from address. Leave blank to auto-geocode on save.",
+    )
+    geocode_status = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=[
+            ("pending", "Pending Geocoding"),
+            ("success", "Successfully Geocoded"),
+            ("failed", "Geocoding Failed"),
+            ("skipped", "Skipped (No Address)"),
+        ],
+        verbose_name="Geocode Status",
+        help_text="Status of automatic geocoding process.",
+    )
+    geocoded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Geocoded At",
+        help_text="Timestamp when geocoding was last attempted.",
+    )
+
     # Church property details
     num_edifices = models.IntegerField(
         blank=True,
@@ -302,6 +340,53 @@ class ReligiousBody(models.Model):
     def __str__(self):
         # if name return name, otherwise "no name provided"
         return self.name if self.name is not None else "No name provided"
+
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically geocode address on save.
+        """
+        # Check if geocoding should be performed
+        from census.geocoding import GeocodingError, geocode_address, should_geocode
+
+        if should_geocode(self):
+            logger.info(f"Attempting to geocode ReligiousBody: {self.name}")
+
+            # Extract location context from related Location
+            city = None
+            county = None
+            state = None
+
+            if self.location:
+                city = self.location.city
+                county = self.location.county
+                state = self.location.state
+
+            try:
+                # Perform geocoding
+                lat, lon, status = geocode_address(
+                    address=self.address, city=city, county=county, state=state
+                )
+
+                # Update geocoding fields
+                self.latitude = lat
+                self.longitude = lon
+                self.geocode_status = status
+                self.geocoded_at = timezone.now()
+
+                if status == "success":
+                    logger.info(
+                        f"Successfully geocoded {self.name} to ({lat:.6f}, {lon:.6f})"
+                    )
+                elif status == "failed":
+                    logger.warning(f"Geocoding failed for {self.name}")
+
+            except GeocodingError as e:
+                logger.error(f"Geocoding error for {self.name}: {e}")
+                self.geocode_status = "failed"
+                self.geocoded_at = timezone.now()
+
+        # Call parent save
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Religious Body"
