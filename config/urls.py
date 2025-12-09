@@ -14,6 +14,7 @@ urlpatterns = [
     path("", index, name="index"),
     path("admin/", admin.site.urls),
     path("census/", include("census.urls")),
+    path("analytics/", include("analytics.urls")),
     # allauth
     path("accounts/", include("allauth.urls")),
     # pages - keep this last so it doesn't interfere with other URL patterns

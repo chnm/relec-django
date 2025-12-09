@@ -208,9 +208,11 @@
     // Initialize the map
             const map = L.map('map').setView([39.8283, -98.5795], 4); // Centered on US
 
-    // Add tile layer (OpenStreetMap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // Add tile layer (Carto Positron - clean, minimal design)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
             }).addTo(map);
 
     // Create a marker cluster group and a regular layer group
@@ -267,19 +269,31 @@
             }
 
     // Function to get color based on denomination family
+            const FAMILY_COLORS = [
+                "#1f77b4", // blue
+                "#ff7f0e", // orange
+                "#2ca02c", // green
+                "#d62728", // red
+                "#9467bd", // purple
+                "#8c564b", // brown
+                "#e377c2", // pink
+                "#7f7f7f", // gray
+                "#bcbd22", // yellow-green
+                "#17becf"  // cyan
+            ];
+
             function getFamilyColor(family) {
-        // Simple hash function to generate colors
+  // Always map the same family to the same index
+                const index = Math.abs(hashString(family)) % FAMILY_COLORS.length;
+                return FAMILY_COLORS[index];
+            }
+
+            function hashString(str) {
                 let hash = 0;
-                for (let i = 0; i < family.length; i++) {
-                    hash = family.charCodeAt(i) + ((hash << 5) - hash);
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
                 }
-
-        // Convert hash to RGB color
-                const r = (hash & 0xFF) % 200 + 20;
-                const g = ((hash >> 8) & 0xFF) % 200 + 20;
-                const b = ((hash >> 16) & 0xFF) % 200 + 20;
-
-                return `rgb(${r}, ${g}, ${b})`;
+                return hash;
             }
 
     // Function to toggle clustering

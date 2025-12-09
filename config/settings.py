@@ -67,6 +67,10 @@ INSTALLED_APPS = [
     # rest framework
     "rest_framework",
     "django_filters",
+    # django-tables2
+    "django_tables2",
+    # cors headers
+    "corsheaders",
     # obj storage
     "storages",
     # image processing
@@ -76,12 +80,14 @@ INSTALLED_APPS = [
     "census",
     "location",
     "pages",
+    "analytics",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -245,12 +251,12 @@ THUMBNAIL_ALIASES = {
 # Django Unfold Configuration
 UNFOLD = {
     "SITE_TITLE": "Religious Ecologies",
-    "SITE_HEADER": "",
+    "SITE_HEADER": "Religious Ecologies",
     "SITE_URL": "/",
-    "SITE_ICON": {
-        "light": lambda request: "/static/images/logo.svg",
-        "dark": lambda request: "/static/images/logo.svg",
-    },
+    # "SITE_ICON": {
+    #     "light": lambda request: "/static/images/logo.svg",
+    #     "dark": lambda request: "/static/images/logo.svg",
+    # },
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
@@ -267,19 +273,34 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Data Quality",
+                "title": "Analytics & Reporting",
                 "separator": True,
                 "collapsible": True,
                 "items": [
                     {
-                        "title": "Schedule ID Gaps",
-                        "icon": "dangerous",
-                        "link": lambda request: "/admin/census/censusschedule/schedule-gap-analysis/",
+                        "title": "Analytics Home",
+                        "icon": "analytics",
+                        "link": lambda request: "/analytics/",
                     },
                     {
-                        "title": "Missing Counties",
-                        "icon": "place",
-                        "link": lambda request: "/admin/census/censusschedule/missing-county-analysis/",
+                        "title": "Query Builder",
+                        "icon": "search",
+                        "link": lambda request: "/analytics/query/",
+                    },
+                    {
+                        "title": "Denomination Analysis",
+                        "icon": "bar_chart",
+                        "link": lambda request: "/analytics/analysis/denominations/",
+                    },
+                    {
+                        "title": "Location Analysis",
+                        "icon": "map",
+                        "link": lambda request: "/analytics/analysis/locations/",
+                    },
+                    {
+                        "title": "Data Completeness",
+                        "icon": "checklist",
+                        "link": lambda request: "/analytics/analysis/completeness/",
                     },
                 ],
             },
