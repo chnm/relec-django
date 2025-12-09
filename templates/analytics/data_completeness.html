@@ -9,67 +9,15 @@
             <a href="{% url 'analytics:home' %}" class="text-religious-primary hover:text-primary-700">&larr; Back to Analytics Home</a>
         </div>
 
+
+
         <div class="bg-white rounded-lg shadow-md p-6">
             <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
             <p class="text-content-secondary mb-6">
-                Review data completeness metrics across the entire dataset. This helps identify which schedules need additional transcription work.
+                Review data completeness metrics across the entire dataset.
             </p>
 
-        <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-content-secondary mb-1">Religious Bodies</div>
-                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.religious_bodies.percentage }}%</div>
-                    <div class="text-sm text-content-tertiary">{{ completeness.religious_bodies.count }} of {{ total_schedules }} schedules</div>
-                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.religious_bodies.percentage }}%"></div>
-                    </div>
-                </div>
-
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-content-secondary mb-1">Membership Data</div>
-                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.membership.percentage }}%</div>
-                    <div class="text-sm text-content-tertiary">{{ completeness.membership.count }} of {{ total_schedules }} schedules</div>
-                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.membership.percentage }}%"></div>
-                    </div>
-                </div>
-
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-content-secondary mb-1">Clergy Data</div>
-                    <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.clergy.percentage }}%</div>
-                    <div class="text-sm text-content-tertiary">{{ completeness.clergy.count }} of {{ total_schedules }} schedules</div>
-                    <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.clergy.percentage }}%"></div>
-                    </div>
-                </div>
-            </div>
-
-        <!-- Location Data -->
-            <div class="border-t border-gray-200 pt-6">
-                <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Location Data Completeness</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-gray-50 rounded-lg p-6">
-                        <div class="text-sm text-content-secondary mb-1">Has Location</div>
-                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.location.percentage }}%</div>
-                        <div class="text-sm text-content-tertiary">{{ completeness.location.count }} religious bodies have location data</div>
-                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.location.percentage }}%"></div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-50 rounded-lg p-6">
-                        <div class="text-sm text-content-secondary mb-1">Has County</div>
-                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.county.percentage }}%</div>
-                        <div class="text-sm text-content-tertiary">{{ completeness.county.count }} religious bodies have county data</div>
-                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.county.percentage }}%"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        <!-- Action Items -->
+          <!-- Action Items -->
             <div class="mt-8 bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
                 <h3 class="text-lg font-semibold text-content-primary mb-2">Find Incomplete Records</h3>
                 <p class="text-sm text-content-secondary mb-3">Use the query builder to find schedules that need additional data:</p>
@@ -80,11 +28,167 @@
                     <a href="{% url 'analytics:run_query' %}?has_clergy=no" class="bg-white px-4 py-2 rounded shadow text-sm hover:bg-gray-50 transition-colors">
                         Missing Clergy Data
                     </a>
+                    <a href="{% url 'analytics:run_query' %}?has_location=no" class="bg-white px-4 py-2 rounded shadow text-sm hover:bg-gray-50 transition-colors">
+                        Missing Location Data
+                    </a>
                     <a href="{% url 'analytics:query_builder' %}" class="bg-religious-primary text-white px-4 py-2 rounded text-sm hover:bg-primary-700 transition-colors">
                         Custom Query
                     </a>
                 </div>
             </div>
+
+            {% if user.is_authenticated %}
+                <div class="mt-8 bg-gray-100 rounded-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-content-primary mb-2">Need to edit data?</h3>
+                            <p class="text-content-secondary">Use the Django admin interface for editing data and transcription project management.</p>
+                        </div>
+                        <a href="/admin/" class="bg-gray-700 text-white px-6 py-2 rounded hover:bg-gray-800 transition-colors">
+                            Go to Admin
+                        </a>
+                    </div>
+                </div>
+
+            {% endif %}
+
+
+        <!-- Assets -->
+            <div class="border-b border-gray-200 pb-6 mb-6">
+                <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Assets</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Original Images</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.images.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.images.count }} of {{ total_schedules }} schedules</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.images.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Place IDs</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.place_ids.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.place_ids.count }} of {{ total_locations }} locations</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.place_ids.percentage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Core Data -->
+            <div class="border-b border-gray-200 pb-6 mb-6">
+                <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Core Data</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Religious Bodies</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.religious_bodies.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.religious_bodies.count }} of {{ total_schedules }} schedules</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.religious_bodies.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Denomination Assignment</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.denomination.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.denomination.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.denomination.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Church Names</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.name.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.name.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.name.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Location Data</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.location.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.location.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.location.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">County Data</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.county.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.county.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.county.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Street Addresses</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.address.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.address.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.address.percentage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Supplementary Data -->
+            <div class="border-b border-gray-200 pb-6 mb-6">
+                <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Supplementary Data</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Membership Data</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.membership.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.membership.count }} of {{ total_schedules }} schedules</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.membership.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Clergy Data</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.clergy.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.clergy.count }} of {{ total_schedules }} schedules</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.clergy.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Edifice Values</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.edifice_value.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.edifice_value.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.edifice_value.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Expenses</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.expenses.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.expenses.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.expenses.percentage }}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
+                        <div class="text-sm text-content-secondary mb-1">Benevolences</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.benevolences.percentage }}%</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.benevolences.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.benevolences.percentage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
         </div>
     </div>
 {% endblock %}
