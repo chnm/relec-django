@@ -5,7 +5,9 @@ from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
+from django_tables2 import RequestConfig
 
+from analytics.tables import ReligiousBodyTable
 from census.models import CensusSchedule, Denomination, ReligiousBody
 from location.models import Location
 
@@ -136,6 +138,13 @@ def run_query(request):
     elif has_clergy == "no":
         queryset = queryset.filter(census_record__clergy__isnull=True)
 
+    # Has location data filter
+    has_location = request.GET.get("has_location")
+    if has_location == "yes":
+        queryset = queryset.filter(location__isnull=False)
+    elif has_location == "no":
+        queryset = queryset.filter(location__isnull=True)
+
     # Property value ranges
     min_edifice_value = request.GET.get("min_edifice_value")
     if min_edifice_value:
@@ -148,24 +157,75 @@ def run_query(request):
     # Get format parameter
     export_format = request.GET.get("format", "html")
 
-    # Limit results for HTML view
-    if export_format == "html":
-        total_count = queryset.count()
-        queryset = queryset[:100]  # Limit to 100 for display
-    else:
-        total_count = queryset.count()
-
+    # Handle export formats (use full queryset)
     if export_format == "csv":
         return export_to_csv(queryset)
     elif export_format == "json":
         return export_to_json(queryset)
 
-    # HTML response
+    # Build applied filters summary for display
+    applied_filters = []
+
+    if family_census:
+        applied_filters.append(
+            {"label": "Census Family", "value": ", ".join(family_census)}
+        )
+    if family_relec:
+        applied_filters.append(
+            {"label": "RelEc Family", "value": ", ".join(family_relec)}
+        )
+    if denomination_ids:
+        denoms = Denomination.objects.filter(id__in=denomination_ids).values_list(
+            "name", flat=True
+        )
+        applied_filters.append({"label": "Denomination", "value": ", ".join(denoms)})
+    if state:
+        applied_filters.append({"label": "State", "value": state})
+    if county:
+        applied_filters.append({"label": "County", "value": county})
+    if city:
+        applied_filters.append({"label": "City", "value": city})
+    if transcription_status:
+        status_display = dict(CensusSchedule.TRANSCRIPTION_STATUS_CHOICES).get(
+            transcription_status, transcription_status
+        )
+        applied_filters.append({"label": "Status", "value": status_display})
+    if has_membership:
+        applied_filters.append(
+            {
+                "label": "Has Membership",
+                "value": "Yes" if has_membership == "yes" else "No",
+            }
+        )
+    if has_clergy:
+        applied_filters.append(
+            {"label": "Has Clergy", "value": "Yes" if has_clergy == "yes" else "No"}
+        )
+    if has_location:
+        applied_filters.append(
+            {"label": "Has Location", "value": "Yes" if has_location == "yes" else "No"}
+        )
+    if min_edifice_value:
+        applied_filters.append(
+            {"label": "Min Edifice Value", "value": f"${float(min_edifice_value):,.2f}"}
+        )
+    if max_edifice_value:
+        applied_filters.append(
+            {"label": "Max Edifice Value", "value": f"${float(max_edifice_value):,.2f}"}
+        )
+
+    # HTML response with django-tables2
+    total_count = queryset.count()
+    table = ReligiousBodyTable(queryset)
+
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={"per_page": 25}).configure(table)
+
     context = {
         "title": "Query Results",
-        "results": queryset,
+        "table": table,
         "total_count": total_count,
-        "showing_count": queryset.count() if export_format == "html" else total_count,
+        "applied_filters": applied_filters,
     }
 
     return render(request, "analytics/query_results.html", context)
@@ -323,6 +383,8 @@ def export_to_json(queryset):
 def data_completeness(request):
     """Analyze data completeness across the dataset"""
     total_schedules = CensusSchedule.objects.count()
+    total_religious_bodies = ReligiousBody.objects.count()
+    total_locations = Location.objects.count()
 
     # Count schedules with various types of data
     with_religious_bodies = (
@@ -337,8 +399,13 @@ def data_completeness(request):
 
     with_clergy = CensusSchedule.objects.filter(clergy__isnull=False).distinct().count()
 
+    # Core Data metrics
     with_location = ReligiousBody.objects.filter(location__isnull=False).count()
-    total_religious_bodies = ReligiousBody.objects.count()
+    with_denomination = ReligiousBody.objects.filter(denomination__isnull=False).count()
+    with_name = ReligiousBody.objects.exclude(Q(name__isnull=True) | Q(name="")).count()
+    with_address = ReligiousBody.objects.exclude(
+        Q(address__isnull=True) | Q(address="")
+    ).count()
 
     with_county = (
         ReligiousBody.objects.filter(
@@ -348,10 +415,27 @@ def data_completeness(request):
         .count()
     )
 
+    # Assets metrics
+    with_images = CensusSchedule.objects.exclude(
+        Q(original_image__isnull=True) | Q(original_image="")
+    ).count()
+
+    locations_with_place_id = Location.objects.filter(place_id__isnull=False).count()
+
+    # Supplementary Data metrics
+    with_edifice_value = ReligiousBody.objects.filter(
+        edifice_value__isnull=False
+    ).count()
+    with_expenses = ReligiousBody.objects.filter(expenses__isnull=False).count()
+    with_benevolences = ReligiousBody.objects.filter(benevolences__isnull=False).count()
+
     context = {
         "title": "Data Completeness Analysis",
         "total_schedules": total_schedules,
+        "total_religious_bodies": total_religious_bodies,
+        "total_locations": total_locations,
         "completeness": {
+            # Original metrics
             "religious_bodies": {
                 "count": with_religious_bodies,
                 "percentage": round((with_religious_bodies / total_schedules * 100), 1)
@@ -370,6 +454,7 @@ def data_completeness(request):
                 if total_schedules > 0
                 else 0,
             },
+            # Core Data
             "location": {
                 "count": with_location,
                 "percentage": round((with_location / total_religious_bodies * 100), 1)
@@ -382,7 +467,105 @@ def data_completeness(request):
                 if total_religious_bodies > 0
                 else 0,
             },
+            "denomination": {
+                "count": with_denomination,
+                "percentage": round(
+                    (with_denomination / total_religious_bodies * 100), 1
+                )
+                if total_religious_bodies > 0
+                else 0,
+            },
+            "name": {
+                "count": with_name,
+                "percentage": round((with_name / total_religious_bodies * 100), 1)
+                if total_religious_bodies > 0
+                else 0,
+            },
+            "address": {
+                "count": with_address,
+                "percentage": round((with_address / total_religious_bodies * 100), 1)
+                if total_religious_bodies > 0
+                else 0,
+            },
+            # Assets
+            "images": {
+                "count": with_images,
+                "percentage": round((with_images / total_schedules * 100), 1)
+                if total_schedules > 0
+                else 0,
+            },
+            "place_ids": {
+                "count": locations_with_place_id,
+                "percentage": round(
+                    (locations_with_place_id / total_locations * 100), 1
+                )
+                if total_locations > 0
+                else 0,
+            },
+            # Supplementary Data
+            "edifice_value": {
+                "count": with_edifice_value,
+                "percentage": round(
+                    (with_edifice_value / total_religious_bodies * 100), 1
+                )
+                if total_religious_bodies > 0
+                else 0,
+            },
+            "expenses": {
+                "count": with_expenses,
+                "percentage": round((with_expenses / total_religious_bodies * 100), 1)
+                if total_religious_bodies > 0
+                else 0,
+            },
+            "benevolences": {
+                "count": with_benevolences,
+                "percentage": round(
+                    (with_benevolences / total_religious_bodies * 100), 1
+                )
+                if total_religious_bodies > 0
+                else 0,
+            },
         },
     }
 
     return render(request, "analytics/data_completeness.html", context)
+
+
+@login_required
+@user_passes_test(is_staff_or_reviewer)
+def missing_place_ids(request):
+    """Show locations that don't have place_id attached"""
+    # Get locations without place_id
+    locations_without_place_id = (
+        Location.objects.filter(Q(place_id__isnull=True))
+        .annotate(usage_count=Count("religiousbody"))
+        .order_by("-usage_count", "state", "county", "map_name")
+    )
+
+    # Get statistics
+    total_locations = Location.objects.count()
+    missing_count = locations_without_place_id.count()
+
+    # Count how many religious bodies are affected
+    affected_bodies = ReligiousBody.objects.filter(
+        location__place_id__isnull=True
+    ).count()
+
+    missing_percentage = (
+        round((missing_count / total_locations * 100), 1) if total_locations > 0 else 0
+    )
+    completeness_percentage = (
+        round(100 - missing_percentage, 1) if total_locations > 0 else 100
+    )
+
+    context = {
+        "title": "Locations Missing Place IDs",
+        "locations": locations_without_place_id,
+        "total_locations": total_locations,
+        "missing_count": missing_count,
+        "missing_percentage": missing_percentage,
+        "completeness_percentage": completeness_percentage,
+        "affected_bodies": affected_bodies,
+    }
+
+    return render(request, "analytics/missing_place_ids.html", context)

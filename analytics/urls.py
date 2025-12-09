@@ -15,4 +15,7 @@ urlpatterns = [
     ),
     path("analysis/locations/", views.location_analysis, name="location_analysis"),
     path("analysis/completeness/", views.data_completeness, name="data_completeness"),
+    path(
+        "analysis/missing-place-ids/", views.missing_place_ids, name="missing_place_ids"
+    ),
 ]
