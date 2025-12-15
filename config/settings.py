@@ -428,7 +428,7 @@ UNFOLD = {
         }
     },
     "STYLES": [
-        lambda request: "css/custom_unfold.css",
+        lambda request: "/static/css/custom_unfold.css",
     ],
 }
 
