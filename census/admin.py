@@ -520,7 +520,13 @@ class CensusScheduleAdmin(ModelAdmin):
         "assigned_transcriber",
         "assigned_reviewer",
     ]
-    search_fields = ["schedule_title", "schedule_id", "resource_id"]
+    search_fields = [
+        "schedule_title",
+        "schedule_id",
+        "resource_id",
+        "location__city",
+        "location__state",
+    ]
     list_filter = [
         TranscriptionWorkflowFilter,
         "transcription_status",
