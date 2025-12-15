@@ -432,16 +432,6 @@ UNFOLD = {
     ],
 }
 
-# CORS Configuration
+# Geocoding settings
 # ------------------------------------------------------------------------------
-# Allow requests from Hugo development server
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:1313",
-    "http://127.0.0.1:1313",
-]
-
-# Allow credentials (cookies, authorization headers, etc.)
-CORS_ALLOW_CREDENTIALS = True
-
-# Allow all headers for development
-CORS_ALLOW_ALL_ORIGINS = False  # Keep this False for security
+GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
