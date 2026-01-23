@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "religious_ecologies",
     "census",
     "location",
+    "pages",
 ]
 
 MIDDLEWARE = [

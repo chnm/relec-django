@@ -22,6 +22,8 @@
                     <div class="hidden md:flex space-x-6">
                         <a href="{% url 'index' %}" class="hover:text-indigo-200 transition duration-150">Home</a>
                         <a href="{% url 'denomination_map' %}" class="hover:text-indigo-200 transition duration-150">Map</a>
+                        <a href="{% url 'blog-list' %}" class="hover:text-indigo-200 transition duration-150">Blog</a>
+                        <a href="{% url 'visualization-list' %}" class="hover:text-indigo-200 transition duration-150">Visualizations</a>
                         <a href="/admin/" class="hover:text-indigo-200 transition duration-150">Admin</a>
                         <a href="/census/api/" class="hover:text-indigo-200 transition duration-150">API</a>
                     </div>
@@ -40,8 +42,10 @@
                 <div class="px-4 py-2 space-y-1 bg-indigo-600">
                     <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Home</a>
                     <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Map</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">About</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Contact</a>
+                    <a href="{% url 'blog-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Blog</a>
+                    <a href="{% url 'visualization-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Visualizations</a>
+                    <a href="/admin/" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Admin</a>
+                    <a href="/census/api/" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">API</a>
                 </div>
             </div>
         </nav>
