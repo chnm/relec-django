@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.db import models
 from simple_history.models import HistoricalRecords
 
@@ -57,38 +58,96 @@ class CensusSchedule(models.Model):
     for a specific schedule.
     """
 
+    TRANSCRIPTION_STATUS_CHOICES = [
+        ("unassigned", "Unassigned"),
+        ("assigned", "Assigned"),
+        ("in_progress", "In Progress"),
+        ("needs_review", "Needs Review"),
+        ("completed", "Transcribed"),
+        ("approved", "Approved"),
+    ]
+
     resource_id = models.IntegerField(unique=True, verbose_name="Record ID")
     schedule_title = models.CharField(max_length=255)
     schedule_id = models.CharField(max_length=50, verbose_name="Schedule ID")
     box = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(null=True, blank=True)
 
+    # Project management fields
+    transcription_status = models.CharField(
+        max_length=20,
+        choices=TRANSCRIPTION_STATUS_CHOICES,
+        default="unassigned",
+        verbose_name="Transcription Status",
+    )
+    assigned_transcriber = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_transcriptions",
+        verbose_name="Assigned Transcriber",
+    )
+    assigned_reviewer = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_reviews",
+        verbose_name="Assigned Reviewer",
+    )
+    transcription_notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Transcription Notes",
+        help_text="Notes about the transcription process or issues",
+    )
+
     # Reference fields from original system
     datascribe_omeka_item_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Omeka Item ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_item_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Item ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_record_id = models.IntegerField(
+        null=True,
+        blank=True,
         verbose_name="DataScribe Record ID",
         help_text="This record is read-only and not editable.",
     )
     datascribe_original_image_path = models.CharField(
         max_length=255,
+        blank=True,
+        null=True,
         verbose_name="DataScribe Original Image Path",
     )
     omeka_storage_id = models.CharField(
         max_length=255,
+        blank=True,
+        null=True,
         verbose_name="Omeka Storage ID",
+    )
+
+    # Image fields
+    original_image = models.ImageField(
+        upload_to="census_images/originals/",
+        blank=True,
+        null=True,
+        verbose_name="Original Census Schedule Image",
+        help_text="High-resolution image of the original census schedule",
     )
 
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    history = HistoricalRecords()
+    history = HistoricalRecords(excluded_fields=["original_image"])
 
     class Meta:
         indexes = [
@@ -96,8 +155,26 @@ class CensusSchedule(models.Model):
             models.Index(fields=["datascribe_omeka_item_id"]),
         ]
 
+    def save(self, *args, **kwargs):
+        # Auto-transition status based on assignments
+        if self.assigned_transcriber and self.transcription_status == "unassigned":
+            self.transcription_status = "assigned"
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Census Record {self.resource_id}"
+
+    def get_status_display_color(self):
+        """Return CSS class for status display"""
+        status_colors = {
+            "unassigned": "gray",
+            "assigned": "blue",
+            "in_progress": "orange",
+            "needs_review": "yellow",
+            "completed": "green",
+            "approved": "dark-green",
+        }
+        return status_colors.get(self.transcription_status, "gray")
 
 
 class ReligiousBody(models.Model):

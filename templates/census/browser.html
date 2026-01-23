@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% load static thumbnail %}
+
+{% block title %}Census Records Browser{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .filter-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .record-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        .record-card:hover {
+            box-shadow: 0 4px 12px -1px rgba(0, 96, 177, 0.15);
+            border-color: #0060b1;
+        }
+
+        .image-placeholder {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 0.875rem;
+            border-radius: 6px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-blue {
+            background-color: #eff8ff;
+            color: #0060b1;
+        }
+
+        .badge-green {
+            background-color: #ecfdf5;
+            color: #065f46;
+        }
+
+        .badge-amber {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .pagination-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .pagination a, .pagination span {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+
+        .pagination .current {
+            background-color: #0060b1;
+            color: white;
+            border-color: #0060b1;
+        }
+
+        .pagination a:hover {
+            background-color: #f3f4f6;
+        }
+
+        .table-header {
+            background-color: #f9fafb;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">Census Records Browser</h1>
+        <p class="text-content-secondary mb-6">Explore {{ total_records|floatformat:0 }} religious census records with detailed filtering and search capabilities.</p>
+
+    <!-- Filters -->
+        <div class="filter-card">
+            <form method="get" class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
+                <!-- Search -->
+                    <div class="lg:col-span-2">
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Search</label>
+                        <input type="text" name="search" value="{{ search }}"
+                               placeholder="Search records, churches, denominations..."
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                    </div>
+
+                <!-- Denomination Family -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Family</label>
+                        <select name="family" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">All Families</option>
+                            {% for family in census_families %}
+                                {% if family %}
+                                    <option value="{{ family }}" {% if family == family_filter %}selected{% endif %}>
+                                        {{ family }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                <!-- Denomination -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
+                        <select name="denomination" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">All Denominations</option>
+                            {% for denomination in denominations %}
+                                <option value="{{ denomination.id }}" {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
+                                    {{ denomination.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                <!-- Location -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Location</label>
+                        <input type="text" name="location" value="{{ location_filter }}"
+                               placeholder="State/location..."
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                    </div>
+
+                <!-- Has Image -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Images</label>
+                        <select name="has_image" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">All Records</option>
+                            <option value="yes" {% if has_image == 'yes' %}selected{% endif %}>With Images</option>
+                            <option value="no" {% if has_image == 'no' %}selected{% endif %}>Without Images</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button type="submit" class="bg-religious-primary text-white px-6 py-2 rounded-md hover:bg-primary-700 transition-colors">
+                        Apply Filters
+                    </button>
+                    <a href="{% url 'census_browser' %}" class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors">
+                        Clear All
+                    </a>
+                </div>
+            </form>
+        </div>
+
+    <!-- Results Summary -->
+        <div class="table-header rounded-t-lg">
+            <div class="flex justify-between items-center w-full">
+                <div>
+                    <span class="text-content-primary font-medium">
+                        {% if page_obj.paginator.count %}
+                            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} records
+                        {% else %}
+                            No records found
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="flex gap-2">
+                    <span class="badge badge-blue">{{ page_obj.paginator.count }} Total</span>
+                    {% if search or denomination_filter or family_filter or location_filter or has_image %}
+                        <span class="badge badge-amber">Filtered</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    <!-- Records Table -->
+        <div class="bg-white border border-t-0 border-gray-200 rounded-b-lg">
+            {% if page_obj %}
+                <div class="divide-y divide-gray-200">
+                    {% for record in page_obj %}
+                        <div class="p-6 hover:bg-gray-50 transition-colors">
+                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                            <!-- Image Column -->
+                                <div class="lg:col-span-1">
+                                    {% if record.original_image %}
+                                        <div class="aspect-[4/3] rounded-lg overflow-hidden">
+                                            <img src="{% thumbnail record.original_image 'medium' %}"
+                                                 alt="Census Schedule {{ record.resource_id }}"
+                                                 class="w-full h-full object-cover">
+                                        </div>
+                                    {% else %}
+                                        <div class="aspect-[4/3] image-placeholder rounded-lg">
+                                            <div class="text-center">
+                                                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <div>No Image</div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                            <!-- Main Content -->
+                                <div class="lg:col-span-4">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-content-primary">
+                                                <a href="{% url 'census_detail' record.resource_id %}"
+                                                   class="hover:text-religious-primary transition-colors">
+                                                    {{ record.schedule_title|default:"Census Record" }}
+                                                </a>
+                                            </h3>
+                                            <p class="text-sm text-content-tertiary">Record ID: {{ record.resource_id }}</p>
+                                        </div>
+                                        {% if record.original_image %}
+                                            <span class="badge badge-green">Has Image</span>
+                                        {% endif %}
+                                    </div>
+
+                                <!-- Church Details -->
+                                    {% with record.church_details.all.0 as church %}
+                                        {% if church %}
+                                            <div class="mb-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <h4 class="font-medium text-content-primary">{{ church.name|default:"Unnamed Church" }}</h4>
+                                                        {% if church.denomination %}
+                                                            <p class="text-sm text-content-secondary">{{ church.denomination.name }}</p>
+                                                            {% if church.denomination.family_census %}
+                                                                <p class="text-xs text-content-tertiary">{{ church.denomination.family_census }}</p>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                        {% if church.location %}
+                                                            <p class="text-sm text-content-tertiary mt-1">
+                                                                {% if church.location.city %}{{ church.location.city }}, {% endif %}
+                                                                {{ church.location.state }}
+                                                            </p>
+                                                        {% endif %}
+                                                    </div>
+
+                                                <!-- Quick Stats -->
+                                                    {% with record.membership_details.all.0 as membership %}
+                                                        {% if membership %}
+                                                            <div class="stats-grid">
+                                                                {% if membership.male_members or membership.female_members %}
+                                                                    <div class="stat-item">
+                                                                        <div class="text-lg font-semibold text-religious-primary">
+                                                                            {{ membership.male_members|add:membership.female_members|default:"—" }}
+                                                                        </div>
+                                                                        <div class="text-xs text-content-tertiary">Total Members</div>
+                                                                    </div>
+                                                                {% endif %}
+                                                                {% if membership.sunday_school_num_scholars %}
+                                                                    <div class="stat-item">
+                                                                        <div class="text-lg font-semibold text-religious-primary">{{ membership.sunday_school_num_scholars }}</div>
+                                                                        <div class="text-xs text-content-tertiary">Sunday School</div>
+                                                                    </div>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endwith %}
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+
+                                <!-- Clergy -->
+                                    {% if record.clergy.exists %}
+                                        <div class="text-sm text-content-secondary">
+                                            <strong>Clergy:</strong>
+                                            {% for clergy in record.clergy.all %}
+                                                {{ clergy.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+
+                                <!-- Actions -->
+                                    <div class="mt-4 pt-4 border-t border-gray-100">
+                                        <a href="{% url 'census_detail' record.resource_id %}"
+                                           class="text-religious-primary hover:text-primary-700 font-medium text-sm transition-colors">
+                                            View Full Record →
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="p-12 text-center">
+                            <div class="text-content-tertiary mb-4">
+                                <svg class="w-12 h-12 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-content-primary mb-2">No records found</h3>
+                            <p class="text-content-secondary">Try adjusting your search terms or filters</p>
+                            <a href="{% url 'census_browser' %}"
+                               class="text-religious-primary hover:text-primary-700 font-medium mt-2 inline-block">
+                                Clear all filters
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+    <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <div class="pagination-wrapper">
+                <div class="pagination">
+                    {% if page_obj.has_previous %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">First</a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a>
+                    {% endif %}
+
+                    <span class="current">
+                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                    </span>
+
+                    {% if page_obj.has_next %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">Last</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

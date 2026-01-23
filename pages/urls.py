@@ -17,4 +17,6 @@ urlpatterns = [
         views.VisualizationDetailView.as_view(),
         name="visualization-detail",
     ),
+    # Page detail view - this should come last to catch any slug
+    path("<slug:slug>/", views.page_detail, name="page_detail"),
 ]

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Browse by Denomination - Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .browse-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .family-section {
+            margin-bottom: 3rem;
+        }
+
+        .family-title {
+            background: #0060b1;
+            color: white;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .denomination-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .denomination-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        .denomination-item:hover {
+            background: #f3f4f6;
+            border-color: #0060b1;
+        }
+
+        .denomination-link {
+            color: #0060b1;
+            text-decoration: none;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .denomination-link:hover {
+            color: #004d91;
+            text-decoration: underline;
+        }
+
+        .denomination-count {
+            background: #0060b1;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .summary-stats {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">Browse by Denomination</h1>
+        <p class="text-content-secondary mb-6">Explore religious census schedules organized by denominational family and tradition.</p>
+
+    <!-- Summary Statistics -->
+        <div class="summary-stats">
+            <div class="text-2xl font-bold text-religious-primary mb-2">{{ total_denominations }}</div>
+            <div class="text-content-secondary">Denominations with census schedules</div>
+        </div>
+
+    <!-- Denominational Families -->
+        <div class="browse-card">
+            {% for family, denominations in families %}
+                <div class="family-section">
+                    <div class="family-title">
+                        {{ family }} ({{ denominations|length }} denomination{{ denominations|length|pluralize }})
+                    </div>
+
+                    <div class="denomination-grid">
+                        {% for denomination in denominations %}
+                            <div class="denomination-item">
+                                <a href="{% url 'census_browser' %}?denomination={{ denomination.id }}"
+                                   class="denomination-link">
+                                    {{ denomination.name }}
+                                </a>
+                                <span class="denomination-count">{{ denomination.schedule_count }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+    <!-- Navigation -->
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <div class="flex gap-4">
+                <a href="{% url 'index' %}"
+                   class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
+                    ← Back to Home
+                </a>
+                <a href="{% url 'locations_browse' %}"
+                   class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
+                    Browse by Location →
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

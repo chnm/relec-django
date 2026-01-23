@@ -1,0 +1,1073 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Religious Bodies Demographics Map{% endblock %}
+
+{% block extra_css %}
+<!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+<!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+<!-- Custom CSS -->
+    <style>
+        #map {
+            height: 80vh;
+            width: 100%;
+        }
+        .filter-section {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 15px;
+        }
+        .map-options {
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .legend {
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #0060b1;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .family-card {
+            cursor: pointer;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .family-card:hover {
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        }
+        .family-card.active {
+            border-left: 4px solid #0060b1;
+            background-color: #eff8ff;
+        }
+        .denomination-item {
+            margin-left: 12px;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .denomination-item:hover {
+            background-color: #f3f4f6;
+        }
+        .denomination-item.active {
+            background-color: #dbeafe;
+            color: #0060b1;
+        }
+        .filter-count {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-left: 6px;
+        }
+        .range-slider {
+            width: 100%;
+        }
+        .filter-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .filter-label {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .demographic-stats {
+            background-color: #f8fafc;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        /* Mobile-first responsive design */
+        @media (max-width: 1024px) {
+            #map {
+                height: 60vh;
+            }
+
+            .filter-section {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+
+            /* Stack layout on mobile */
+            .grid.grid-cols-1.lg\\:grid-cols-5 {
+                grid-template-columns: 1fr;
+            }
+
+            .grid.grid-cols-1.lg\\:grid-cols-4 {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* Mobile: Filters on top, then map, then denominations and stats side by side */
+            .grid.grid-cols-1.lg\\:grid-cols-5 > div:nth-child(1) {
+                order: 2; /* Denominations second */
+            }
+            .grid.grid-cols-1.lg\\:grid-cols-5 > div:nth-child(2) {
+                order: 1; /* Map first */
+            }
+            .grid.grid-cols-1.lg\\:grid-cols-5 > div:nth-child(3) {
+                order: 3; /* Stats third */
+            }
+
+            #map {
+                height: 50vh;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        <h1 class="text-2xl font-bold mb-4">Religious Bodies Demographics Map</h1>
+        <p class="text-gray-600 mb-6">Explore religious bodies by membership demographics, age groups, and educational programs.</p>
+
+        <!-- Filters Row (Top) -->
+        <div class="mb-6">
+            <div class="filter-section">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
+                    <!-- Map Controls -->
+                    <div>
+                        <h3 class="font-medium text-gray-700 mb-2">Map Controls</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <label class="toggle-switch mr-2">
+                                    <input type="checkbox" id="clusteringToggle">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="text-sm font-medium text-gray-700">Clustering</span>
+                            </div>
+                            <div class="flex items-center">
+                                <label class="text-sm font-medium text-gray-700 mr-2">Size by:</label>
+                                <select id="markerSizeBy" class="text-sm border border-gray-300 rounded px-2 py-1">
+                                    <option value="fixed">Fixed</option>
+                                    <option value="members">Total Members</option>
+                                    <option value="male_members">Male Members</option>
+                                    <option value="female_members">Female Members</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demographics Filters -->
+                    <div>
+                        <h3 class="font-medium text-gray-700 mb-2">Demographics</h3>
+                        <div class="space-y-2">
+                            <div>
+                                <label class="text-sm text-gray-600">Members:</label>
+                                <div class="flex gap-1">
+                                    <input type="number" id="minMembers" placeholder="Min" class="filter-input text-sm">
+                                    <input type="number" id="maxMembers" placeholder="Max" class="filter-input text-sm">
+                                </div>
+                            </div>
+                            <select id="genderFilter" class="filter-input text-sm">
+                                <option value="">All Genders</option>
+                                <option value="male_majority">Male Majority (>60%)</option>
+                                <option value="female_majority">Female Majority (>60%)</option>
+                                <option value="balanced">Balanced (40-60%)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Age & Education -->
+                    <div>
+                        <h3 class="font-medium text-gray-700 mb-2">Age & Education</h3>
+                        <div class="space-y-2">
+                            <select id="ageFilter" class="filter-input text-sm">
+                                <option value="">All Ages</option>
+                                <option value="youth_heavy">Youth Heavy (>30% under 13)</option>
+                                <option value="adult_heavy">Adult Heavy (>80% 13+)</option>
+                                <option value="mixed">Mixed Ages</option>
+                            </select>
+                            <div class="space-y-1">
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="hasSundaySchool" class="mr-2">
+                                    <span>Sunday School</span>
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="hasParochialSchool" class="mr-2">
+                                    <span>Parochial School</span>
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="hasWeekdaySchool" class="mr-2">
+                                    <span>Weekday School</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Actions -->
+                    <div>
+                        <div class="space-y-2">
+                            <button id="applyFilters" class="w-full bg-religious-primary text-white py-2 px-4 rounded hover:bg-primary-800 transition-colors text-sm">
+                                Apply Filters
+                            </button>
+                            <button id="clearAllFilters" class="w-full bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition-colors text-sm">
+                                Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mapStatus" class="text-sm text-gray-500 mt-2"></div>
+            </div>
+        </div>
+
+        <!-- Main Content Row: Denominations | Map | Statistics -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <!-- Left: Denomination Selection -->
+            <div class="lg:col-span-1">
+                <!-- Family Selection -->
+                <div class="filter-section mb-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-lg font-semibold">Families</h2>
+                        <button id="clearFamilyFilter" class="text-sm text-religious-primary hover:text-primary-800">Clear</button>
+                    </div>
+                    <div id="familyList" class="max-h-64 overflow-y-auto">
+                        <div class="text-gray-500 text-sm text-center py-4">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Denomination Selection -->
+                <div class="filter-section">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-lg font-semibold">Denominations</h2>
+                        <button id="clearDenominationFilter" class="text-sm text-religious-primary hover:text-primary-800">Clear</button>
+                    </div>
+                    <input type="text" id="denominationSearch" placeholder="Search denominations..." class="filter-input mb-2">
+                    <div id="denominationList" class="max-h-64 overflow-y-auto">
+                        <div class="text-gray-500 text-sm text-center py-4">Select a family first</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Map -->
+            <div class="lg:col-span-3">
+                <div id="map" class="rounded-lg shadow"></div>
+            </div>
+
+            <!-- Right: Statistics -->
+            <div class="lg:col-span-1">
+                <!-- Current Selection Stats -->
+                <div class="filter-section mb-4">
+                    <h2 class="text-lg font-semibold mb-3">Current Selection</h2>
+                    <div class="mb-2">
+                        <span class="text-gray-700">Showing:</span>
+                        <span id="markerCount" class="font-medium text-religious-primary">0 religious bodies</span>
+                    </div>
+                    <div id="familyStats" class="text-sm text-gray-600">
+                        <!-- Family statistics will appear here -->
+                    </div>
+                </div>
+
+                <!-- Detailed Statistics -->
+                <div class="filter-section">
+                    <h2 class="text-lg font-semibold mb-3">Demographics</h2>
+                    <div id="demographicStats" class="demographic-stats">
+                        <!-- Detailed demographic statistics will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the map
+            const map = L.map('map').setView([39.8283, -98.5795], 4); // Centered on US
+
+            // Add tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            // Create a marker cluster group and a regular layer group
+            const markers = L.markerClusterGroup();
+            const individualMarkers = L.layerGroup();
+
+            // Track clustering state and filters
+            let clusteringEnabled = false;
+            let currentFamily = null;
+            let currentDenomination = null;
+            let currentFilters = {};
+
+            // Store families and denominations data
+            let allFamilies = [];
+            let allDenominations = [];
+
+            // Add the initial layer to the map (individual markers by default)
+            map.addLayer(individualMarkers);
+
+            // Store all markers for filtering and statistics
+            let allMarkers = [];
+
+            // Create a legend control
+            const legend = L.control({position: 'bottomright'});
+
+            // Function to update the legend
+            function updateLegend(families) {
+                if (legend.getContainer()) {
+                    legend.remove();
+                }
+
+                legend.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'info legend');
+
+                    if (families.length === 0) {
+                        div.innerHTML = '<h6>No denomination families found</h6>';
+                        return div;
+                    }
+
+                    div.innerHTML = '<h6>Denomination Families</h6>';
+
+                    // Add legend items
+                    families.forEach(family => {
+                        div.innerHTML +=
+                            `<div class="mb-1">
+                                <i style="background:${getFamilyColor(family)}"></i>
+                                ${family}
+                            </div>`;
+                    });
+
+                    return div;
+                };
+
+                legend.addTo(map);
+            }
+
+            // Function to get color based on denomination family
+            function getFamilyColor(family) {
+                // Simple hash function to generate colors
+                let hash = 0;
+                for (let i = 0; i < family.length; i++) {
+                    hash = family.charCodeAt(i) + ((hash << 5) - hash);
+                }
+
+                // Convert hash to RGB color
+                const r = (hash & 0xFF) % 200 + 20;
+                const g = ((hash >> 8) & 0xFF) % 200 + 20;
+                const b = ((hash >> 16) & 0xFF) % 200 + 20;
+
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            // Function to calculate marker size based on selection
+            function getMarkerRadius(church) {
+                const sizeBy = document.getElementById('markerSizeBy').value;
+                const baseSize = 3;
+                const maxSize = 15;
+
+                switch (sizeBy) {
+                    case 'members':
+                        return Math.min(baseSize + (church.total_members || 0) / 50, maxSize);
+                    case 'male_members':
+                        return Math.min(baseSize + (church.male_members || 0) / 25, maxSize);
+                    case 'female_members':
+                        return Math.min(baseSize + (church.female_members || 0) / 25, maxSize);
+                    default:
+                        return baseSize;
+                }
+            }
+
+            // Function to toggle clustering
+            function toggleClustering() {
+                clusteringEnabled = document.getElementById('clusteringToggle').checked;
+
+                // Remove both layers first
+                map.removeLayer(markers);
+                map.removeLayer(individualMarkers);
+
+                // Clear both layer groups
+                markers.clearLayers();
+                individualMarkers.clearLayers();
+
+                // Add markers to the appropriate layer group
+                allMarkers.forEach(marker => {
+                    if (clusteringEnabled) {
+                        markers.addLayer(marker);
+                    } else {
+                        individualMarkers.addLayer(marker);
+                    }
+                });
+
+                // Add the active layer to the map
+                if (clusteringEnabled) {
+                    map.addLayer(markers);
+                } else {
+                    map.addLayer(individualMarkers);
+                }
+
+                // Update marker count display
+                updateMapStatus();
+            }
+
+            // Function to update marker size for all markers
+            function updateMarkerSizes() {
+                allMarkers.forEach(marker => {
+                    const radius = getMarkerRadius(marker.churchData);
+                    marker.setRadius(radius);
+                });
+            }
+
+            // Function to update map status display
+            function updateMapStatus() {
+                const mapStatusElement = document.getElementById('mapStatus');
+                const markerCountElement = document.getElementById('markerCount');
+
+                markerCountElement.textContent = `${allMarkers.length} religious bodies`;
+
+                let status = `Showing ${allMarkers.length} locations`;
+                if (currentFamily) {
+                    status += ` in ${currentFamily}`;
+                    if (currentDenomination) {
+                        status += ` > ${currentDenomination}`;
+                    }
+                }
+
+                mapStatusElement.textContent = status;
+            }
+
+            // Function to calculate demographic statistics
+            function updateDemographicStats() {
+                const statsContainer = document.getElementById('demographicStats');
+
+                if (allMarkers.length === 0) {
+                    statsContainer.innerHTML = '<div class="text-gray-500 text-sm">No data to display</div>';
+                    return;
+                }
+
+                let totalMembers = 0;
+                let totalMale = 0;
+                let totalFemale = 0;
+                let totalUnder13 = 0;
+                let total13AndOlder = 0;
+                let sundaySchools = 0;
+                let parochialSchools = 0;
+                let weekdaySchools = 0;
+
+                allMarkers.forEach(marker => {
+                    const church = marker.churchData;
+                    totalMembers += church.total_members || 0;
+                    totalMale += church.male_members || 0;
+                    totalFemale += church.female_members || 0;
+                    totalUnder13 += church.members_under_13 || 0;
+                    total13AndOlder += church.members_13_and_older || 0;
+
+                    if (church.sunday_school_scholars > 0) sundaySchools++;
+                    if (church.parochial_elementary_scholars > 0 || church.parochial_secondary_scholars > 0) parochialSchools++;
+                    if (church.weekday_scholars > 0) weekdaySchools++;
+                });
+
+                const malePercentage = totalMale + totalFemale > 0 ? ((totalMale / (totalMale + totalFemale)) * 100).toFixed(1) : 0;
+                const femalePercentage = totalMale + totalFemale > 0 ? ((totalFemale / (totalMale + totalFemale)) * 100).toFixed(1) : 0;
+
+                statsContainer.innerHTML = `
+                    <div class="stat-item">
+                        <span>Total Members:</span>
+                        <span class="font-medium">${totalMembers.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Male/Female:</span>
+                        <span class="font-medium">${malePercentage}% / ${femalePercentage}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Under 13:</span>
+                        <span class="font-medium">${totalUnder13.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>13 and Older:</span>
+                        <span class="font-medium">${total13AndOlder.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>With Sunday Schools:</span>
+                        <span class="font-medium">${sundaySchools}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>With Parochial Schools:</span>
+                        <span class="font-medium">${parochialSchools}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>With Weekday Schools:</span>
+                        <span class="font-medium">${weekdaySchools}</span>
+                    </div>
+                `;
+            }
+
+            // Function to update family statistics
+            function updateFamilyStats() {
+                const statsContainer = document.getElementById('familyStats');
+
+                if (!currentFamily) {
+                    statsContainer.innerHTML = '';
+                    return;
+                }
+
+                // Count markers by denomination
+                const denominationCounts = {};
+                allMarkers.forEach(marker => {
+                    const church = marker.churchData;
+                    const denominationName = church.denomination_name || 'Unknown';
+                    denominationCounts[denominationName] = (denominationCounts[denominationName] || 0) + 1;
+                });
+
+                // Create statistics HTML
+                let statsHTML = `<h4 class="font-medium text-gray-700 mb-2">${currentFamily}</h4>`;
+
+                // Add denomination breakdown if we have more than one denomination
+                const denominations = Object.keys(denominationCounts);
+                if (denominations.length > 1) {
+                    statsHTML += '<ul class="text-sm space-y-1">';
+                    denominations.sort().forEach(name => {
+                        statsHTML += `<li>${name}: <span class="font-medium">${denominationCounts[name]}</span></li>`;
+                    });
+                    statsHTML += '</ul>';
+                }
+
+                statsContainer.innerHTML = statsHTML;
+            }
+
+            // Function to load marker data with demographic filtering
+            function loadMarkers(filters = {}) {
+                // Show loading indicator
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'map-loading';
+                loadingDiv.style.position = 'absolute';
+                loadingDiv.style.top = '50%';
+                loadingDiv.style.left = '50%';
+                loadingDiv.style.transform = 'translate(-50%, -50%)';
+                loadingDiv.style.background = 'white';
+                loadingDiv.style.padding = '10px';
+                loadingDiv.style.borderRadius = '5px';
+                loadingDiv.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
+                loadingDiv.style.zIndex = '1000';
+                loadingDiv.innerHTML = 'Loading data...';
+                document.getElementById('map').appendChild(loadingDiv);
+
+                // Clear existing markers
+                markers.clearLayers();
+                individualMarkers.clearLayers();
+                allMarkers = [];
+
+                // Build the query string
+                let queryParams = new URLSearchParams();
+
+                // Add denomination filters
+                if (filters.family_census) {
+                    queryParams.append('family_census', filters.family_census);
+                    currentFamily = filters.family_census;
+                } else {
+                    currentFamily = null;
+                }
+
+                if (filters.denomination) {
+                    queryParams.append('denomination', filters.denomination);
+                    currentDenomination = filters.denomination || currentDenomination;
+                } else {
+                    currentDenomination = null;
+                }
+
+                if (filters.bounds) {
+                    queryParams.append('bounds', filters.bounds);
+                }
+
+                // Store current filters for client-side filtering
+                currentFilters = {...filters};
+
+                // Add timestamp to prevent caching
+                queryParams.append('_', Date.now());
+
+                // Fetch data from our new demographics API endpoint
+                fetch(`/census/api/religious-bodies/demographics_data/?${queryParams.toString()}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Create a legend for denomination families
+                        const families = new Set();
+
+                        // Process each religious body and add to map
+                        data.forEach(church => {
+                            if (church.lat && church.lon) {
+                                // Apply client-side demographic filtering
+                                if (!passesClientFilters(church)) {
+                                    return;
+                                }
+
+                                // Get family info, handling potential missing data
+                                const family = church.family || 'Unknown';
+                                families.add(family);
+
+                                // Create marker with variable size
+                                const radius = getMarkerRadius(church);
+                                const marker = L.circleMarker(
+                                    [church.lat, church.lon],
+                                    {
+                                        radius: radius,
+                                        fillColor: getFamilyColor(family),
+                                        color: '#000',
+                                        weight: 1,
+                                        opacity: 1,
+                                        fillOpacity: 0.8
+                                    }
+                                );
+
+                                // Enhanced popup content with demographic information
+                                const totalMembers = church.total_members || 0;
+                                const maleMembers = church.male_members || 0;
+                                const femaleMembers = church.female_members || 0;
+                                const under13 = church.members_under_13 || 0;
+                                const over13 = church.members_13_and_older || 0;
+
+                                let demographicInfo = '';
+                                if (maleMembers > 0 || femaleMembers > 0) {
+                                    demographicInfo += `<p><strong>Gender:</strong> ${maleMembers}M / ${femaleMembers}F</p>`;
+                                }
+                                if (under13 > 0 || over13 > 0) {
+                                    demographicInfo += `<p><strong>Age:</strong> ${under13} under 13 / ${over13} 13+</p>`;
+                                }
+
+                                // Educational programs
+                                let educationInfo = '';
+                                if (church.sunday_school_scholars > 0) {
+                                    educationInfo += `<p><strong>Sunday School:</strong> ${church.sunday_school_scholars} scholars</p>`;
+                                }
+                                if (church.parochial_elementary_scholars > 0 || church.parochial_secondary_scholars > 0) {
+                                    const total = (church.parochial_elementary_scholars || 0) + (church.parochial_secondary_scholars || 0);
+                                    educationInfo += `<p><strong>Parochial School:</strong> ${total} students</p>`;
+                                }
+                                if (church.weekday_scholars > 0) {
+                                    educationInfo += `<p><strong>Weekday School:</strong> ${church.weekday_scholars} scholars</p>`;
+                                }
+
+                                marker.bindPopup(`
+                                    <h5 class="font-bold text-lg">${church.name || 'Unnamed Religious Body'}</h5>
+                                    <p><strong>Denomination:</strong> ${church.denomination_name || 'Unknown'}</p>
+                                    <p><strong>Family:</strong> ${family}</p>
+                                    <p><strong>Total Members:</strong> ${totalMembers}</p>
+                                    ${demographicInfo}
+                                    ${educationInfo}
+                                `);
+
+                                // Store marker data for filtering
+                                marker.churchData = church;
+                                allMarkers.push(marker);
+
+                                // Add to appropriate layer based on current clustering setting
+                                if (clusteringEnabled) {
+                                    markers.addLayer(marker);
+                                } else {
+                                    individualMarkers.addLayer(marker);
+                                }
+                            }
+                        });
+
+                        // Update the legend
+                        updateLegend([...families].sort());
+
+                        // Update statistics
+                        updateMapStatus();
+                        updateFamilyStats();
+                        updateDemographicStats();
+
+                        // Remove loading indicator
+                        const loadingElem = document.getElementById('map-loading');
+                        if (loadingElem) {
+                            loadingElem.remove();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading religious body data:', error);
+
+                        // Remove loading indicator and show error
+                        const loadingElem = document.getElementById('map-loading');
+                        if (loadingElem) {
+                            loadingElem.innerHTML = 'Error loading data. Please try again.';
+                            setTimeout(() => {
+                                loadingElem.remove();
+                            }, 3000);
+                        }
+                    });
+            }
+
+            // Function to check if a church passes client-side filters
+            function passesClientFilters(church) {
+                // Members range filter
+                const minMembers = parseInt(document.getElementById('minMembers').value) || 0;
+                const maxMembers = parseInt(document.getElementById('maxMembers').value) || Infinity;
+                const totalMembers = church.total_members || 0;
+
+                if (totalMembers < minMembers || totalMembers > maxMembers) {
+                    return false;
+                }
+
+                // Gender composition filter
+                const genderFilter = document.getElementById('genderFilter').value;
+                if (genderFilter) {
+                    const male = church.male_members || 0;
+                    const female = church.female_members || 0;
+                    const total = male + female;
+
+                    if (total > 0) {
+                        const maleRatio = male / total;
+                        switch (genderFilter) {
+                            case 'male_majority':
+                                if (maleRatio <= 0.6) return false;
+                                break;
+                            case 'female_majority':
+                                if (maleRatio >= 0.4) return false;
+                                break;
+                            case 'balanced':
+                                if (maleRatio < 0.4 || maleRatio > 0.6) return false;
+                                break;
+                        }
+                    }
+                }
+
+                // Age composition filter
+                const ageFilter = document.getElementById('ageFilter').value;
+                if (ageFilter) {
+                    const under13 = church.members_under_13 || 0;
+                    const over13 = church.members_13_and_older || 0;
+                    const ageTotal = under13 + over13;
+
+                    if (ageTotal > 0) {
+                        const youthRatio = under13 / ageTotal;
+                        const adultRatio = over13 / ageTotal;
+
+                        switch (ageFilter) {
+                            case 'youth_heavy':
+                                if (youthRatio <= 0.3) return false;
+                                break;
+                            case 'adult_heavy':
+                                if (adultRatio <= 0.8) return false;
+                                break;
+                            case 'mixed':
+                                if (youthRatio < 0.2 || youthRatio > 0.8) return false;
+                                break;
+                        }
+                    }
+                }
+
+                // Educational programs filters
+                if (document.getElementById('hasSundaySchool').checked && (church.sunday_school_scholars || 0) <= 0) {
+                    return false;
+                }
+                if (document.getElementById('hasParochialSchool').checked &&
+                    ((church.parochial_elementary_scholars || 0) + (church.parochial_secondary_scholars || 0)) <= 0) {
+                        return false;
+                    }
+                if (document.getElementById('hasWeekdaySchool').checked && (church.weekday_scholars || 0) <= 0) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            // Function to load families data (same as original)
+            function loadFamilies() {
+                const familyList = document.getElementById('familyList');
+                familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+
+                fetch('/census/api/denominations/families/')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        allFamilies = data.census_families || [];
+
+                        if (allFamilies.length > 0) {
+                            allFamilies.sort((a, b) => a.name.localeCompare(b.name));
+
+                            let familyHTML = '';
+                            allFamilies.forEach(family => {
+                                familyHTML += `
+                                    <div class="family-card" data-family="${family.name}">
+                                        <div class="font-medium">${family.name}</div>
+                                        <div class="text-sm text-gray-500">
+                                            ${family.count} denomination${family.count !== 1 ? 's' : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            });
+
+                            familyList.innerHTML = familyHTML;
+
+                            // Add click event listeners to family cards
+                            document.querySelectorAll('.family-card').forEach(card => {
+                                card.addEventListener('click', () => {
+                                    const familyName = card.dataset.family;
+
+                                    // Update UI
+                                    document.querySelectorAll('.family-card').forEach(c => {
+                                        c.classList.remove('active');
+                                    });
+                                    card.classList.add('active');
+
+                                    // Load denominations for this family
+                                    loadDenominations(familyName);
+
+                                    // Apply filter to map
+                                    loadMarkers({family_census: familyName});
+                                });
+                            });
+                        } else {
+                            familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No families found</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading families:', error);
+                        familyList.innerHTML = '<div class="text-red-500 text-sm text-center py-4">Error loading families</div>';
+                    });
+            }
+
+            // Function to load denominations for a specific family (same as original)
+            function loadDenominations(familyName) {
+                const denominationList = document.getElementById('denominationList');
+                denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+
+                fetch(`/census/api/denominations/by_family/?family_census=${encodeURIComponent(familyName)}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        allDenominations = data || [];
+
+                        if (allDenominations.length > 0) {
+                            let denominationHTML = '';
+                            allDenominations.forEach(denomination => {
+                                denominationHTML += `
+                                    <div class="denomination-item" data-id="${denomination.id}" data-name="${denomination.name}">
+                                        ${denomination.name}
+                                    </div>
+                                `;
+                            });
+
+                            denominationList.innerHTML = denominationHTML;
+
+                            // Add click handlers for denomination items
+                            document.querySelectorAll('.denomination-item').forEach(item => {
+                                item.addEventListener('click', () => {
+                                    const denominationId = item.dataset.id;
+                                    const denominationName = item.dataset.name;
+
+                                    // Toggle active state
+                                    if (item.classList.contains('active')) {
+                                        item.classList.remove('active');
+                                        loadMarkers({family_census: currentFamily});
+                                        currentDenomination = null;
+                                    } else {
+                                        document.querySelectorAll('.denomination-item').forEach(i => {
+                                            i.classList.remove('active');
+                                        });
+                                        item.classList.add('active');
+                                        loadMarkers({
+                                            family_census: currentFamily,
+                                            denomination: denominationId
+                                        });
+                                        currentDenomination = denominationName;
+                                    }
+                                });
+                            });
+                        } else {
+                            denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No denominations found</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading denominations:', error);
+                        denominationList.innerHTML = '<div class="text-red-500 text-sm text-center py-4">Error loading denominations</div>';
+                    });
+            }
+
+            // Function to filter denominations by search term
+            function filterDenominations(searchTerm) {
+                searchTerm = searchTerm.toLowerCase();
+
+                document.querySelectorAll('.denomination-item').forEach(item => {
+                    const denominationName = item.dataset.name.toLowerCase();
+                    if (denominationName.includes(searchTerm)) {
+                        item.style.display = 'block';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            }
+
+            // Set up event listeners
+
+            // Clustering toggle
+            document.getElementById('clusteringToggle').addEventListener('change', toggleClustering);
+
+            // Marker size selector
+            document.getElementById('markerSizeBy').addEventListener('change', updateMarkerSizes);
+
+            // Clear filters
+            document.getElementById('clearFamilyFilter').addEventListener('click', () => {
+                document.querySelectorAll('.family-card').forEach(card => {
+                    card.classList.remove('active');
+                });
+                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
+                currentFamily = null;
+                currentDenomination = null;
+                loadMarkers({});
+            });
+
+            document.getElementById('clearDenominationFilter').addEventListener('click', () => {
+                document.querySelectorAll('.denomination-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                currentDenomination = null;
+                loadMarkers({family_census: currentFamily});
+            });
+
+            // Denomination search
+            document.getElementById('denominationSearch').addEventListener('input', (e) => {
+                filterDenominations(e.target.value);
+            });
+
+            // Apply filters button
+            document.getElementById('applyFilters').addEventListener('click', () => {
+                // Reapply current filters which will trigger client-side filtering
+                const filters = {};
+                if (currentFamily) filters.family_census = currentFamily;
+                if (currentDenomination) filters.denomination = currentDenomination;
+                loadMarkers(filters);
+            });
+
+
+            // Clear all filters button
+            document.getElementById('clearAllFilters').addEventListener('click', () => {
+                // Clear denomination filters
+                document.querySelectorAll('.family-card').forEach(card => {
+                    card.classList.remove('active');
+                });
+                document.querySelectorAll('.denomination-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
+
+                // Clear demographic filters
+                document.getElementById('minMembers').value = '';
+                document.getElementById('maxMembers').value = '';
+                document.getElementById('genderFilter').value = '';
+                document.getElementById('ageFilter').value = '';
+                document.getElementById('hasSundaySchool').checked = false;
+                document.getElementById('hasParochialSchool').checked = false;
+                document.getElementById('hasWeekdaySchool').checked = false;
+
+                currentFamily = null;
+                currentDenomination = null;
+                loadMarkers({});
+            });
+
+            // Track map movement to load data for visible area only
+            map.on('moveend', function() {
+                if (map.getZoom() > 8) {
+                    const bounds = map.getBounds();
+                    const boundsParam = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+                    let filters = {bounds: boundsParam};
+
+                    if (currentFamily) {
+                        filters.family_census = currentFamily;
+                    }
+
+                    if (currentDenomination) {
+                        filters.denomination = currentDenomination;
+                    }
+
+                    loadMarkers(filters);
+                }
+            });
+
+            // Initial data load
+            loadFamilies();
+            loadMarkers({}); // Load all data initially
+        });
+    </script>
+{% endblock %}
