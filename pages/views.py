@@ -37,7 +37,20 @@ def get_nav_pages():
 # Context processor to make nav pages available in all templates
 def nav_pages_context(request):
     """Context processor to add navigation pages to all templates"""
-    return {"nav_pages": get_nav_pages()}
+
+    # Use a lazy object that only queries when accessed in templates
+    # This prevents the async/sync issue with ASGI
+    class LazyNavPages:
+        def __iter__(self):
+            return iter(get_nav_pages())
+
+        def __len__(self):
+            return get_nav_pages().count()
+
+        def __bool__(self):
+            return get_nav_pages().exists()
+
+    return {"nav_pages": LazyNavPages()}
 
 
 # Blog Posts

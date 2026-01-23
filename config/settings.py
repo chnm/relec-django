@@ -116,7 +116,8 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # pages context processor for navigation
-                "pages.views.nav_pages_context",
+                # Temporarily disabled due to ASGI/sync issues
+                # "pages.views.nav_pages_context",
             ],
         },
     },
