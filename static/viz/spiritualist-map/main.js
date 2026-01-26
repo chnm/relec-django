@@ -1,6 +1,6 @@
 import * as L from "leaflet";
 import { leafletCSS } from "../common/leaflet-css";
-import data from "./spiritualist.json";
+import data from "./spiritualist.data.js";
 
 leafletCSS(L.version); // Add the leaflet CSS in the correct version
 var map = L.map("spiritualist-map", { minZoom: 3, maxZoom: 9 }).setView(

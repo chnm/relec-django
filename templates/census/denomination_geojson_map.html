@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Denomination Map by Populated Place | American Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <style>
+        #map {
+            height: 700px;
+            width: 100%;
+        }
+        .filter-section {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 15px;
+        }
+        .details-panel {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            height: 700px;
+            overflow-y: auto;
+        }
+        .filter-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .filter-label {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .btn-primary {
+            background-color: #0060b1;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background-color: #0052a3;
+        }
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        .info-box {
+            background: #f3f4f6;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        .congregation-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .congregation-card h4 {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+        .congregation-card p {
+            margin: 4px 0;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        .congregation-card p strong {
+            color: #374151;
+        }
+        .place-header {
+            background: #eff6ff;
+            border-left: 4px solid #0060b1;
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 4px;
+        }
+        .place-header h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+        .place-header p {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin: 2px 0;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #9ca3af;
+        }
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            opacity: 0.5;
+        }
+        .marker-label {
+            background: white;
+            border: 2px solid #0060b1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            color: #0060b1;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        <h1 class="text-2xl font-bold mb-4">Congregations by Populated Place</h1>
+        <p class="text-gray-600 mb-6">Explore congregations grouped by their populated place. Click a marker to see all congregations at that location.</p>
+
+        <!-- Filters -->
+        <div class="mb-6">
+            <div class="filter-section">
+                <h2 class="text-lg font-semibold mb-4">Filter Options</h2>
+                <form id="filterForm">
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label class="filter-label" for="family_census">Census Family</label>
+                            <select id="family_census" name="family_census" class="filter-input">
+                                <option value="">All Families</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="filter-label" for="denomination">Denomination</label>
+                            <select id="denomination" name="denomination" class="filter-input">
+                                <option value="">All Denominations</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="filter-label" for="transcription_status">Transcription Status</label>
+                            <select id="transcription_status" name="transcription_status" class="filter-input">
+                                <option value="">All</option>
+                                <option value="approved" selected>Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="needs_review">Needs Review</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="filter-label" for="limit">Location Limit</label>
+                            <select id="limit" name="limit" class="filter-input">
+                                <option value="200">200 locations</option>
+                                <option value="500">500 locations</option>
+                                <option value="2000">2000 locations</option>
+                                <option value="99999" selected>All locations</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end mt-4">
+                        <div>
+                            <button type="submit" class="btn-primary">Apply Filters</button>
+                        </div>
+                        <div>
+                            <button type="button" id="clearBtn" class="btn-secondary">Clear Filters</button>
+                        </div>
+                    </div>
+                </form>
+                <div class="info-box">
+                    <strong>Loaded:</strong> <span id="placeCount">0</span> populated places with <span id="congregationCount">0</span> congregations
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Map and Details Side by Side -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Map -->
+            <div class="lg:col-span-2">
+                <div id="map" class="rounded-lg shadow"></div>
+            </div>
+
+            <!-- Details Panel -->
+            <div class="lg:col-span-1">
+                <div class="details-panel">
+                    <div id="detailsContent" class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p>Click a marker on the map to see congregations at that location</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize map centered on US
+            const map = L.map('map').setView([39.8283, -98.5795], 4);
+
+            // Add Carto Positron base layer (clean, minimal design)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            let geoJsonLayer;
+            let totalCongregations = 0;
+
+            // Load families dropdown
+            async function loadFamilies() {
+                try {
+                    const response = await fetch('/census/api/denominations/families/');
+                    const data = await response.json();
+
+                    const familySelect = document.getElementById('family_census');
+                    // Use census_families from the response
+                    data.census_families.forEach(familyData => {
+                        const option = document.createElement('option');
+                        option.value = familyData.name;
+                        option.textContent = `${familyData.name} (${familyData.count})`;
+                        familySelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading families:', error);
+                }
+            }
+
+            // Load denominations for a specific family
+            async function loadDenominations(family = '') {
+                try {
+                    const denominationSelect = document.getElementById('denomination');
+                    // Clear existing options except "All"
+                    denominationSelect.innerHTML = '<option value="">All Denominations</option>';
+
+                    // Always use by_family endpoint (it filters by location and returns all if no family specified)
+                    const url = family
+                        ? `/census/api/denominations/by_family/?family_census=${encodeURIComponent(family)}`
+                        : '/census/api/denominations/by_family/';
+
+                    const response = await fetch(url);
+                    const denominations = await response.json();
+
+                    denominations.forEach(denom => {
+                        const option = document.createElement('option');
+                        option.value = denom.id;
+                        option.textContent = denom.name;
+                        denominationSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading denominations:', error);
+                }
+            }
+
+            // Family dropdown change handler
+            document.getElementById('family_census').addEventListener('change', function() {
+                const selectedFamily = this.value;
+                loadDenominations(selectedFamily);
+            });
+
+            // Function to get marker size based on congregation count
+            function getMarkerRadius(count) {
+                const min = 1, max = 45;
+                const minR = 4, maxR = 25;
+
+                return minR + (Math.sqrt(count - min) / Math.sqrt(max - min)) * (maxR - minR);
+            }
+
+            // Function to show place details in the side panel
+            function showPlaceDetails(properties) {
+                const detailsContent = document.getElementById('detailsContent');
+
+                let html = `
+                    <div class="place-header">
+                        <h3>${properties.populated_place || 'Unknown'}</h3>
+                        <p><strong>${properties.city || ''}</strong>${properties.county ? ', ' + properties.county : ''}${properties.state ? ', ' + properties.state : ''}</p>
+                        <p class="mt-2">
+                            <strong>${properties.congregation_count}</strong> congregation${properties.congregation_count !== 1 ? 's' : ''} &bull;
+                            <strong>${properties.denominations_count}</strong> denomination${properties.denominations_count !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                `;
+
+                // Group congregations by denomination
+                const byDenomination = {};
+                properties.congregations.forEach(cong => {
+                    const denom = cong.denomination || 'Unknown';
+                    if (!byDenomination[denom]) {
+                        byDenomination[denom] = [];
+                    }
+                    byDenomination[denom].push(cong);
+                });
+
+                // Display congregations grouped by denomination
+                Object.keys(byDenomination).sort().forEach(denom => {
+                    html += `<h4 class="font-semibold text-gray-700 mb-2 mt-4">${denom}</h4>`;
+
+                    byDenomination[denom].forEach(cong => {
+                        html += `
+                            <div class="congregation-card">
+                                <h4>${cong.name}</h4>
+                                ${cong.address ? `<p><strong>Address:</strong> ${cong.address}</p>` : ''}
+                                ${cong.schedule_id ? `<p><strong>Schedule ID:</strong> ${cong.schedule_id}</p>` : ''}
+                                ${cong.num_edifices ? `<p><strong>Edifices:</strong> ${cong.num_edifices}</p>` : ''}
+                                ${cong.edifice_value ? `<p><strong>Value:</strong> $${cong.edifice_value.toLocaleString()}</p>` : ''}
+                                ${cong.census_record_id ? `<p><a href="/census/record/${cong.census_record_id}/" class="text-religious-primary hover:text-primary-700 font-medium">View Full Schedule →</a></p>` : ''}
+                            </div>
+                        `;
+                    });
+                });
+
+                detailsContent.innerHTML = html;
+            }
+
+            // Function to load GeoJSON data
+            async function loadGeoJSON() {
+                const form = document.getElementById('filterForm');
+                const formData = new FormData(form);
+                const params = new URLSearchParams();
+
+                // Build query parameters
+                for (const [key, value] of formData.entries()) {
+                    if (value) {
+                        params.append(key, value);
+                    }
+                }
+
+                const url = `/census/api/religious-bodies/places_geojson/?${params.toString()}`;
+
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    // Remove existing layer if any
+                    if (geoJsonLayer) {
+                        map.removeLayer(geoJsonLayer);
+                    }
+
+                    // Calculate total congregations
+                    totalCongregations = 0;
+                    data.features.forEach(feature => {
+                        totalCongregations += feature.properties.congregation_count;
+                    });
+
+                    // Sort features by congregation count (descending)
+                    // This ensures larger markers render first (bottom layer)
+                    // and smaller markers render last (top layer)
+                    data.features.sort((a, b) =>
+                        b.properties.congregation_count - a.properties.congregation_count
+                    );
+
+                    // Add new GeoJSON layer with custom markers
+                    geoJsonLayer = L.geoJSON(data, {
+                        pointToLayer: function(feature, latlng) {
+                            const count = feature.properties.congregation_count;
+                            const radius = getMarkerRadius(count);
+
+                            return L.circleMarker(latlng, {
+                                radius: radius,
+                                fillColor: '#0060b1',
+                                color: '#fff',
+                                weight: 0.5,
+                                opacity: 1,
+                                fillOpacity: 0.7
+                            }).bindTooltip(
+                                `<strong>${feature.properties.populated_place}</strong><br>${count} congregation${count !== 1 ? 's' : ''}`,
+                                { permanent: false, direction: 'top' }
+                            );
+                        },
+                        onEachFeature: function(feature, layer) {
+                            layer.on('click', function() {
+                                showPlaceDetails(feature.properties);
+
+                                // Highlight selected marker
+                                geoJsonLayer.eachLayer(l => {
+                                    l.setStyle({ weight: 0.5, color: '#fff' });
+                                });
+                                layer.setStyle({ weight: 3, color: '#ff0000' });
+                            });
+                        }
+                    }).addTo(map);
+
+                    // Update info boxes
+                    document.getElementById('placeCount').textContent = data.features.length;
+                    document.getElementById('congregationCount').textContent = totalCongregations;
+
+                    // Fit map to markers if any exist
+                    if (data.features.length > 0) {
+                        map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50] });
+                    }
+
+                } catch (error) {
+                    console.error('Error loading GeoJSON:', error);
+                    alert('Error loading map data. Check console for details.');
+                }
+            }
+
+            // Form submission
+            document.getElementById('filterForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                loadGeoJSON();
+            });
+
+            // Clear filters
+            document.getElementById('clearBtn').addEventListener('click', function() {
+                document.getElementById('filterForm').reset();
+                document.getElementById('transcription_status').value = 'approved';
+                document.getElementById('limit').value = '500';
+                // Reload all denominations when clearing family filter
+                loadDenominations();
+                if (geoJsonLayer) {
+                    map.removeLayer(geoJsonLayer);
+                }
+                document.getElementById('placeCount').textContent = '0';
+                document.getElementById('congregationCount').textContent = '0';
+                document.getElementById('detailsContent').innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p>Click a marker on the map to see congregations at that location</p>
+                    </div>
+                `;
+                map.setView([39.8283, -98.5795], 4);
+            });
+
+            // Initialize dropdowns and load default view on page load
+            loadFamilies();
+            loadDenominations();
+            loadGeoJSON();
+        });
+    </script>
+{% endblock %}

@@ -1,5 +1,5 @@
 import * as Plot from "@observablehq/plot";
-import citiesTotal from "./city-total-membership.json";
+import citiesTotal from "./city-total-membership.data.js";
 import * as params from "@params";
 
 const width = 800;

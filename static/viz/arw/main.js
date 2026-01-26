@@ -1,5 +1,5 @@
 import { json } from "d3-fetch";
-import data from "./arw.json";
+import data from "./arw.data.js";
 import * as params from "@params";
 import ARWMap from "./map";
 
