@@ -121,6 +121,17 @@ import-all: import-locations import-denoms import-omeka import-images setup-grou
 fresh-start: setup-fresh-db import-all
 	@echo "Fresh installation complete with all data imported."
 
+# Frontend Assets
+# ===============
+
+# Build Tailwind CSS for production (one-time build)
+build-css:
+	cd theme/static_src && npm run build
+
+# Watch Tailwind CSS for development (auto-rebuild on changes)
+watch-css:
+	cd theme/static_src && npm run dev
+
 # Utility Commands
 # ================
 
@@ -164,9 +175,13 @@ help:
 	@echo "Complete Reset:"
 	@echo "  fresh-start     - Complete fresh installation"
 	@echo ""
+	@echo "Frontend Assets:"
+	@echo "  build-css       - Build Tailwind CSS for production"
+	@echo "  watch-css       - Watch and rebuild Tailwind CSS (dev mode)"
+	@echo ""
 	@echo "Utilities:"
 	@echo "  superuser       - Create superuser account"
 	@echo "  collectstatic   - Collect static files"
 	@echo "  help            - Show this help message"
 
-.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images setup-groups import-all fresh-start superuser collectstatic help
+.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images setup-groups import-all fresh-start build-css watch-css superuser collectstatic help
