@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from pathlib import Path
 
@@ -5,6 +6,10 @@ import environ
 from dotenv import load_dotenv
 
 load_dotenv(verbose=True, override=True)
+
+# Ensure JavaScript files are served with correct MIME type
+mimetypes.add_type("application/javascript", ".js", strict=True)
+mimetypes.add_type("application/json", ".json", strict=True)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent

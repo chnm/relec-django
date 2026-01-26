@@ -97,19 +97,117 @@ class PageAdmin(SimpleHistoryAdmin):
 
 @admin.register(BlogPost)
 class BlogPostAdmin(ModelAdmin):
-    list_display = ("title", "author", "published_date", "is_draft")
+    list_display = (
+        "title",
+        "author",
+        "published_date",
+        "is_draft",
+        "thumbnail_preview",
+    )
     list_filter = ("is_draft", "published_date", "author")
     search_fields = ("title", "content", "abstract")
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "published_date"
     ordering = ("-published_date",)
+    readonly_fields = ("thumbnail_preview", "created_at", "updated_at")
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("title", "slug", "author", "published_date")},
+        ),
+        ("Content", {"fields": ("abstract", "content")}),
+        (
+            "Thumbnail Image",
+            {
+                "fields": ("thumbnail_image", "thumbnail_preview", "image_alt_text"),
+                "description": "Upload a thumbnail image for blog post listings",
+            },
+        ),
+        (
+            "Legacy Fields",
+            {
+                "fields": ("featured_image",),
+                "classes": ("collapse",),
+                "description": "Deprecated: Old static image path field",
+            },
+        ),
+        ("Publishing", {"fields": ("is_draft",)}),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def thumbnail_preview(self, obj):
+        """Show thumbnail preview in admin"""
+        url = obj.get_thumbnail_url()
+        if url:
+            return format_html(
+                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', url
+            )
+        return "No image"
+
+    thumbnail_preview.short_description = "Preview"
 
 
 @admin.register(Visualization)
 class VisualizationAdmin(ModelAdmin):
-    list_display = ("title", "published_date", "updated_date", "doi")
-    list_filter = ("published_date",)
-    search_fields = ("title", "content", "abstract")
+    list_display = (
+        "title",
+        "author",
+        "published_date",
+        "updated_date",
+        "doi",
+        "thumbnail_preview",
+    )
+    list_filter = ("published_date", "author")
+    search_fields = ("title", "author", "content", "abstract")
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "published_date"
     ordering = ("-published_date",)
+    readonly_fields = ("thumbnail_preview", "created_at", "updated_at")
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("title", "slug", "author", "published_date", "updated_date")},
+        ),
+        ("Content", {"fields": ("abstract", "content")}),
+        (
+            "Thumbnail Image",
+            {
+                "fields": (
+                    "thumbnail_image",
+                    "thumbnail_preview",
+                    "thumbnail_description",
+                ),
+                "description": "Upload a thumbnail image for visualization listings",
+            },
+        ),
+        ("Visualization Assets", {"fields": ("script_file", "style_file")}),
+        ("Metadata", {"fields": ("doi",), "classes": ("collapse",)}),
+        (
+            "Legacy Fields",
+            {
+                "fields": ("thumbnail",),
+                "classes": ("collapse",),
+                "description": "Deprecated: Old static image path field",
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def thumbnail_preview(self, obj):
+        """Show thumbnail preview in admin"""
+        url = obj.get_thumbnail_url()
+        if url:
+            return format_html(
+                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', url
+            )
+        return "No image"
+
+    thumbnail_preview.short_description = "Preview"
