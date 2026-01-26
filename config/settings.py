@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from pathlib import Path
 
@@ -5,6 +6,10 @@ import environ
 from dotenv import load_dotenv
 
 load_dotenv(verbose=True, override=True)
+
+# Ensure JavaScript files are served with correct MIME type
+mimetypes.add_type("application/javascript", ".js", strict=True)
+mimetypes.add_type("application/json", ".json", strict=True)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -122,7 +127,8 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # pages context processor for navigation
-                "pages.views.nav_pages_context",
+                # Temporarily disabled due to ASGI/sync issues
+                # "pages.views.nav_pages_context",
             ],
         },
     },
