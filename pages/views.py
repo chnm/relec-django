@@ -104,6 +104,12 @@ class VisualizationDetailView(DetailView):
     context_object_name = "visualization"
     slug_field = "slug"
 
+    def get_template_names(self):
+        """Check for custom template based on slug, fall back to default"""
+        custom_template = f"pages/visualizations/{self.object.slug}.html"
+        # Try custom template first, then fall back to default
+        return [custom_template, self.template_name]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Render markdown to HTML
