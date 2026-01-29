@@ -230,8 +230,8 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize map centered on US
-            const map = L.map('map').setView([39.8283, -98.5795], 4);
+            // Initialize map centered on Hartford, CT
+            const map = L.map('map').setView([41.7658, -72.6734], 8);
 
             // Add Carto Positron base layer (clean, minimal design)
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -420,10 +420,7 @@
                     document.getElementById('placeCount').textContent = data.features.length;
                     document.getElementById('congregationCount').textContent = totalCongregations;
 
-                    // Fit map to markers if any exist
-                    if (data.features.length > 0) {
-                        map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50] });
-                    }
+                    // Keep centered on Hartford, CT - don't auto-zoom to fit all markers
 
                 } catch (error) {
                     console.error('Error loading GeoJSON:', error);
@@ -458,7 +455,7 @@
                         <p>Click a marker on the map to see congregations at that location</p>
                     </div>
                 `;
-                map.setView([39.8283, -98.5795], 4);
+                map.setView([41.7658, -72.6734], 9);
             });
 
             // Initialize dropdowns and load default view on page load
