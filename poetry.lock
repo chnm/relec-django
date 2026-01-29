@@ -503,6 +503,21 @@ twisted = {version = ">=22.4", extras = ["tls"]}
 tests = ["django", "hypothesis", "pytest", "pytest-asyncio"]
 
 [[package]]
+name = "diff-match-patch"
+version = "20241021"
+description = "Repackaging of Google's Diff Match and Patch libraries."
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "diff_match_patch-20241021-py3-none-any.whl", hash = "sha256:93cea333fb8b2bc0d181b0de5e16df50dd344ce64828226bda07728818936782"},
+    {file = "diff_match_patch-20241021.tar.gz", hash = "sha256:beae57a99fa48084532935ee2968b8661db861862ec82c6f21f4acdd6d835073"},
+]
+
+[package.extras]
+dev = ["attribution (==1.8.0)", "black (==24.8.0)", "build (>=1)", "flit (==3.9.0)", "mypy (==1.12.1)", "ufmt (==2.7.3)", "usort (==1.0.8.post1)"]
+
+[[package]]
 name = "dill"
 version = "0.3.9"
 description = "serialize all of Python"
@@ -637,6 +652,34 @@ Django = ">=5.2"
 drf = ["djangorestframework"]
 
 [[package]]
+name = "django-import-export"
+version = "4.4.0"
+description = "Django application and library for importing and exporting data with included admin integration."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "django_import_export-4.4.0-py3-none-any.whl", hash = "sha256:2d9b234c0f024d3377167f4d9c5a506e095c5bad98e06d30700e1d0752829e3d"},
+    {file = "django_import_export-4.4.0.tar.gz", hash = "sha256:9900e99c89027594941074fb4cd63a5f2964975e239021765c0f066003fcd412"},
+]
+
+[package.dependencies]
+diff-match-patch = "20241021"
+Django = ">=4.2"
+tablib = ">=3.7.0"
+
+[package.extras]
+all = ["tablib[all]"]
+cli = ["tablib[cli]"]
+docs = ["openpyxl (==3.1.5)", "psycopg[binary] (>=3.2.9)", "sphinx (==8.1.3)", "sphinx-rtd-theme (==3.0.1)"]
+ods = ["tablib[ods]"]
+pandas = ["tablib[pandas]"]
+tests = ["chardet (==5.2.0)", "coverage (==7.6.4)", "django-extensions (==3.2.3)", "memory-profiler (==0.61.0)", "mysqlclient (==2.2.5)", "psycopg[binary] (>=3.2.9)", "pytz (==2024.2)", "setuptools-scm (==8.1.0)", "tablib[all] (>=3.7.0)"]
+xls = ["tablib[xls]"]
+xlsx = ["tablib[xlsx]"]
+yaml = ["tablib[yaml]"]
+
+[[package]]
 name = "django-simple-history"
 version = "3.8.0"
 description = "Store model history and view/revert changes from admin site."
@@ -755,6 +798,18 @@ pillow = "*"
 
 [package.extras]
 svg = ["reportlab", "svglib"]
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+description = "An implementation of lxml.xmlfile for the standard library"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"},
+    {file = "et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54"},
+]
 
 [[package]]
 name = "filelock"
@@ -877,6 +932,22 @@ files = [
 ]
 
 [[package]]
+name = "markdown"
+version = "3.10.1"
+description = "Python implementation of John Gruber's Markdown."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "markdown-3.10.1-py3-none-any.whl", hash = "sha256:867d788939fe33e4b736426f5b9f651ad0c0ae0ecf89df0ca5d1176c70812fe3"},
+    {file = "markdown-3.10.1.tar.gz", hash = "sha256:1c19c10bd5c14ac948c53d0d762a04e2fa35a6d58a6b7b1e6bfcbe6fefc0001a"},
+]
+
+[package.extras]
+docs = ["mdx_gh_links (>=0.2)", "mkdocs (>=1.6)", "mkdocs-gen-files", "mkdocs-literate-nav", "mkdocs-nature (>=0.6)", "mkdocs-section-index", "mkdocstrings[python] (>=0.28.3)"]
+testing = ["coverage", "pyyaml"]
+
+[[package]]
 name = "mccabe"
 version = "0.7.0"
 description = "McCabe checker, plugin for flake8"
@@ -911,6 +982,21 @@ files = [
     {file = "nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9"},
     {file = "nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f"},
 ]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"},
+    {file = "openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050"},
+]
+
+[package.dependencies]
+et-xmlfile = "*"
 
 [[package]]
 name = "packaging"
@@ -1497,6 +1583,27 @@ dev = ["build", "hatch"]
 doc = ["sphinx"]
 
 [[package]]
+name = "tablib"
+version = "3.9.0"
+description = "Format agnostic tabular data library (XLS, JSON, YAML, CSV, etc.)"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "tablib-3.9.0-py3-none-any.whl", hash = "sha256:eda17cd0d4dda614efc0e710227654c60ddbeb1ca92cdcfc5c3bd1fc5f5a6e4a"},
+    {file = "tablib-3.9.0.tar.gz", hash = "sha256:1b6abd8edb0f35601e04c6161d79660fdcde4abb4a54f66cc9f9054bd55d5fe2"},
+]
+
+[package.extras]
+all = ["odfpy", "openpyxl (>=2.6.0)", "pandas", "pyyaml", "tabulate", "xlrd", "xlwt"]
+cli = ["tabulate"]
+ods = ["odfpy"]
+pandas = ["pandas"]
+xls = ["xlrd", "xlwt"]
+xlsx = ["openpyxl (>=2.6.0)"]
+yaml = ["pyyaml"]
+
+[[package]]
 name = "tomlkit"
 version = "0.13.2"
 description = "Style preserving TOML library"
@@ -1701,4 +1808,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "949fedcc24f7b05abc0369a4e855ee7abf398aaf777aed06b1bf0d226711aaa6"
+content-hash = "280c43731b12ebd81737ec798e1d599217ca30299e3db6c3c21aa14862408e1c"
