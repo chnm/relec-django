@@ -1,15 +1,15 @@
 # Project-specific additions
 node_modules/
+staticfiles/
 models.png
 documents/
-staticfiles/
-images/
-static/upload
+static-data/
 *.sql
 logs/
 .claude/
 backups/
 CLAUDE.md
+AGENTS.md
 hugo_site/
 .idea/
 
