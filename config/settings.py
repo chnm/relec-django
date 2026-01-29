@@ -80,6 +80,8 @@ INSTALLED_APPS = [
     "storages",
     # image processing
     "easy_thumbnails",
+    # import/export
+    "import_export",
     # local apps
     "religious_ecologies",
     "census",
@@ -127,8 +129,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # pages context processor for navigation
-                # Temporarily disabled due to ASGI/sync issues
-                # "pages.views.nav_pages_context",
+                "pages.context_processors.navigation_pages",
             ],
         },
     },
@@ -321,6 +322,11 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/",
                     },
                     {
+                        "title": "Export by Location",
+                        "icon": "download",
+                        "link": lambda request: "/admin/census/censusschedule/location-export/",
+                    },
+                    {
                         "title": "Religious Bodies",
                         "icon": "account_balance",
                         "link": lambda request: "/admin/census/religiousbody/",
@@ -360,9 +366,14 @@ UNFOLD = {
                 "collapsible": True,
                 "items": [
                     {
-                        "title": "Pages",
+                        "title": "Blog Posts",
                         "icon": "article",
-                        "link": lambda request: "/admin/pages/page/",
+                        "link": lambda request: "/admin/pages/blogpost/",
+                    },
+                    {
+                        "title": "Visualizations",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/visualization/",
                     },
                 ],
             },
@@ -441,3 +452,22 @@ UNFOLD = {
 # Geocoding settings
 # ------------------------------------------------------------------------------
 GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
+
+# Django REST Framework Configuration
+# ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 100,  # Default page size
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",  # Make API publicly readable
+    ],
+}
