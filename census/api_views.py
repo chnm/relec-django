@@ -1,4 +1,5 @@
 # census/api_views.py
+import requests
 from django.db.models import IntegerField, Sum, Value
 from django.db.models.functions import Coalesce
 from django_filters.rest_framework import DjangoFilterBackend
@@ -671,6 +672,257 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
 
             return Response(geojson)
 
+        except Exception as e:
+            import traceback
+
+            return Response(
+                {"error": str(e), "traceback": traceback.format_exc()}, status=500
+            )
+
+    @action(detail=False, methods=["get"])
+    def city_membership(self, request):
+        """
+        City-level membership aggregation endpoint.
+        Matches the external data.chnm.org/relcensus/city-membership API structure.
+
+        Aggregates membership data by city (Location), returning total members
+        per city with optional filtering by denomination or family.
+
+        Query Parameters:
+            - year: Year filter (currently only 1926 is supported)
+            - denomination: Filter by specific denomination name
+            - denominationFamily: Filter by family_relec value
+
+        Returns: Array of objects with city name, state, coordinates, and total membership
+        """
+        try:
+            from collections import defaultdict
+
+            from django.db.models import Count, Q, Sum
+
+            # Filter by denomination family if provided
+            family_filter = Q()
+            if "denominationFamily" in request.query_params:
+                family = request.query_params.get("denominationFamily")
+                family_filter = Q(denomination__family_relec=family)
+
+            # Filter by denomination name if provided
+            denom_filter = Q()
+            if "denomination" in request.query_params:
+                denom_name = request.query_params.get("denomination")
+                denom_filter = Q(denomination__name=denom_name)
+
+            # Use database aggregation for better performance
+            # Group by city location and aggregate
+            city_aggregates = (
+                ReligiousBody.objects.filter(
+                    location__isnull=False,
+                    location__lat__isnull=False,
+                    location__lon__isnull=False,
+                )
+                .filter(family_filter)
+                .filter(denom_filter)
+                .values(
+                    "location__city",
+                    "location__state",
+                    "location__county",
+                    "location__lat",
+                    "location__lon",
+                )
+                .annotate(
+                    congregations=Count("id"),
+                    total_members=Sum("membership__total_members_by_sex"),
+                )
+                .order_by("-total_members")
+            )
+
+            # Get denomination names per city (separate query for efficiency)
+            denom_by_city = defaultdict(set)
+            denom_query = (
+                ReligiousBody.objects.filter(
+                    location__isnull=False,
+                    location__lat__isnull=False,
+                    location__lon__isnull=False,
+                )
+                .filter(family_filter)
+                .filter(denom_filter)
+                .select_related("denomination", "location")
+                .only("location__city", "location__state", "denomination__name")
+            )
+
+            for body in denom_query:
+                if body.denomination:
+                    city_key = (body.location.city, body.location.state)
+                    denom_by_city[city_key].add(body.denomination.name)
+
+            # Format response
+            response_data = []
+            for item in city_aggregates:
+                city_key = (item["location__city"], item["location__state"])
+                denoms = sorted(list(denom_by_city.get(city_key, set())))
+
+                response_data.append(
+                    {
+                        "city": item["location__city"],
+                        "state": item["location__state"],
+                        "county": item["location__county"],
+                        "lat": float(item["location__lat"])
+                        if item["location__lat"]
+                        else None,
+                        "lon": float(item["location__lon"])
+                        if item["location__lon"]
+                        else None,
+                        "total_members": item["total_members"] or 0,
+                        "congregations": item["congregations"],
+                        "denominations_count": len(denoms),
+                        "denominations": denoms,
+                    }
+                )
+
+            return Response(response_data)
+
+        except Exception as e:
+            import traceback
+
+            return Response(
+                {"error": str(e), "traceback": traceback.format_exc()}, status=500
+            )
+
+    @action(detail=False, methods=["get"])
+    def denomination_families(self, request):
+        """
+        List unique denomination families endpoint.
+        Matches the external data.chnm.org/relcensus/city-membership API structure.
+
+        Returns both census families and RelEc families, with counts of denominations
+        and congregations in each family.
+
+        Returns: Object with census_families and relec_families arrays
+        """
+        try:
+            from django.db.models import Count
+
+            # Get all unique census families with counts
+            census_families_data = []
+
+            # Get all families (not just those with location data)
+            census_families = (
+                Denomination.objects.filter(family_census__isnull=False)
+                .values("family_census")
+                .annotate(
+                    denomination_count=Count("id", distinct=True),
+                    total_congregation_count=Count("religiousbody", distinct=True),
+                )
+                .order_by("family_census")
+            )
+
+            # For each family, get count of congregations WITH location data
+            for family in census_families:
+                if family["family_census"]:  # Skip null/empty
+                    family_name = family["family_census"]
+
+                    # Count congregations with location data
+                    congregation_count_with_location = (
+                        Denomination.objects.filter(
+                            family_census=family_name,
+                            religiousbody__location__isnull=False,
+                            religiousbody__location__lat__isnull=False,
+                            religiousbody__location__lon__isnull=False,
+                        )
+                        .values("religiousbody")
+                        .distinct()
+                        .count()
+                    )
+
+                    census_families_data.append(
+                        {
+                            "name": family_name,
+                            "denominations": family["denomination_count"],
+                            "congregations": congregation_count_with_location,
+                            "total_congregations": family["total_congregation_count"],
+                            "has_location_data": congregation_count_with_location > 0,
+                        }
+                    )
+
+            # Get all unique RelEc families with counts
+            relec_families_data = []
+
+            # Get all families (not just those with location data)
+            relec_families = (
+                Denomination.objects.filter(family_relec__isnull=False)
+                .values("family_relec")
+                .annotate(
+                    denomination_count=Count("id", distinct=True),
+                    total_congregation_count=Count("religiousbody", distinct=True),
+                )
+                .order_by("family_relec")
+            )
+
+            # For each family, get count of congregations WITH location data
+            for family in relec_families:
+                if family["family_relec"]:  # Skip null/empty
+                    family_name = family["family_relec"]
+
+                    # Count congregations with location data
+                    congregation_count_with_location = (
+                        Denomination.objects.filter(
+                            family_relec=family_name,
+                            religiousbody__location__isnull=False,
+                            religiousbody__location__lat__isnull=False,
+                            religiousbody__location__lon__isnull=False,
+                        )
+                        .values("religiousbody")
+                        .distinct()
+                        .count()
+                    )
+
+                    relec_families_data.append(
+                        {
+                            "name": family_name,
+                            "denominations": family["denomination_count"],
+                            "congregations": congregation_count_with_location,
+                            "total_congregations": family["total_congregation_count"],
+                            "has_location_data": congregation_count_with_location > 0,
+                        }
+                    )
+
+            return Response(
+                {
+                    "census_families": census_families_data,
+                    "relec_families": relec_families_data,
+                }
+            )
+
+        except Exception as e:
+            import traceback
+
+            return Response(
+                {"error": str(e), "traceback": traceback.format_exc()}, status=500
+            )
+
+    @action(detail=False, methods=["get"])
+    def hugo_city_membership(self, request):
+        """Proxy endpoint for Hugo API city membership data to avoid CORS issues"""
+        try:
+            # Build the external API URL with query parameters
+            external_url = "https://data.chnm.org/relcensus/city-membership"
+
+            # Forward all query parameters - convert MultiValueDict to regular dict
+            # MultiValueDict stores lists, we need single values
+            params = {key: value for key, value in request.query_params.items()}
+
+            # Make request to external API
+            response = requests.get(external_url, params=params, timeout=30)
+            response.raise_for_status()
+
+            # Return the JSON data
+            return Response(response.json())
+
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {"error": f"Failed to fetch data from external API: {str(e)}"},
+                status=502,
+            )
         except Exception as e:
             import traceback
 
