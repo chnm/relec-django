@@ -371,10 +371,15 @@ UNFOLD = {
                         "link": lambda request: "/admin/pages/blogpost/",
                     },
                     {
-                        "title": "Visualizations",
+                        "title": "Pages",
                         "icon": "article",
-                        "link": lambda request: "/admin/pages/visualization/",
+                        "link": lambda request: "/admin/pages/page/",
                     },
+                    # {
+                    #     "title": "Visualizations",
+                    #     "icon": "article",
+                    #     "link": lambda request: "/admin/pages/visualization/",
+                    # },
                 ],
             },
             {
