@@ -57,6 +57,11 @@ def demographics_map_view(request):
     return render(request, "census/demographics_map.html", context)
 
 
+def denomination_geojson_map_view(request):
+    """Render the GeoJSON map test view for denominations by populated place"""
+    return render(request, "census/denomination_geojson_map.html")
+
+
 def census_browser_view(request):
     """Render the census records browser with filtering and pagination"""
 
@@ -233,3 +238,23 @@ def locations_browse_view(request):
     }
 
     return render(request, "census/locations_browse.html", context)
+
+
+def urban_congregations_map_view(request):
+    """
+    Urban American Congregations Map visualization.
+
+    Faithful recreation of the original cities-map visualization using local Django API.
+    Matches original styling, colors, layout, and functionality.
+    """
+    return render(request, "census/visualizations/urban_congregations_map.html")
+
+
+def urban_congregations_simple_view(request):
+    """
+    Simplified Urban Congregations Map visualization.
+
+    Self-contained template with inline JavaScript using local Django API.
+    Much simpler to maintain than separate JS modules.
+    """
+    return render(request, "census/visualizations/urban_congregations_simple.html")

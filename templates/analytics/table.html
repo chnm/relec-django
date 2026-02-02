@@ -1,0 +1,68 @@
+{% load django_tables2 %}
+{% load i18n %}
+
+<div class="django-tables2">
+    <table {% render_attrs table.attrs %}>
+        <thead {{ table.attrs.thead.as_html }}>
+            <tr>
+                {% for column in table.columns %}
+                    <th {{ column.attrs.th.as_html }}>
+                        {% if column.orderable %}
+                            <a href="{% querystring table.prefixed_order_by_field=column.order_by_alias.next %}">
+                                {{ column.header }}
+                                {% if column.is_ordered %}
+                                    <span class="ml-1">
+                                        {% if column.order_by_alias.is_descending %}
+                                            ↓
+                                        {% else %}
+                                            ↑
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+                            </a>
+                        {% else %}
+                            {{ column.header }}
+                        {% endif %}
+                    </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody {{ table.attrs.tbody.as_html }}>
+            {% for row in table.paginated_rows %}
+                <tr {{ row.attrs.as_html }}>
+                    {% for column, cell in row.items %}
+                        <td {{ column.attrs.td.as_html }}>{{ cell }}</td>
+                    {% endfor %}
+                </tr>
+            {% empty %}
+                {% if table.empty_text %}
+                    <tr>
+                        <td colspan="{{ table.columns|length }}" class="text-center py-8 text-gray-500">
+                            {{ table.empty_text }}
+                        </td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if table.page %}
+        <nav class="pagination" aria-label="Table pagination">
+            {% if table.page.has_previous %}
+                <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}" class="previous">
+                    ← Previous
+                </a>
+            {% endif %}
+
+            <span class="cardinality">
+                Page {{ table.page.number }} of {{ table.paginator.num_pages }}
+            </span>
+
+            {% if table.page.has_next %}
+                <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}" class="next">
+                    Next →
+                </a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</div>

@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from pathlib import Path
 
@@ -5,6 +6,10 @@ import environ
 from dotenv import load_dotenv
 
 load_dotenv(verbose=True, override=True)
+
+# Ensure JavaScript files are served with correct MIME type
+mimetypes.add_type("application/javascript", ".js", strict=True)
+mimetypes.add_type("application/json", ".json", strict=True)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -67,21 +72,29 @@ INSTALLED_APPS = [
     # rest framework
     "rest_framework",
     "django_filters",
+    # django-tables2
+    "django_tables2",
+    # cors headers
+    "corsheaders",
     # obj storage
     "storages",
     # image processing
     "easy_thumbnails",
+    # import/export
+    "import_export",
     # local apps
     "religious_ecologies",
     "census",
     "location",
     "pages",
+    "analytics",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -116,7 +129,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 # pages context processor for navigation
-                "pages.views.nav_pages_context",
+                "pages.context_processors.navigation_pages",
             ],
         },
     },
@@ -263,19 +276,34 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Data Quality",
+                "title": "Analytics & Reporting",
                 "separator": True,
                 "collapsible": True,
                 "items": [
                     {
-                        "title": "Schedule ID Gaps",
-                        "icon": "dangerous",
-                        "link": lambda request: "/admin/census/censusschedule/schedule-gap-analysis/",
+                        "title": "Analytics Home",
+                        "icon": "analytics",
+                        "link": lambda request: "/analytics/",
                     },
                     {
-                        "title": "Missing Counties",
-                        "icon": "place",
-                        "link": lambda request: "/admin/census/censusschedule/missing-county-analysis/",
+                        "title": "Query Builder",
+                        "icon": "search",
+                        "link": lambda request: "/analytics/query/",
+                    },
+                    {
+                        "title": "Denomination Analysis",
+                        "icon": "bar_chart",
+                        "link": lambda request: "/analytics/analysis/denominations/",
+                    },
+                    {
+                        "title": "Location Analysis",
+                        "icon": "map",
+                        "link": lambda request: "/analytics/analysis/locations/",
+                    },
+                    {
+                        "title": "Data Completeness",
+                        "icon": "checklist",
+                        "link": lambda request: "/analytics/analysis/completeness/",
                     },
                 ],
             },
@@ -288,6 +316,11 @@ UNFOLD = {
                         "title": "Census Schedules",
                         "icon": "description",
                         "link": lambda request: "/admin/census/censusschedule/",
+                    },
+                    {
+                        "title": "Export by Location",
+                        "icon": "download",
+                        "link": lambda request: "/admin/census/censusschedule/location-export/",
                     },
                     {
                         "title": "Religious Bodies",
@@ -329,10 +362,20 @@ UNFOLD = {
                 "collapsible": True,
                 "items": [
                     {
+                        "title": "Blog Posts",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/blogpost/",
+                    },
+                    {
                         "title": "Pages",
                         "icon": "article",
                         "link": lambda request: "/admin/pages/page/",
                     },
+                    # {
+                    #     "title": "Visualizations",
+                    #     "icon": "article",
+                    #     "link": lambda request: "/admin/pages/visualization/",
+                    # },
                 ],
             },
             {
@@ -403,10 +446,29 @@ UNFOLD = {
         }
     },
     "STYLES": [
-        lambda request: "css/custom_unfold.css",
+        lambda request: "/static/css/custom_unfold.css",
     ],
 }
 
 # Geocoding settings
 # ------------------------------------------------------------------------------
 GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
+
+# Django REST Framework Configuration
+# ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 100,  # Default page size
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",  # Make API publicly readable
+    ],
+}

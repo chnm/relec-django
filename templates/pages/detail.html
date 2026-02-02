@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load markdown_tags %}
 
 {% block title %}{{ page.title }} - {{ block.super }}{% endblock %}
 
@@ -147,7 +148,7 @@
         </header>
 
         <div class="prose max-w-none">
-            {{ page.content|safe }}
+            {{ page.content|markdown }}
         </div>
 
         {% if user.is_staff %}

@@ -1,0 +1,722 @@
+{% extends "base.html" %}
+{% load static %}
+
+
+{% block title %}{{ visualization.title }} - Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <style>
+/* Catholic Dioceses Visualization Styles */
+
+        :root {
+            --color-orange: #F18701;
+            --color-white: #F7F4F3;
+            --color-blue: #9EB3C2;
+            --color-red: #D7263D;
+            --color-black: #2E282A;
+            --color-green: #8DAA91;
+        }
+
+        .viz-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .viz-header {
+            max-width: 1200px;
+            margin: 0 auto 2rem;
+        }
+
+        .viz-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .viz-meta {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 2rem;
+        }
+
+        .viz-content {
+            margin-bottom: 2rem;
+        }
+
+        .controls {
+            padding: 1.5rem;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+        }
+
+        .controls label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        input[type=range] {
+            width: 100%;
+            margin-bottom: 0;
+        }
+
+        .year-display {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-top: 0.5rem;
+        }
+
+        .viz-section {
+            margin: 3rem auto;
+            max-width: 1400px;
+        }
+
+        .viz-section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        #chrono-map {
+            margin: 1rem 0;
+            min-height: 600px;
+        }
+
+        #rite-map {
+            margin: 1rem 0;
+            min-height: 650px;
+        }
+
+        #barchart {
+            margin: 1rem 0;
+            min-height: 250px;
+        }
+
+        #chrono-map svg, #rite-map svg, #barchart svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .map-container {
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+
+        .controls-chart-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .controls-chart-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .instructions {
+            background: #fef3c7;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+/* D3 Visualization Styles */
+
+        .country {
+            fill: transparent;
+            stroke: var(--color-black);
+            stroke-opacity: 0.5;
+        }
+
+        .diocese {
+            fill: var(--color-orange);
+            fill-opacity: 0.5;
+            stroke: var(--color-orange);
+            stroke-opacity: 1;
+        }
+
+        .metropolitan {
+            fill: var(--color-green);
+            fill-opacity: 0.5;
+            stroke: var(--color-green);
+            stroke-opacity: 1;
+        }
+
+        .nonlatin {
+            fill-opacity: 0.75;
+            stroke: var(--color-black);
+            stroke-width: 1;
+            stroke-opacity: 1;
+        }
+
+        rect {
+            fill: var(--color-black);
+        }
+
+        .active {
+            fill: var(--color-red);
+        }
+
+        .tooltip {
+            background: rgba(101, 104, 109, 0.9);
+            border-radius: .2rem;
+            color: #fff;
+            display: inline-block;
+            font-size: 12px;
+            max-width: 400px;
+            padding: .2rem .4rem;
+            position: absolute;
+            text-overflow: ellipsis;
+            z-index: 300;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .overlay {
+            fill: none;
+            pointer-events: all;
+        }
+
+        .axis text {
+            font-size: 10px;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <article class="viz-container">
+        <header class="viz-header">
+            <h1>{{ visualization.title }}</h1>
+
+            {% if visualization.published_date %}
+                <p class="viz-meta">
+                    Published: {{ visualization.published_date|date:"F j, Y" }}
+                    {% if visualization.doi %}
+                        • DOI: <a href="{{ visualization.doi }}" class="text-blue-600 hover:underline">{{ visualization.doi|slice:"16:" }}</a>
+                    {% endif %}
+                </p>
+            {% endif %}
+
+            <div class="viz-content prose max-w-none">
+                <p>
+                    The interactive map below shows the development of Roman Catholic dioceses in North America from the establishment of the first dioceses in 1511 until the present. Included are dioceses located in the current boundaries of Canada, the United States, Mexico, Cuba, the Dominican Republic, Haiti, and the Bahamas. A diocese is the main administrative unit of the Roman Catholic church, in which a bishop presides over the churches within his territory. An archdiocese is likewise presided over by an archbishop, and most archdioceses are metropolitan sees that govern several other dioceses.
+                </p>
+            </div>
+        </header>
+
+        <div class="viz-section">
+            <h2>Latin Rite Roman Catholic dioceses and archdioceses by year</h2>
+
+            <div class="map-container">
+                <div id="chrono-map"></div>
+            </div>
+
+            <div class="controls-chart-container">
+                <div class="controls">
+                    <label for="year">Year: <span id="year-display" class="year-display">1926</span></label>
+                    <div style="position: relative;">
+                        <input type="range" id="year" min="1511" max="2011" value="1926" step="1">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">
+                            <span>1511</span>
+                            <span>2011</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="barchart"></div>
+            </div>
+        </div>
+
+        <div class="viz-section">
+            <h2>What does this visualization say about religious ecologies?</h2>
+            <div class="prose max-w-none">
+                <p>This map offers a way to see a religious ecosystem at a transnational and even continental scale. Because it is a map of dioceses, the map shows the institutional structures of the Roman Catholic church at a high vantage point within the church hierarchy. It can therefore reflect only indirectly on questions about the church outside of institutional structures or at a much more detailed level of analysis, such as the parish-level understanding that we are seeking to recreate by digitizing the 1926 Census of Religious Bodies.<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup> Nevertheless, the map lets us see at least some of the dynamics of a religious ecology.</p>
+
+                <p>The <em>American Religious Ecologies</em> project is creating new datasets and visualizations for the study of American religious history. Datasets and visualizations, though, are means to the end of creating historical interpretations that advance our knowledge of American religious history. In particular, we are seeking to understand American religion through the lens of religious ecologies. The term <em>ecology of religion</em> encourages us to look at the interactions of religious groups with one another, as well as their interactions with their geographic, political, cultural, and social environments. Using this map we can see ways, even on this large scale, in which Roman Catholicism has interacted with its larger geopolitical environment. Indeed, scale is part of the point: while most studies of religion that take an ecological framework have focused on the scale of the street, the block, or the city, the concept is also useful at larger scales.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup></p>
+
+                <p>There are three things we can observe about religious ecologies at this continental scale.</p>
+
+                <p>The first thing to note is the transnational scope of Roman Catholicism. Perhaps this point is obvious in the case of a global church like Roman Catholicism, but the point is made more striking when depicted in geographical space. Without denying the significance of the nation for understanding religious developments, the boundaries of the nation-state are only sometimes the appropriate boundaries for the study of a religious tradition.</p>
+
+                <p>Take, for instance, the map in 1789, the first year for which the background political boundaries displayed on the map are even approximately correct.<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup> That year saw the establishment of the Diocese of Baltimore, the first Roman Catholic diocese in the newly formed United States. The founding of a new nation enabled the creation of a new diocese, even if the presence of a Roman Catholic diocese in the British-controlled province of Quebec, formerly a French colonial possession, had been at issue in the lead-up to the American revolution. But the presence of institutional Roman Catholicism on the continent was hardly limited to those two dioceses. By 1789, Roman Catholic dioceses had been established for nearly three centuries on the continent. The first two were the diocese of San Juan and the diocese of Santo Domingo, now in Puerto Rico and the Dominican Republic. In 1789, there were two dioceses north of the Rio Grande, but there were ten in the territory that became Mexico and four in the Caribbean. The institutional hierarchy of the Roman Catholic church was thus well developed on the continent long before the founding of the United States and Canada as nation states.</p>
+
+                <p>The changing political boundaries of empires and nations on the continent raises a second question: what happens when national borders change, but Catholic dioceses remain in place? As institutions, Catholic dioceses are extraordinarily long-lived. Very few are suppressed once they have been established. Even suppressed dioceses often become titular sees, serving an institutional purpose though no longer functioning as a unit of administration.<sup id="fnref:4"><a href="#fn:4" class="footnote-ref" role="doc-noteref">4</a></sup> (This map could have been inverted to show the stability of Catholic dioceses over against changing borders instead of showing changing dioceses against a stable background layer.)</p>
+
+                <p>Long-standing dioceses remained in place while political borders changed around them. Take as an example one of the earliest dioceses to have been founded in North America. The diocese of San Juan was established within the Spanish Empire in 1511. Following the Spanish-American war, it was located within a territorial possession of the United States. Likewise the diocese of New Orleans, founded in 1793, has been located within Spanish, French, and American empires.</p>
+
+                <p>The borders that change around dioceses can be relatively open or closed. The demographic distribution of Roman Catholics along the border between the northeastern United States and southeastern Canada looks much the same as if there were no border. And so the Catholic dioceses along that border are dispersed among the major cities of Quebec, Ontario, and New Brunswick, on the one side of the border, and the major cities of New York, Vermont, New Hampshire, and Maine on the other, just as they might be if they were not near a border.</p>
+
+                <p>Along the more tightly controlled border between the United States and Mexico, the situation is rather different. Take, for instance, the Diocese of Brownsville in the United States and the Diocese of Matamoros in Mexico. Though divided by the Rio Grande and an international border, Matamoros-Brownsville is functionally a single urban unit, one of several such cross-border cities. The two dioceses were established within years of one another in the 1960s, and their cathedrals are a mere two miles apart. These two dioceses are distinct because they are on separate sides of a rather fraught border. And yet, in a way that would not happen in other places, the two dioceses exist within the same city. A similar dynamic, perhaps, can be found among the historically contested border between the United States and Canada now dividing Washington State from British Columbia.</p>
+
+                <p>The third observation is that the map demonstrates two patterns of growth in Catholic dioceses, which we can term extensive growth versus intensive growth. The sixteenth century saw a few initial dioceses established in connection with the Spanish Empire, followed by a few more dioceses established in the eighteenth century. But the first period of major growth in the number of dioceses established was the nineteenth century, at least in part in response to waves of immigration and rapid population growth. The growth in the number of dioceses, like the growth of population, was extensive, as dioceses followed the spread of settler colonists across the continent. One of the earliest dioceses established in the U.S., for example, was the Diocese of Bardstown, Kentucky, a frontier outpost in 1808. The Dioceses of Monterrey and Los Angeles were established in Mexican territory, only later to become part of the United States following the Mexican War and U.S. settlement in California. The foundation of Catholic dioceses in the United States more or less followed the same pattern as the <a href="https://lincolnmullen.com/projects/us-boundaries/">admission of states</a>.</p>
+
+                <p>The second major period of growth happened during the reforms of the Roman Catholic Church in the period leading up to and encompassing the Second Vatican Council. The growth in the number of dioceses during this period was intensive, meaning that dioceses were established in close geographic proximity to one another. This was a process driven by the high rates of religious affiliation in the United States during the 1950s, population growth and increasing urbanization, and the institutional reform of the church. As an example, take the archdiocese in Mexico City. Founded in 1530 as only the fifth diocese on the continent, there are now many more dioceses in close geographic proximity to the archiepiscopal see.</p>
+
+                <p>The difference between extensive and intensive growth is an important concept for understanding religious ecologies. A diocese established in response to a growing but spreading population has a different relationship to its environment and to the rest of the institutional church than dioceses that are established in a place where the growth is intensive. As for the flip side of growth, there has been relatively little retrenchment of dioceses: only a handful have been suppressed over the past five centuries. But in the twenty-first century, the number of ex-Catholics has grown enormously due to the clerical sex abuse scandal, and next to no new dioceses have been established in North America.</p>
+
+            </div>
+        </div>
+
+        <div class="viz-section">
+            <h2>Non–Latin Rite Dioceses in North America (Present Day)</h2>
+            <div id="rite-map"></div>
+        </div>
+
+        <div class="viz-section">
+            <div class="prose max-w-none">
+                <p>A particularly interesting form of intensive growth is the arrival of non-Latin Rite dioceses in North America. The Roman (thus Latin) Catholic Church is in communion with twenty-three Eastern Catholic Churches which recognize the authority of the Pope. These churches have their own liturgical rites, derived from their historic connection to the Orthodox churches of the East as opposed to Roman churches of the West. While dioceses are territorial, meaning that their authority does not usually overlap geographically, the Eastern Catholic Churches serve different Christians than the Latin Rite churches, and so they have their own dioceses. The first such diocese in North America was established in Philadelphia in 1924, with a handful of others established over the next several decades. But the number of these dioceses has greatly expanded since 1965. This growth can be explained in part because the United States opened up immigration from the countries that were the geographic home of the Eastern Catholic churches. But at the same time, the Second Vatican Council’s decree <em>Orientalium Ecclesiarum</em> (1964) reversed the process by which these eastern churches were being Latinized, or brought into greater conformity with the Latin Rite, and encouraged their distinctive identity among the churches in communion with the papacy.</p>
+
+                <p>A map of dioceses necessarily represents a limited picture of Roman Catholicism in North America, and it can only track the institutional church at its highest levels of organization rather than provide evidence for more complex and granular understandings of American religion. Nevertheless, this continental scale shows how concepts from the idea of religious ecologies can be used to understand the relationship of churches to their environment. It demonstrates the transnational significance of religious groups and the relationship of churches to national borders, as well as a distinction between intensive and extensive growth.</p>
+
+            </div>
+        </div>
+
+        <div class="viz-section">
+            <h2>Suggested citation</h2>
+            <div class="prose max-w-none">
+                <blockquote><p>“Roman Catholic Dioceses in North America,” <em>American Religious Ecologies</em>, Roy Rosenzweig Center for History and New Media, George Mason University (2020): <a href="https://religiousecologies.org/visualizations/catholic-dioceses/">https://religiousecologies.org/visualizations/catholic-dioceses/</a>, <a href="https://doi.org/10.31835/relec.dioceses">https://doi.org/10.31835/relec.dioceses</a>.</p></blockquote>
+            </div>
+
+            <h2>Sources</h2>
+
+            <p>The data for this map comes from several locations. The bulk of the data comes from Joseph Bernard Code, <em>Dictionary of the American Hierarchy (1789-1964)</em> (New York: Joseph F. Wagner, 1964), 425–26. This data was supplemented by information from <a href="http://www.catholic-hierarchy.org">catholic-hierarchy.org</a> for the <a href="http://www.catholic-hierarchy.org/country/dus2.html">United States</a>, <a href="http://www.catholic-hierarchy.org/country/dmx.html">Mexico</a>, and <a href="http://www.catholic-hierarchy.org/country/dca2.html">Canada</a>. Additional information, including data for suppressed dioceses, came from the website <a href="http://www.gcatholic.org">gcatholic.org</a>.</p>
+
+            <h2>Notes</h2>
+            <div class="footnotes" role="doc-endnotes"><hr><ol><li id="fn:1"><p>In the United States, at least, the presence and practice of Catholicism has often been carried out by lay Catholics in the absence of bishops and dioceses, and even without priests. See James M. O’Toole, <em>The Faithful: A History of Catholics in America</em> (Belknap Press, 2008), ch. 1.&nbsp;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">↩︎</a></p></li><li id="fn:2"><p>For example, Katie Day, <em>Faith on the Avenue: Religion on a City Street</em> (Oxford University Press, 2014) or Wallace D. Best, <em>Passionately Human, No Less Divine: Religion and Culture in Black Chicago, 1915–1952</em> (Princeton University Press, 2005).&nbsp;<a href="#fnref:2" class="footnote-backref" role="doc-backlink">↩︎</a></p></li><li id="fn:3"><p>While it would be desirable for the political boundaries on this map to change over time as well, gathering that spatial data was beyond the scope of this project. The boundaries of contemporary political units, even if anachronistic for most of the time period depicted on the map, are necessary to orient the user in space.&nbsp;<a href="#fnref:3" class="footnote-backref" role="doc-backlink">↩︎</a></p></li><li id="fn:4"><p>We have attempted to include suppressed dioceses, though our sources are stronger on suppressed dioceses in the United States than in other places, and we have not made an attempt to capture every detail of the dynamics of changing dioceses. Titular sees are not represented.&nbsp;<a href="#fnref:4" class="footnote-backref" role="doc-backlink">↩︎</a></p></li></ol></div>
+        </div>
+    </article>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script>
+// Embedded data
+        const diocesesData = {{ dioceses_data|safe }};
+        const diocesesByDecade = [{"decade":1500,"n":0},{"decade":1510,"n":3},{"decade":1520,"n":1},{"decade":1530,"n":4},{"decade":1540,"n":1},{"decade":1550,"n":0},{"decade":1560,"n":1},{"decade":1570,"n":0},{"decade":1580,"n":0},{"decade":1590,"n":0},{"decade":1600,"n":0},{"decade":1610,"n":0},{"decade":1620,"n":1},{"decade":1630,"n":0},{"decade":1640,"n":0},{"decade":1650,"n":0},{"decade":1660,"n":0},{"decade":1670,"n":1},{"decade":1680,"n":0},{"decade":1690,"n":0},{"decade":1700,"n":0},{"decade":1710,"n":0},{"decade":1720,"n":0},{"decade":1730,"n":0},{"decade":1740,"n":0},{"decade":1750,"n":0},{"decade":1760,"n":0},{"decade":1770,"n":2},{"decade":1780,"n":2},{"decade":1790,"n":1},{"decade":1800,"n":4},{"decade":1810,"n":0},{"decade":1820,"n":7},{"decade":1830,"n":8},{"decade":1840,"n":21},{"decade":1850,"n":25},{"decade":1860,"n":24},{"decade":1870,"n":12},{"decade":1880,"n":25},{"decade":1890,"n":15},{"decade":1900,"n":19},{"decade":1910,"n":15},{"decade":1920,"n":8},{"decade":1930,"n":17},{"decade":1940,"n":14},{"decade":1950,"n":37},{"decade":1960,"n":47},{"decade":1970,"n":28},{"decade":1980,"n":27},{"decade":1990,"n":18},{"decade":2000,"n":17},{"decade":2010,"n":1},{"decade":2020,"n":0}];
+        let northamericaData; // Will be loaded from static file
+
+// Fetch map data from static file and initialize when ready
+        fetch('{% static "data/northamerica_map.json" %}')
+            .then(response => response.json())
+            .then(data => {
+                northamericaData = data;
+                console.log('Map data loaded successfully');
+        // Initialize visualizations now that data is ready
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initializeVisualizations);
+                } else {
+                    initializeVisualizations();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading map data:', error);
+                northamericaData = {"type": "FeatureCollection", "features": []};
+        // Initialize anyway with empty data
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initializeVisualizations);
+                } else {
+                    initializeVisualizations();
+                }
+            });
+
+
+
+// Helper function to determine diocese type
+        function dioceseType(yearMetropolitan, year) {
+            if (yearMetropolitan === null) return 'diocese';
+            return yearMetropolitan <= year ? 'metropolitan' : 'diocese';
+        }
+
+// Helper function to get decade from year
+        function getDecade(year) {
+            return Math.trunc(year / 10) * 10;
+        }
+
+// Jitter factory for the rite map
+        function jitterFactory(pixels) {
+            const random = [
+                -0.17337332969564012, -0.8044061672363676, -0.7085270228985721,
+                -0.9341195279816954, 0.11231064594171469, 0.6152947367401096,
+                -0.46236238623993975, 0.49192797981467384, 0.7634299593402021,
+                0.2645428437586692, -0.7092644056711896, 0.30968152189953435,
+                0.9368738160896659, 0.7236982095941684, -0.41247651329490571,
+                -0.8393846810568692, -0.0030943972050698765, 0.18827882472033108,
+                -0.5121688558962094, -0.933589881416313, 0.3285378576856379,
+                0.7895315242728946, -0.3472608364753844, -0.5372524997547725,
+                -0.21772705338562326, 0.456164241998416, 0.5730829092855472,
+                0.11847978538351267, 0.4346387539440091, -0.15237332918937319,
+                0.29026185776954927, 0.0767452693605235, 0.7213546495729197,
+                -0.7468924528887921, 0.6519021184491143, 0.3948439812628137,
+                0.43591858058629307, 0.6634676646705147, -0.9222118678655942,
+                -0.5041254269951034, -0.7308503525647052, -0.051415228802816904,
+                -0.9532257686633572, 0.25536397356075535, -0.9702294240819413,
+                -0.43466058892613635, 0.9632344611488792, -0.38767478964045554,
+                0.10127762286307429, -0.3823284111905183, 0.74699439530312,
+                0.7982606555498692, 0.24013069222556682, -0.832430125790258
+            ];
+            let i = 0;
+            return () => {
+                const out = random[i] * pixels;
+                i = (i + 1) % random.length;
+                return out;
+            };
+        }
+
+// Initialize visualizations when data is loaded
+        function initializeVisualizations() {
+            const yearSlider = document.getElementById('year');
+            const yearDisplay = document.getElementById('year-display');
+            let currentYear = parseInt(yearSlider.value);
+
+    // Update year display
+            function updateYearDisplay(year) {
+                yearDisplay.textContent = year;
+            }
+
+            updateYearDisplay(currentYear);
+
+    // ===== CHRONOLOGICAL MAP =====
+            const chronoWidth = 1000;
+            const chronoHeight = 525;
+            const chronoMargin = {top: 10, right: 10, bottom: 10, left: 10};
+            const chronoInnerWidth = chronoWidth - chronoMargin.left - chronoMargin.right;
+            const chronoInnerHeight = chronoHeight - chronoMargin.top - chronoMargin.bottom;
+
+            const chronoSvg = d3.select('#chrono-map')
+                .append('svg')
+                .attr('viewBox', `0 0 ${chronoWidth} ${chronoHeight}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+
+            const chronoViz = chronoSvg.append('g')
+                .attr('transform', `translate(${chronoMargin.left},${chronoMargin.top})`);
+
+            const projection = d3.geoAlbers()
+                .translate([chronoInnerWidth / 2 + 60, chronoInnerHeight / 2 + 40])
+                .scale(550);
+
+            const path = d3.geoPath().projection(projection);
+
+    // Draw map background
+            chronoViz.selectAll('path')
+                .data(northamericaData.features)
+                .enter()
+                .append('path')
+                .attr('d', path)
+                .attr('class', 'country');
+
+    // Add year label
+            const yearLabel = chronoViz.append('text')
+                .text(currentYear)
+                .attr('y', chronoInnerHeight - 25)
+                .attr('font-size', 48)
+                .attr('alignment-baseline', 'top');
+
+    // Add legend
+            const legend = chronoViz.append('g')
+                .attr('transform', 'translate(120,470)');
+
+            legend.append('circle')
+                .attr('cx', 0)
+                .attr('cy', 5)
+                .attr('r', 3)
+                .attr('class', 'diocese legend');
+
+            legend.append('text')
+                .attr('x', 10)
+                .attr('y', 10)
+                .attr('font-size', 16)
+                .text('Diocese');
+
+            legend.append('circle')
+                .attr('cx', 0)
+                .attr('cy', 25)
+                .attr('r', 3)
+                .attr('class', 'metropolitan legend');
+
+            legend.append('text')
+                .attr('x', 10)
+                .attr('y', 30)
+                .attr('font-size', 16)
+                .text('Archdiocese');
+
+    // Tooltip
+            const tooltip = d3.select('body').append('div')
+                .attr('class', 'tooltip')
+                .style('position', 'absolute')
+                .style('visibility', 'hidden');
+
+    // Overlay for zoom
+            let centered = null;
+            let kScale = 1;
+
+            chronoViz.append('rect')
+                .attr('class', 'overlay')
+                .attr('width', chronoInnerWidth)
+                .attr('height', chronoInnerHeight)
+                .on('click', function() {
+            // Zoom out
+                    if (centered) {
+                        chronoViz.transition()
+                            .duration(500)
+                            .attr('transform', `translate(${chronoMargin.left},${chronoMargin.top})`);
+
+                        chronoViz.selectAll('circle')
+                            .transition()
+                            .duration(500)
+                            .attr('r', 3)
+                            .style('stroke-width', '1px');
+
+                        chronoViz.selectAll('.country')
+                            .transition()
+                            .duration(500)
+                            .style('stroke-width', '1px');
+
+                        centered = null;
+                        kScale = 1;
+                    }
+                });
+
+            function updateChronoMap(year) {
+                yearLabel.text(year);
+
+                const currentDioceses = diocesesData.filter(d =>
+                    d.year_erected <= year &&
+                    (d.year_destroyed === null || year <= d.year_destroyed) &&
+                    d.rite === 'Latin'
+                );
+
+                const countries = {
+                    BMU: 'Bermuda', CAN: 'Canada', CUB: 'Cuba',
+                    DOM: 'Dominican Republic', HTI: 'Haiti', JAM: 'Jamaica',
+                    MEX: 'Mexico', USA: 'United States'
+                };
+
+                chronoViz.selectAll('circle:not(.legend)')
+                    .data(currentDioceses, d => d.city + d.state)
+                    .join(
+                        enter => enter.append('circle')
+                            .attr('cx', d => projection([d.lon, d.lat])[0])
+                            .attr('cy', d => projection([d.lon, d.lat])[1])
+                            .attr('r', 3 / kScale)
+                            .style('stroke-width', 1 / kScale)
+                            .attr('class', d => dioceseType(d.year_metropolitan, year))
+                            .on('mouseover', function(event, d) {
+                                const country = countries[d.country];
+                                const type = dioceseType(d.year_metropolitan, year);
+                                const label = type === 'metropolitan' ? 'Archdiocese' : 'Diocese';
+                                tooltip.html(`${label} of ${d.city}<br/>${d.state}, ${country}<br/>Founded ${d.year_erected}`);
+                                tooltip.style('visibility', 'visible');
+                            })
+                            .on('mousemove', function(event) {
+                                tooltip
+                                    .style('top', `${event.pageY - 10}px`)
+                                    .style('left', `${event.pageX + 10}px`);
+                            })
+                            .on('mouseout', function() {
+                                tooltip.style('visibility', 'hidden');
+                            })
+                            .on('click', function(event, d) {
+                                event.stopPropagation();
+                                const coords = projection([d.lon, d.lat]);
+                                const x = coords[0];
+                                const y = coords[1];
+                                const k = 10;
+                                kScale = 8;
+                                centered = d;
+
+                                chronoViz.transition()
+                                    .duration(500)
+                                    .attr('transform',
+                                        `translate(${chronoMargin.left},${chronoMargin.top})` +
+                                        `translate(${chronoInnerWidth/2},${chronoInnerHeight/2})` +
+                                        `scale(${k})` +
+                                        `translate(${-x},${-y})`
+                                    );
+
+                                chronoViz.selectAll('circle')
+                                    .transition()
+                                    .duration(500)
+                                    .attr('r', 3 / kScale)
+                                    .style('stroke-width', `${1 / kScale}px`);
+
+                                chronoViz.selectAll('.country')
+                                    .transition()
+                                    .duration(500)
+                                    .style('stroke-width', `${1 / k}px`);
+                            }),
+                        update => update
+                            .attr('class', d => dioceseType(d.year_metropolitan, year)),
+                        exit => exit.remove()
+                    );
+            }
+
+    // ===== BAR CHART =====
+            const chartWidth = 400;
+            const chartHeight = 200;
+            const chartMargin = {top: 0, right: 40, bottom: 40, left: 10};
+            const chartInnerWidth = chartWidth - chartMargin.left - chartMargin.right;
+            const chartInnerHeight = chartHeight - chartMargin.top - chartMargin.bottom;
+
+            const chartSvg = d3.select('#barchart')
+                .append('svg')
+                .attr('viewBox', `0 0 ${chartWidth} ${chartHeight}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+
+            const chartViz = chartSvg.append('g')
+                .attr('transform', `translate(${chartMargin.left},${chartMargin.top})`);
+
+            const xScale = d3.scaleBand()
+                .domain(d3.range(diocesesByDecade.length))
+                .range([0, chartInnerWidth])
+                .padding(0.1);
+
+            const xAxis = d3.axisBottom()
+                .scale(xScale)
+                .tickValues(xScale.domain().filter((d, i) => !(i % 5)))
+                .tickFormat(i => diocesesByDecade[i].decade);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, d3.max(diocesesByDecade, d => d.n)])
+                .range([chartInnerHeight, 0]);
+
+            const yAxis = d3.axisRight()
+                .scale(yScale)
+                .ticks(10);
+
+            chartViz.append('g')
+                .attr('class', 'x axis')
+                .attr('transform', `translate(0,${chartInnerHeight})`)
+                .call(xAxis);
+
+            chartViz.append('g')
+                .attr('class', 'y axis')
+                .attr('transform', `translate(${chartInnerWidth},0)`)
+                .call(yAxis);
+
+            chartViz.selectAll('rect')
+                .data(diocesesByDecade)
+                .enter()
+                .append('rect')
+                .attr('x', (d, i) => xScale(i))
+                .attr('y', d => yScale(d.n))
+                .attr('width', xScale.bandwidth())
+                .attr('height', d => yScale(0) - yScale(d.n));
+
+            function updateBarChart(year) {
+                chartViz.selectAll('rect')
+                    .data(diocesesByDecade)
+                    .classed('active', false)
+                    .filter(d => d.decade === getDecade(year))
+                    .classed('active', true);
+            }
+
+    // ===== RITE MAP =====
+            const riteWidth = 1000;
+            const riteHeight = 600;
+            const riteMargin = {top: 10, right: 10, bottom: 10, left: 10};
+            const riteInnerWidth = riteWidth - riteMargin.left - riteMargin.right;
+            const riteInnerHeight = riteHeight - riteMargin.top - riteMargin.bottom;
+
+            const riteSvg = d3.select('#rite-map')
+                .append('svg')
+                .attr('viewBox', `0 0 ${riteWidth} ${riteHeight}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+
+            const riteViz = riteSvg.append('g')
+                .attr('transform', `translate(${riteMargin.left},${riteMargin.top})`);
+
+            const riteProjection = d3.geoAlbers()
+                .translate([riteInnerWidth / 2 + 40, riteInnerHeight / 2])
+                .scale(1000);
+
+            const ritePath = d3.geoPath().projection(riteProjection);
+
+            const colorScale = d3.scaleOrdinal(d3.schemeSet1);
+
+            const jitter = jitterFactory(7);
+
+    // Draw map background
+            riteViz.selectAll('path')
+                .data(northamericaData.features)
+                .enter()
+                .append('path')
+                .attr('d', ritePath)
+                .attr('class', 'country');
+
+    // Filter non-Latin dioceses
+            const nonLatinDioceses = diocesesData.filter(d => d.rite !== 'Latin');
+
+    // Draw dioceses
+            riteViz.selectAll('circle:not(.legend)')
+                .data(nonLatinDioceses)
+                .join('circle')
+                .attr('cx', d => riteProjection([d.lon, d.lat])[0] + jitter())
+                .attr('cy', d => riteProjection([d.lon, d.lat])[1] + jitter())
+                .attr('r', 5)
+                .style('fill', d => colorScale(d.rite))
+                .classed('nonlatin', true)
+                .on('mouseover', function(event, d) {
+                    let prefix = 'Diocese of ';
+                    if (d.city.includes('Eparchy')) {
+                        prefix = '';
+                    }
+                    tooltip.html(`${prefix}${d.city}<br/>${d.state}<br/>${d.rite} Rite`);
+                    tooltip.style('visibility', 'visible');
+                })
+                .on('mousemove', function(event) {
+                    tooltip
+                        .style('top', `${event.pageY - 10}px`)
+                        .style('left', `${event.pageX + 10}px`);
+                })
+                .on('mouseout', function() {
+                    tooltip.style('visibility', 'hidden');
+                });
+
+    // Add legend
+            const riteLegend = riteViz.append('g')
+                .attr('transform', 'translate(0,10)');
+
+            const rites = colorScale.domain();
+            rites.forEach((rite, i) => {
+                riteLegend.append('circle')
+                    .attr('cx', 0)
+                    .attr('cy', 25 * i)
+                    .attr('r', 5)
+                    .style('fill', colorScale(rite))
+                    .classed('nonlatin', true)
+                    .classed('legend', true);
+
+                riteLegend.append('text')
+                    .attr('x', 10)
+                    .attr('y', 5 + 25 * i)
+                    .text(`${rite} Rite`);
+            });
+
+    // Initialize visualizations
+            updateChronoMap(currentYear);
+            updateBarChart(currentYear);
+
+    // Listen for slider changes
+            yearSlider.addEventListener('input', function() {
+                const year = parseInt(this.value);
+                currentYear = year;
+                updateYearDisplay(year);
+                updateChronoMap(year);
+                updateBarChart(year);
+            });
+        }
+    </script>
+{% endblock %}

@@ -14,6 +14,8 @@ urlpatterns = [
     path("", index, name="index"),
     path("admin/", admin.site.urls),
     path("census/", include("census.urls")),
+    path("analytics/", include("analytics.urls")),
+    path("", include("pages.urls")),
     # allauth
     path("accounts/", include("allauth.urls")),
     # pages - keep this last so it doesn't interfere with other URL patterns
@@ -22,3 +24,5 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns = [path("__debug__/", include(debug_toolbar.urls))] + urlpatterns
+    # Serve static files in development
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

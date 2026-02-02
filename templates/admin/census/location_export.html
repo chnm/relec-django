@@ -1,0 +1,91 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+    <div class="content-wrapper">
+        <h1>{% trans "Export Census Schedules by Location" %}</h1>
+
+        <div class="module">
+            <p class="help">
+                Select a location from the list below to export all census schedules associated with that location.
+                You can export the data in Excel (XLSX), CSV, or JSON format.
+            </p>
+
+            <form method="post" class="location-export-form">
+                {% csrf_token %}
+
+                <div class="form-row">
+                    <div>
+                        <label for="location_id">{% trans "Select Location:" %}</label>
+                        <select name="location_id" id="location_id" required class="admin-autocomplete">
+                            <option value="">---------</option>
+                            {% for state, locations in locations_by_state %}
+                                <optgroup label="{{ state }}">
+                                    {% for location in locations %}
+                                        <option value="{{ location.id }}">
+                                            {{ location.city }}{% if location.county %}, {{ location.county }}{% endif %}, {{ location.state }}
+                                            ({{ location.religiousbody_set.count }} schedule{% if location.religiousbody_set.count != 1 %}s{% endif %})
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div>
+                        <label for="export_format">{% trans "Export Format:" %}</label>
+                        <select name="export_format" id="export_format">
+                            <option value="xlsx">Excel (XLSX)</option>
+                            <option value="csv">CSV</option>
+                            <option value="json">JSON</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="submit-row">
+                    <input type="submit" value="{% trans 'Export' %}" class="default" />
+                    <a href="{% url 'admin:census_censusschedule_changelist' %}" class="button cancel-link">
+                        {% trans "Cancel" %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .location-export-form {
+            padding: 20px;
+        }
+
+        .location-export-form .form-row {
+            margin-bottom: 20px;
+        }
+
+        .location-export-form label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .location-export-form select {
+            width: 100%;
+            max-width: 600px;
+            padding: 8px;
+            font-size: 14px;
+        }
+
+        .location-export-form .submit-row {
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .help {
+            background: #ffc;
+            padding: 15px;
+            border-left: 5px solid #f90;
+            margin-bottom: 20px;
+        }
+    </style>
+{% endblock %}
