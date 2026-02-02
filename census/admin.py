@@ -9,7 +9,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.db.models import Q
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -18,7 +18,10 @@ from requests.exceptions import RequestException
 from unfold.admin import ModelAdmin, StackedInline
 from urllib3.util.retry import Retry
 
+from location.models import Location
+
 from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+from .resources import CensusScheduleResource
 
 
 class HasLocationFilter(admin.SimpleListFilter):
@@ -520,7 +523,13 @@ class CensusScheduleAdmin(ModelAdmin):
         "assigned_transcriber",
         "assigned_reviewer",
     ]
-    search_fields = ["schedule_title", "schedule_id", "resource_id"]
+    search_fields = [
+        "schedule_title",
+        "schedule_id",
+        "resource_id",
+        "location__city",
+        "location__state",
+    ]
     list_filter = [
         TranscriptionWorkflowFilter,
         "transcription_status",
@@ -557,6 +566,11 @@ class CensusScheduleAdmin(ModelAdmin):
                 "missing-county-analysis/",
                 self.admin_site.admin_view(self.missing_county_analysis_view),
                 name="census_schedule_missing_county_analysis",
+            ),
+            path(
+                "location-export/",
+                self.admin_site.admin_view(self.location_export_view),
+                name="census_schedule_location_export",
             ),
         ]
         return custom_urls + urls
@@ -877,6 +891,93 @@ class CensusScheduleAdmin(ModelAdmin):
         ),
     ]
     inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
+
+    def location_export_view(self, request):
+        """View to filter and export census schedules by location"""
+        # Get all unique locations with census schedules
+        locations = (
+            Location.objects.filter(religiousbody__census_record__isnull=False)
+            .distinct()
+            .order_by("state", "county", "city")
+        )
+
+        # Organize locations by state for better display
+        locations_by_state = defaultdict(list)
+        for location in locations:
+            state = location.state or "Unknown"
+            locations_by_state[state].append(location)
+
+        # Sort states
+        sorted_states = sorted(locations_by_state.items())
+
+        if request.method == "POST":
+            location_id = request.POST.get("location_id")
+            export_format = request.POST.get("export_format", "xlsx")
+
+            if not location_id:
+                messages.error(request, "Please select a location.")
+                return HttpResponseRedirect(request.path)
+
+            # Get the location
+            try:
+                location = Location.objects.get(pk=location_id)
+            except Location.DoesNotExist:
+                messages.error(request, "Location not found.")
+                return HttpResponseRedirect(request.path)
+
+            # Get all census schedules for this location
+            schedules = (
+                CensusSchedule.objects.filter(church_details__location=location)
+                .select_related()
+                .prefetch_related(
+                    "church_details__denomination",
+                    "church_details__location",
+                    "membership_details",
+                    "clergy",
+                )
+                .distinct()
+            )
+
+            # Export the data
+            resource = CensusScheduleResource()
+            dataset = resource.export(schedules)
+
+            # Generate filename
+            location_str = (
+                f"{location.city}_{location.county}_{location.state}".replace(" ", "_")
+            )
+            filename = f"census_schedules_{location_str}"
+
+            # Return appropriate response based on format
+            if export_format == "csv":
+                response = HttpResponse(dataset.csv, content_type="text/csv")
+                response["Content-Disposition"] = (
+                    f'attachment; filename="{filename}.csv"'
+                )
+            elif export_format == "json":
+                response = HttpResponse(dataset.json, content_type="application/json")
+                response["Content-Disposition"] = (
+                    f'attachment; filename="{filename}.json"'
+                )
+            else:  # xlsx
+                response = HttpResponse(
+                    dataset.xlsx,
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                response["Content-Disposition"] = (
+                    f'attachment; filename="{filename}.xlsx"'
+                )
+
+            return response
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Export Census Schedules by Location",
+            "locations_by_state": sorted_states,
+            "opts": self.model._meta,
+        }
+
+        return render(request, "admin/census/location_export.html", context)
 
     def transcription_status_display(self, obj):
         """Display status with color coding"""

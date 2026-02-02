@@ -27,25 +27,12 @@
                     </div>
                     <div class="hidden md:flex space-x-6 items-center">
                         <a href="{% url 'index' %}" class="hover:text-primary-200 transition duration-150">Home</a>
-
-                        <!-- Maps Dropdown -->
-                        <div class="relative group">
-                            <button class="hover:text-primary-200 transition duration-150 flex items-center">
-                                Maps
-                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-                            <div class="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                <div class="py-1">
-                                    <a href="{% url 'denomination_map' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-religious-primary">Denomination Map</a>
-                                    <!--<a href="{% url 'demographics_map' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-religious-primary">Demographics Map</a> -->
-                                    <a href="{% url 'denomination_geojson_map' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-religious-primary">Populated Places Map</a>
-                                </div>
-                            </div>
-                        </div>
-
+                        {% for page in nav_pages %}
+                            <a href="{% url 'page_detail' page.slug %}" class="hover:text-primary-200 transition duration-150">{{ page.get_nav_title }}</a>
+                        {% endfor %}
                         <a href="{% url 'census_browser' %}" class="hover:text-primary-200 transition duration-150">Browse Records</a>
+                        <a href="{% url 'blog-list' %}" class="hover:text-primary-200 transition duration-150">Blog</a>
+                        <a href="{% url 'visualization-list' %}" class="hover:text-primary-200 transition duration-150">Visualizations</a>
                     </div>
                     <!-- Mobile menu button -->
                     <div class="md:hidden">
@@ -61,21 +48,12 @@
             <div id="mobile-menu" class="hidden md:hidden">
                 <div class="px-4 py-2 space-y-1 bg-primary-600">
                     <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Home</a>
-
-                    <!-- Maps submenu -->
-                    <button id="mobile-maps-toggle" class="w-full text-left px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500 flex items-center justify-between">
-                        Maps
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                    </button>
-                    <div id="mobile-maps-submenu" class="hidden pl-4 space-y-1">
-                        <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Denomination Map</a>
-                        <a href="{% url 'demographics_map' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Demographics Map</a>
-                        <a href="{% url 'denomination_geojson_map' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Places Map</a>
-                    </div>
-
+                    {% for page in nav_pages %}
+                        <a href="{% url 'page_detail' page.slug %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">{{ page.get_nav_title }}</a>
+                    {% endfor %}
                     <a href="{% url 'census_browser' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Browse Records</a>
+                    <a href="{% url 'blog-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Blog</a>
+                    <a href="{% url 'visualization-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Visualizations</a>
                 </div>
             </div>
         </nav>

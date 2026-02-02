@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from .api_root import api_root
 from .api_views import DenominationViewSet, ReligiousBodyViewSet
 
 router = DefaultRouter()
@@ -9,8 +10,21 @@ router.register(r"religious-bodies", ReligiousBodyViewSet)
 router.register(r"denominations", DenominationViewSet)
 
 urlpatterns = [
+    # Custom API root
+    path("api/", api_root, name="census-api-root"),
     # API endpoints
     path("api/", include(router.urls)),
+    # Visualization views
+    path(
+        "viz/urban-congregations/",
+        views.urban_congregations_map_view,
+        name="urban_congregations_map",
+    ),
+    path(
+        "viz/urban-congregations-simple/",
+        views.urban_congregations_simple_view,
+        name="urban_congregations_simple",
+    ),
     # Map views
     path("map/", views.map_view, name="denomination_map"),
     path("demographics-map/", views.demographics_map_view, name="demographics_map"),

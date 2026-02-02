@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="923ec323-b497-44e8-b2b5-4f6ab5b3c14e" name="Changes" comment="build: Updated uv.lock">
+      <change beforePath="$PROJECT_DIR$/analytics/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/analytics/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/analytics/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/analytics/views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/census/api_views.py" beforeDir="false" afterPath="$PROJECT_DIR$/census/api_views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/census/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/census/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/census/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/census/views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/poetry.lock" beforeDir="false" afterPath="$PROJECT_DIR$/poetry.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/css/custom_unfold.css" beforeDir="false" afterPath="$PROJECT_DIR$/static/css/custom_unfold.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/admin/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/admin/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/analytics/data_completeness.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/analytics/data_completeness.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/analytics/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/analytics/home.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/analytics/query_builder.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/analytics/query_builder.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/analytics/query_results.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/analytics/query_results.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/base.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/census/browser.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/census/browser.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/census/demographics_map.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/census/demographics_map.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/census/detail.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/census/detail.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/census/map.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/census/map.html" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="DjangoConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)">
+    <option name="myCustomStartScript" value="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="preview" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;hepplerj&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/chnm/relec-django.git&quot;,
+    &quot;accountId&quot;: &quot;84414399-9e6d-48bc-b40d-9135d1bf36f9&quot;
+  }
+}</component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="34hOpV80x55jYRuPmORTG1humdf" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Django Server.religious_ecologies.executor": "Run",
+    "RunOnceActivity.OpenDjangoStructureViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "feat/admin-queries",
+    "last_opened_file_path": "/Users/jheppler/Library/CloudStorage/Dropbox/30-39 Projects/30.06 CHNM/Projects/Religious Ecologies/religious_ecologies",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "run.code.analysis.last.selected.profile": "pProject Default",
+    "settings.editor.selected.configurable": "preferences.lookFeel",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="religious_ecologies" type="Python.DjangoServer" factoryName="Django server">
+      <module name="religious_ecologies" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="DJANGO_SETTINGS_MODULE" value="config.settings" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <option name="port" value="8000" />
+      <option name="host" value="localhost" />
+      <option name="additionalOptions" value="" />
+      <option name="browserUrl" value="" />
+      <option name="runTestServer" value="false" />
+      <option name="runNoReload" value="false" />
+      <option name="useCustomRunCommand" value="false" />
+      <option name="customRunCommand" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-e768b9ed790e-JavaScript-PY-243.21565.199" />
+        <option value="bundled-python-sdk-cab1f2013843-4ae2d6a61b08-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.21565.199" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="923ec323-b497-44e8-b2b5-4f6ab5b3c14e" name="Changes" comment="" />
+      <created>1761662519610</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1761662519610</updated>
+      <workItem from="1761662520695" duration="459000" />
+      <workItem from="1761662990636" duration="159000" />
+      <workItem from="1761663155434" duration="3252000" />
+      <workItem from="1763474286296" duration="4677000" />
+      <workItem from="1763483493904" duration="262000" />
+      <workItem from="1764776392185" duration="28000" />
+      <workItem from="1764776425691" duration="42046000" />
+    </task>
+    <task id="LOCAL-00001" summary="feat: Add automatic geocoding for ReligiousBody addresses">
+      <option name="closed" value="true" />
+      <created>1763483613876</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1763483613876</updated>
+    </task>
+    <task id="LOCAL-00002" summary="style: Updated Unfold settings">
+      <option name="closed" value="true" />
+      <created>1764778600891</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1764778600891</updated>
+    </task>
+    <task id="LOCAL-00003" summary="build: Updated uv.lock">
+      <option name="closed" value="true" />
+      <created>1764778619001</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1764778619001</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value=" feat: Add automatic geocoding for ReligiousBody addresses" />
+    <MESSAGE value="feat: Add automatic geocoding for ReligiousBody addresses" />
+    <MESSAGE value="style: Updated Unfold settings" />
+    <MESSAGE value="build: Updated uv.lock" />
+    <option name="LAST_COMMIT_MESSAGE" value="build: Updated uv.lock" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>

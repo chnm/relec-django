@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ post.title }} - Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <style>
+    /* Markdown content styling */
+        .markdown-content {
+            line-height: 1.8;
+        }
+        .markdown-content h2 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+        .markdown-content h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #374151;
+        }
+        .markdown-content p {
+            margin-bottom: 1rem;
+            color: #374151;
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        .markdown-content li {
+            margin-bottom: 0.5rem;
+        }
+        .markdown-content a {
+            color: #4f46e5;
+            text-decoration: underline;
+        }
+        .markdown-content a:hover {
+            color: #4338ca;
+        }
+        .markdown-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1rem;
+            margin: 1.5rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+        .markdown-content figure {
+            margin: 2rem 0;
+        }
+        .markdown-content figure img {
+            width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+        }
+        .markdown-content figcaption {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+            text-align: center;
+        }
+        .markdown-content code {
+            background-color: #f3f4f6;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            font-size: 0.875em;
+        }
+        .markdown-content pre {
+            background-color: #1f2937;
+            color: #f9fafb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem;
+            text-align: left;
+        }
+        .markdown-content th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+        .markdown-content .footnote {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        .markdown-content sup {
+            font-size: 0.75rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <article class="max-w-4xl mx-auto">
+    <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">{{ post.title }}</h1>
+            <div class="flex items-center text-gray-600 text-sm mb-6">
+                <span class="font-medium">{{ post.author }}</span>
+                <span class="mx-3">•</span>
+                <time datetime="{{ post.published_date|date:'Y-m-d' }}">
+                    {{ post.published_date|date:"F j, Y" }}
+                </time>
+            </div>
+            {% if post.abstract %}
+                <div class="p-4 mb-6">
+                    <p class="text-gray-700 text-2xl italic">{{ post.abstract }}</p>
+                </div>
+            {% endif %}
+        </header>
+
+    <!-- Content -->
+        <div class="markdown-content prose prose-lg max-w-none">
+            {{ content_html|safe }}
+        </div>
+
+    <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t border-gray-200">
+            <a href="{% url 'blog-list' %}"
+               class="inline-flex items-center text-indigo-600 hover:text-indigo-700 font-medium">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Blog
+            </a>
+        </footer>
+    </article>
+{% endblock %}
