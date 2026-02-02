@@ -1,4 +1,7 @@
+import json
+
 import markdown
+from django.conf import settings
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.views.generic import DetailView, ListView
@@ -121,4 +124,32 @@ class VisualizationDetailView(DetailView):
             ]
         )
         context["content_html"] = md.convert(self.object.content)
+
+        # Load JSON data for specific visualizations
+        if self.object.slug == "catholic-dioceses":
+            # Try STATICFILES_DIRS first (development), then STATIC_ROOT (production)
+            if hasattr(settings, "STATICFILES_DIRS") and settings.STATICFILES_DIRS:
+                base_path = settings.STATICFILES_DIRS[0]
+            else:
+                base_path = settings.STATIC_ROOT
+
+            dioceses_path = base_path / "data" / "catholic_dioceses.json"
+
+            try:
+                with open(dioceses_path, "r", encoding="utf-8") as f:
+                    # Load and re-serialize to JSON string for template
+                    context["dioceses_data"] = json.dumps(json.load(f))
+
+                # Use CHNM API for historical state boundaries instead of embedding large GeoJSON
+                # The template will fetch from: http://data.chnm.org/ahcb/states/[date]/
+                context["use_chnm_api_for_map"] = True
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                # Gracefully handle missing or invalid data files
+                context["dioceses_data"] = "[]"
+                context["use_chnm_api_for_map"] = False
+                # Log the error in development
+                import logging
+
+                logging.warning(f"Error loading Catholic dioceses data: {e}")
+
         return context
