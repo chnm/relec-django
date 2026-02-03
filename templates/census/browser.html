@@ -123,10 +123,10 @@
 
     <!-- Filters -->
         <div class="filter-card">
-            <form method="get" class="space-y-4">
-                <div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
+            <form method="get" class="space-y-4" id="filter-form">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <!-- Search -->
-                    <div class="lg:col-span-2">
+                    <div class="lg:col-span-3">
                         <label class="block text-sm font-medium text-content-secondary mb-2">Search</label>
                         <input type="text" name="search" value="{{ search }}"
                                placeholder="Search records, churches, denominations..."
@@ -136,7 +136,7 @@
                 <!-- Denomination Family -->
                     <div>
                         <label class="block text-sm font-medium text-content-secondary mb-2">Family</label>
-                        <select name="family" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                        <select name="family" id="family-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                             <option value="">All Families</option>
                             {% for family in census_families %}
                                 {% if family %}
@@ -151,22 +151,18 @@
                 <!-- Denomination -->
                     <div>
                         <label class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
-                        <select name="denomination" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                        <select name="denomination" id="denomination-select"
+                                {% if not family_filter %}disabled{% endif %}
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
                             <option value="">All Denominations</option>
                             {% for denomination in denominations %}
-                                <option value="{{ denomination.id }}" {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
+                                <option value="{{ denomination.id }}"
+                                        data-family="{{ denomination.family_census|default:'Other' }}"
+                                        {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
                                     {{ denomination.name }}
                                 </option>
                             {% endfor %}
                         </select>
-                    </div>
-
-                <!-- Location -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Location</label>
-                        <input type="text" name="location" value="{{ location_filter }}"
-                               placeholder="State/location..."
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                     </div>
 
                 <!-- Has Image -->
@@ -176,6 +172,29 @@
                             <option value="">All Records</option>
                             <option value="yes" {% if has_image == 'yes' %}selected{% endif %}>With Images</option>
                             <option value="no" {% if has_image == 'no' %}selected{% endif %}>Without Images</option>
+                        </select>
+                    </div>
+
+                <!-- State -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">State</label>
+                        <select name="location" id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">All States</option>
+                            {% for state in states %}
+                                <option value="{{ state }}" {% if state == location_filter %}selected{% endif %}>
+                                    {{ state }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                <!-- County -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">County</label>
+                        <select name="county" id="county-select"
+                                {% if not location_filter %}disabled{% endif %}
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                            <option value="">All Counties</option>
                         </select>
                     </div>
                 </div>
@@ -190,6 +209,88 @@
                 </div>
             </form>
         </div>
+
+        <script>
+            // Data from Django
+            const countiesByState = {{ counties_by_state_json|safe }};
+            const denominationsByFamily = {{ denominations_by_family_json|safe }};
+
+            // Get form elements
+            const familySelect = document.getElementById('family-select');
+            const denominationSelect = document.getElementById('denomination-select');
+            const stateSelect = document.getElementById('state-select');
+            const countySelect = document.getElementById('county-select');
+
+            // Store original values
+            const selectedDenomination = "{{ denomination_filter }}";
+            const selectedCounty = "{{ county_filter }}";
+
+            // Update denomination dropdown based on family selection
+            function updateDenominationOptions() {
+                const selectedFamily = familySelect.value;
+                const allOptions = Array.from(denominationSelect.querySelectorAll('option'));
+                const denominationOptions = allOptions.filter(opt => opt.value !== '');
+
+                if (!selectedFamily) {
+                    // No family selected - disable denomination dropdown
+                    denominationSelect.disabled = true;
+                    denominationSelect.value = '';
+                } else {
+                    // Family selected - filter denominations
+                    denominationSelect.disabled = false;
+                    denominationOptions.forEach(option => {
+                        const optionFamily = option.getAttribute('data-family');
+                        if (optionFamily === selectedFamily) {
+                            option.style.display = '';
+                        } else {
+                            option.style.display = 'none';
+                            if (option.selected) {
+                                denominationSelect.value = '';
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Update county dropdown based on state selection
+            function updateCountyOptions() {
+                const selectedState = stateSelect.value;
+
+                // Clear existing options
+                countySelect.innerHTML = '<option value="">All Counties</option>';
+
+                if (!selectedState) {
+                    // No state selected - disable county dropdown
+                    countySelect.disabled = true;
+                } else {
+                    // State selected - populate counties
+                    countySelect.disabled = false;
+                    const counties = countiesByState[selectedState] || [];
+                    counties.forEach(county => {
+                        const option = document.createElement('option');
+                        option.value = county;
+                        option.textContent = county;
+                        if (county === selectedCounty) {
+                            option.selected = true;
+                        }
+                        countySelect.appendChild(option);
+                    });
+                }
+            }
+
+            // Add event listeners
+            familySelect.addEventListener('change', updateDenominationOptions);
+            stateSelect.addEventListener('change', function() {
+                updateCountyOptions();
+                countySelect.value = ''; // Reset county when state changes
+            });
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                updateDenominationOptions();
+                updateCountyOptions();
+            });
+        </script>
 
     <!-- Results Summary -->
         <div class="table-header rounded-t-lg">
@@ -272,6 +373,7 @@
                                                         {% if church.location %}
                                                             <p class="text-sm text-content-tertiary mt-1">
                                                                 {% if church.location.city %}{{ church.location.city }}, {% endif %}
+                                                                {% if church.location.county %}{{ church.location.county }} county, {% endif %}
                                                                 {{ church.location.state }}
                                                             </p>
                                                         {% endif %}

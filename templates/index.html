@@ -194,21 +194,6 @@
                         While the Census Bureau published summary reports from that data, the forms (or schedules) filled out by each congregation have not been widely used. Only the schedules from the 1926 Census survive, housed in a collection at the National Archives and Records Administration in Washington, DC.
                     </p>
 
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <a href="{% url 'denomination_map' %}" class="cta-button">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                            </svg>
-                            Map of Denominations
-                        </a>
-                        <a href="{% url 'demographics_map' %}" class="cta-button">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                            Map of Demographics
-                        </a>
-                    </div>
-
                     <!-- Browse Options -->
                     <div class="mt-6 pt-6 border-t border-gray-200">
                         <div class="flex flex-col sm:flex-row gap-4">
@@ -382,13 +367,24 @@
             <p class="text-xl opacity-90 mb-6">
                 Get the latest updates on new datasets, features, and research findings.
             </p>
-            <form class="newsletter-form">
-                <input type="email" placeholder="Enter your email address" class="newsletter-input" required>
-                <button type="submit" class="newsletter-button">Subscribe</button>
+            <form action="https://rrchnm.us14.list-manage.com/subscribe/post?u=61d42b8d0bd0af50c96813715&amp;id=6d054e762f&amp;f_id=00efe1e6f0" method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="newsletter-form" target="_blank">
+                <input type="email" name="EMAIL" placeholder="Enter your email address" class="newsletter-input" required>
+                <div style="position: absolute; left: -5000px;" aria-hidden="true">
+                    <input type="text" name="b_61d42b8d0bd0af50c96813715_6d054e762f" tabindex="-1" value="">
+                </div>
+                <button type="submit" name="subscribe" class="newsletter-button">Subscribe</button>
             </form>
-            <p class="text-sm opacity-75 mt-4">
-                We respect your privacy. Unsubscribe at any time.
-            </p>
+        </div>
+    </section>
+
+    <section class="content-section bg-white">
+        <div class="section-container">
+            <h2 class="text-3xl font-bold text-content-primary mb-6 font-heading">
+                Learn about the U.S. Census of Religious Bodies
+            </h2>
+            <div class="video-container">
+                <iframe src="https://www.youtube.com/embed/HNgJFwtanyo?si=alL2HbITlIF7HZU7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            </div>
         </div>
     </section>
 

@@ -79,6 +79,61 @@
             text-align: center;
             margin-bottom: 2rem;
         }
+
+        .toc-container {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            position: sticky;
+            top: 1rem;
+            align-self: start;
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+        }
+
+        .toc-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #0060b1;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        .toc-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .toc-item {
+            color: #0060b1;
+            text-decoration: none;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .toc-item:hover {
+            background: #f3f4f6;
+            text-decoration: underline;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .content-wrapper {
+                grid-template-columns: 300px 1fr;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -93,28 +148,45 @@
             <div class="text-content-secondary">Denominations with census schedules</div>
         </div>
 
-    <!-- Denominational Families -->
-        <div class="browse-card">
-            {% for family, denominations in families %}
-                <div class="family-section">
-                    <div class="family-title">
-                        {{ family }} ({{ denominations|length }} denomination{{ denominations|length|pluralize }})
-                    </div>
+    <!-- Content Wrapper with TOC -->
+        <div class="content-wrapper">
+            <!-- Table of Contents -->
+            <aside class="toc-container">
+                <div class="toc-title">Jump to Family</div>
+                <nav class="toc-list">
+                    {% for family, denominations in families %}
+                        <a href="#family-{{ forloop.counter }}" class="toc-item">
+                            {{ family }} ({{ denominations|length }})
+                        </a>
+                    {% endfor %}
+                </nav>
+            </aside>
 
-                    <div class="denomination-grid">
-                        {% for denomination in denominations %}
-                            <div class="denomination-item">
-                                <a href="{% url 'census_browser' %}?denomination={{ denomination.id }}"
-                                   class="denomination-link">
-                                    {{ denomination.name }}
-                                </a>
-                                <span class="denomination-count">{{ denomination.schedule_count }}</span>
-                            </div>
-                        {% endfor %}
+            <!-- Main Content -->
+
+            <!-- Denominational Families -->
+            <div class="browse-card">
+                {% for family, denominations in families %}
+                    <div class="family-section" id="family-{{ forloop.counter }}">
+                        <div class="family-title">
+                            {{ family }} ({{ denominations|length }} denomination{{ denominations|length|pluralize }})
+                        </div>
+
+                        <div class="denomination-grid">
+                            {% for denomination in denominations %}
+                                <div class="denomination-item">
+                                    <a href="{% url 'census_browser' %}?denomination={{ denomination.id }}"
+                                       class="denomination-link">
+                                        {{ denomination.name }}
+                                    </a>
+                                    <span class="denomination-count">{{ denomination.schedule_count }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
-                </div>
-            {% endfor %}
-        </div>
+                {% endfor %}
+            </div>
+        </div> <!-- End content-wrapper -->
 
     <!-- Navigation -->
         <div class="mt-8 pt-6 border-t border-gray-200">

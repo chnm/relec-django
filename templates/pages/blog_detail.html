@@ -103,7 +103,43 @@
         .markdown-content sup {
             font-size: 0.75rem;
         }
+
+        /* Interactive visualization styling */
+        .markdown-content .viz-interactive {
+            margin: 3rem 0;
+            padding: 2rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .markdown-content .viz-interactive h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            color: #1f2937;
+        }
+        .markdown-content .viz-container {
+            display: flex;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+        .markdown-content .viz-interactive figcaption {
+            text-align: left;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
     </style>
+
+    <!-- Import map for Observable Plot and dependencies -->
+    <script type="importmap">
+        {
+            "imports": {
+                "@observablehq/plot": "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm",
+                "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm"
+            }
+        }
+    </script>
 {% endblock %}
 
 {% block content %}

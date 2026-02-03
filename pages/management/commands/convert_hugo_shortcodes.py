@@ -109,7 +109,7 @@ class Command(BaseCommand):
         return content
 
     def convert_fig_interactive(self, content):
-        """Convert {{< fig-interactive >}} shortcodes to HTML with D3.js div"""
+        """Convert {{< fig-interactive >}} shortcodes to HTML with Plot.js div"""
 
         # Pattern for {{< fig-interactive id="..." script="..." caption="..." title="..." >}}
         pattern = r'\{\{<\s*fig-interactive\s+id="([^"]+)"\s+script="([^"]+)"\s+caption="([^"]*)"\s+(?:title="([^"]*)")?\s*>\}\}'
@@ -120,10 +120,24 @@ class Command(BaseCommand):
             caption = match.group(3)
             title = match.group(4) or ""
 
-            html = f"""<figure class="viz-interactive">
+            # Simple approach: create inline module that directly imports and renders
+            # Extract the script filename to create a unique variable name
+            script_name = script.split("/")[-1].replace(".js", "").replace("-", "_")
+
+            html = f"""<figure class="viz-interactive" data-viz-id="{div_id}">
   {f"<h3>{title}</h3>" if title else ""}
   <div id="{div_id}" class="viz-container"></div>
-  <script type="module" src="/static/{script}"></script>
+  <script type="module">
+    import * as Plot from "@observablehq/plot";
+    import citiesTotal from "/static/viz/cities-overview/city-total-membership.data.js";
+
+    const width = 800;
+    const targetId = "{div_id}";
+
+    // Inline the visualization code with the specific target ID
+    const plotConfig = {script_name}_config || {{}};
+    // The actual plot creation will be inlined here
+  </script>
   <figcaption>{caption}</figcaption>
 </figure>"""
             return html
