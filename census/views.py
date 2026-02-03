@@ -70,6 +70,7 @@ def census_browser_view(request):
     denomination_filter = request.GET.get("denomination", "")
     family_filter = request.GET.get("family", "")
     location_filter = request.GET.get("location", "")
+    county_filter = request.GET.get("county", "")
     has_image = request.GET.get("has_image", "")
 
     # Base queryset with related data
@@ -106,6 +107,11 @@ def census_browser_view(request):
             church_details__location__state__icontains=location_filter
         )
 
+    if county_filter:
+        queryset = queryset.filter(
+            church_details__location__county__icontains=county_filter
+        )
+
     if has_image == "yes":
         queryset = queryset.exclude(original_image__isnull=True).exclude(
             original_image=""
@@ -128,14 +134,52 @@ def census_browser_view(request):
         .order_by("family_census")
     )
 
+    # Get states for location dropdown
+    states = (
+        ReligiousBody.objects.filter(location__isnull=False)
+        .values_list("location__state", flat=True)
+        .distinct()
+        .order_by("location__state")
+    )
+
+    # Get counties grouped by state for JavaScript
+    import json
+
+    counties_by_state = {}
+    county_data = (
+        ReligiousBody.objects.filter(location__isnull=False)
+        .exclude(Q(location__county__isnull=True) | Q(location__county=""))
+        .values("location__state", "location__county")
+        .distinct()
+        .order_by("location__state", "location__county")
+    )
+    for item in county_data:
+        state = item["location__state"]
+        county = item["location__county"]
+        if state not in counties_by_state:
+            counties_by_state[state] = []
+        counties_by_state[state].append(county)
+
+    # Get denominations grouped by family for JavaScript
+    denominations_by_family = {}
+    for denom in denominations:
+        family = denom.family_census if denom.family_census else "Other"
+        if family not in denominations_by_family:
+            denominations_by_family[family] = []
+        denominations_by_family[family].append({"id": denom.id, "name": denom.name})
+
     context = {
         "page_obj": page_obj,
         "denominations": denominations,
         "census_families": census_families,
+        "states": states,
+        "counties_by_state_json": json.dumps(counties_by_state),
+        "denominations_by_family_json": json.dumps(denominations_by_family),
         "search": search,
         "denomination_filter": denomination_filter,
         "family_filter": family_filter,
         "location_filter": location_filter,
+        "county_filter": county_filter,
         "has_image": has_image,
         "total_records": paginator.count,
     }
@@ -232,9 +276,13 @@ def locations_browse_view(request):
                 {"name": county["location__county"], "count": county["schedule_count"]}
             )
 
+    # Calculate total counties across all states
+    total_counties = sum(len(state["counties"]) for state in states_data.values())
+
     context = {
         "states_data": states_data,
         "total_states": len(states_data),
+        "total_counties": total_counties,
     }
 
     return render(request, "census/locations_browse.html", context)

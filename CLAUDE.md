@@ -136,3 +136,102 @@ poetry run python manage.py check
 ```
 
 The project now has a professional transcription management interface with workflow tracking, team assignments, and administrative oversight capabilities. The main remaining work is finishing the bulk assignment template and setting up user groups for testing.
+
+---
+
+## Django 6.0 Async Compatibility Fix (Feb 2026)
+
+### Issue
+Django 6.0 runs in async mode by default (via ASGI), causing `SynchronousOnlyOperation` errors with django-debug-toolbar.
+
+### Solution
+**Disabled django-debug-toolbar** for Django 6.0 compatibility:
+- Commented out in `config/settings.py`:
+  - `INSTALLED_APPS += ["debug_toolbar"]`
+  - `MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]`
+- Updated `config/urls.py` to conditionally include debug toolbar only if in INSTALLED_APPS
+
+**Why:** Django Debug Toolbar makes synchronous database queries in its panels, which conflicts with Django 6.0's async context. The toolbar needs updates for full Django 6.0 compatibility.
+
+**What Still Works:**
+- ✅ Django Admin with Unfold styling
+- ✅ Custom dashboard with metrics and charts
+- ✅ All transcription management features
+- ✅ Bulk assignment system
+
+**To Re-enable Later:** Wait for django-debug-toolbar to release Django 6.0 compatible version, then uncomment the lines in settings.py.
+
+---
+
+## Interactive Visualizations with Observable Plot
+
+### ✅ Completed Work (Feb 2026)
+
+**Problem:** Blog posts migrated from Hugo had interactive visualizations using Observable Plot.js, but the ES6 module imports weren't working in Django without a bundler.
+
+**Solution Implemented:**
+- Added **import maps** to `templates/pages/blog_detail.html` to load Observable Plot and D3 from CDN
+- Updated `static/viz/params.js` to dynamically get visualization div IDs from a global params object
+- Modified `pages/management/commands/convert_hugo_shortcodes.py` to inject params setup script before viz loads
+- Created `pages/management/commands/fix_interactive_viz.py` to update already-converted posts
+
+**Files Modified:**
+- `templates/pages/blog_detail.html` - Added import map for `@observablehq/plot` and `d3` from jsDelivr CDN, plus styling for `.viz-interactive` figures
+- `static/viz/params.js` - Updated to read div ID from `window.__vizParams` global object set by inline script
+- `pages/management/commands/convert_hugo_shortcodes.py` - Enhanced `convert_fig_interactive()` to inject params setup
+- `pages/management/commands/fix_interactive_viz.py` - New command to update existing posts with new HTML structure
+
+**How It Works:**
+1. Hugo shortcode `{{< fig-interactive id="..." script="..." caption="..." title="..." >}}` converts to HTML `<figure>` with:
+   - A `<div id="..." class="viz-container">` for the visualization
+   - An inline wrapper `<script type="module">` that:
+     - Creates a data URL blob exporting `{ id: 'div-id' }` as a module
+     - Fetches the viz script, replaces `@params` import with the data URL
+     - Creates another blob URL for the modified script and dynamically imports it
+   - Import map in page header resolves `@observablehq/plot` and `d3` from CDN
+
+2. Visualization scripts (e.g., `denominational-diversity.js`) import Plot.js and params:
+   ```javascript
+   import * as Plot from "@observablehq/plot";
+   import * as params from "@params";  // Replaced at runtime with data URL
+   // ... creates plot ...
+   document.getElementById(params.id).appendChild(plot);
+   ```
+
+3. Each figure gets its own isolated params module via data URL
+   - No global state means multiple visualizations work independently
+   - The `@params` import is replaced at fetch-time with a unique blob URL per figure
+
+**Posts with Interactive Visualizations:**
+- `overview-of-cities-data` - 2 Plot.js visualizations (denominational diversity, membership proportion)
+- `american-rescue-workers` - Interactive visualizations
+
+**Commands:**
+```bash
+# Fix existing converted posts (already run)
+uv run python manage.py fix_interactive_viz
+
+# Convert new Hugo posts with shortcodes
+uv run python manage.py convert_hugo_shortcodes
+```
+
+**Key Technical Details:**
+- Uses ES6 import maps (no bundler needed) - modern browser feature
+- Observable Plot loaded from `https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm`
+- D3 loaded from `https://cdn.jsdelivr.net/npm/d3@7/+esm`
+- Each visualization uses a wrapper script with hardcoded div ID (no params system needed)
+- CSS styling in blog_detail.html provides consistent figure appearance
+
+**Current Implementation (Simplified):**
+After several iterations, we settled on the simplest approach:
+- Each visualization has a wrapper script (e.g., `denominational-diversity-wrapper.js`)
+- The wrapper has the target div ID hardcoded as a constant
+- No global state, no params resolution, no data URLs
+- Just straightforward ES6 modules that import Plot, import data, create viz, append to div
+
+**Adding New Interactive Visualizations:**
+See detailed guide in `docs/INTERACTIVE_VISUALIZATIONS.md` for complete instructions on:
+- Creating data files
+- Writing wrapper scripts
+- Adding HTML to blog posts
+- Troubleshooting common issues

@@ -148,8 +148,10 @@
 
     <!-- Summary Statistics -->
         <div class="summary-stats">
-            <div class="text-2xl font-bold text-religious-primary mb-2">{{ total_states }}</div>
-            <div class="text-content-secondary">States with census schedules</div>
+            <div class="text-2xl font-bold text-religious-primary mb-2">
+                {{ total_states }} states &middot; {{ total_counties }} counties
+            </div>
+            <div class="text-content-secondary">Locations with census schedules</div>
         </div>
 
     <!-- States and Counties -->
@@ -175,7 +177,7 @@
                         <div class="counties-list">
                             {% for county in state_data.counties %}
                                 <div class="county-item">
-                                    <a href="{% url 'census_browser' %}?location={{ state_name }}&search={{ county.name }}"
+                                    <a href="{% url 'census_browser' %}?location={{ state_name }}&county={{ county.name }}"
                                        class="county-link">
                                         {{ county.name }} County
                                     </a>

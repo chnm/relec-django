@@ -109,7 +109,7 @@ class Command(BaseCommand):
         return content
 
     def convert_fig_interactive(self, content):
-        """Convert {{< fig-interactive >}} shortcodes to HTML with D3.js div"""
+        """Convert {{< fig-interactive >}} shortcodes to HTML with Plot.js div"""
 
         # Pattern for {{< fig-interactive id="..." script="..." caption="..." title="..." >}}
         pattern = r'\{\{<\s*fig-interactive\s+id="([^"]+)"\s+script="([^"]+)"\s+caption="([^"]*)"\s+(?:title="([^"]*)")?\s*>\}\}'
