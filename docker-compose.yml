@@ -3,8 +3,11 @@ name: religious_ecologies
 
 services:
   app:
-    build: .
-    image: "rrchnm/religious_ecologies"
+    build:
+      context: .
+      dockerfile: Dockerfile
+      no_cache: true
+    image: "rrchnm/relec-django"
     ports:
       - 8000:8000
     volumes:
@@ -28,8 +31,8 @@ services:
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
     command: >
-      sh -c "poetry run python3 manage.py migrate &&
-             poetry run python3 manage.py runserver 0.0.0.0:8000"
+      sh -c "uv run manage.py migrate &&
+             uv run manage.py runserver 0.0.0.0:8000"
     depends_on:
       db:
         condition: service_healthy
