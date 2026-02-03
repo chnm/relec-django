@@ -65,17 +65,21 @@ def _get_dashboard_data_sync():
         ).order_by("-updated_at")[:10]
     )
 
-    return {
-        "total_records": total_records,
-        "transcribed_count": transcribed_count,
-        "needs_review_count": status_counts_complete["needs_review"],
-        "unassigned_count": status_counts_complete["unassigned"],
-        "assigned_count": status_counts_complete["assigned"],
-        "completion_percentage": completion_percentage,
-        "status_counts": status_counts_complete,
-        "top_transcribers": top_transcribers_list,
-        "recent_activity": recent_activity,
-    }
+        return {
+            "total_records": total_records,
+            "transcribed_count": transcribed_count,
+            "needs_review_count": status_counts_complete["needs_review"],
+            "unassigned_count": status_counts_complete["unassigned"],
+            "assigned_count": status_counts_complete["assigned"],
+            "completion_percentage": completion_percentage,
+            "status_counts": status_counts_complete,
+            "top_transcribers": top_transcribers_list,
+            "recent_activity": recent_activity,
+        }
+    except Exception as e:
+        # If there's an async context error, return empty context
+        print(f"Dashboard context error: {e}")
+        return {}
 
 
 def dashboard_context(request):
