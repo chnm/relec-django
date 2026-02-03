@@ -276,9 +276,13 @@ def locations_browse_view(request):
                 {"name": county["location__county"], "count": county["schedule_count"]}
             )
 
+    # Calculate total counties across all states
+    total_counties = sum(len(state["counties"]) for state in states_data.values())
+
     context = {
         "states_data": states_data,
         "total_states": len(states_data),
+        "total_counties": total_counties,
     }
 
     return render(request, "census/locations_browse.html", context)
