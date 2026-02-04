@@ -19,7 +19,7 @@ class Page(models.Model):
         help_text="URL path (e.g., 'datasets' for /datasets/). Leave blank to auto-generate from title.",
     )
     content = models.TextField(
-        help_text="Page content. HTML is allowed for formatting."
+        help_text="Page content as Markdown. HTML is allowed for formatting."
     )
     meta_description = models.CharField(
         max_length=160,
@@ -166,10 +166,10 @@ class Visualization(models.Model):
     updated_date = models.DateTimeField(blank=True, null=True)
     content = models.TextField(help_text="Markdown content")
     abstract = models.TextField()
-    thumbnail = models.CharField(
-        max_length=500,
-        help_text="DEPRECATED: Path to thumbnail image (use thumbnail_image instead)",
-    )
+    # thumbnail = models.CharField(
+    #    max_length=500,
+    #    help_text="DEPRECATED: Path to thumbnail image (use thumbnail_image instead)",
+    # )
     thumbnail_image = models.ImageField(
         upload_to="visualizations/thumbnails/",
         blank=True,
@@ -180,10 +180,15 @@ class Visualization(models.Model):
     doi = models.URLField(blank=True, help_text="Digital Object Identifier")
     script_file = models.CharField(
         max_length=200,
+        blank=True,
+        null=True,
         help_text="Path to JavaScript file (e.g., viz/cities-map/main.js)",
     )
     style_file = models.CharField(
-        max_length=200, help_text="Path to CSS file (e.g., viz/cities-map/style.css)"
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Path to CSS file (e.g., viz/cities-map/style.css)",
     )
 
     # Record keeping
@@ -203,7 +208,7 @@ class Visualization(models.Model):
         return reverse("visualization-detail", kwargs={"slug": self.slug})
 
     def get_thumbnail_url(self):
-        """Return thumbnail URL, preferring uploaded image over static path"""
+        """Return thumbnail URL from uploaded image"""
         if self.thumbnail_image:
             return self.thumbnail_image.url
-        return self.thumbnail if self.thumbnail else None
+        return None

@@ -7,7 +7,7 @@ from .models import BlogPost, Page, Visualization
 
 
 @admin.register(Page)
-class PageAdmin(SimpleHistoryAdmin):
+class PageAdmin(ModelAdmin, SimpleHistoryAdmin):
     list_display = [
         "title",
         "slug",
@@ -187,14 +187,6 @@ class VisualizationAdmin(ModelAdmin):
         ),
         ("Visualization Assets", {"fields": ("script_file", "style_file")}),
         ("Metadata", {"fields": ("doi",), "classes": ("collapse",)}),
-        (
-            "Legacy Fields",
-            {
-                "fields": ("thumbnail",),
-                "classes": ("collapse",),
-                "description": "Deprecated: Old static image path field",
-            },
-        ),
         (
             "Timestamps",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
