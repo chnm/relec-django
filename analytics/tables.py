@@ -1,5 +1,6 @@
 import django_tables2 as tables
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from census.models import ReligiousBody
 
@@ -56,7 +57,7 @@ class ReligiousBodyTable(tables.Table):
         """Render religious body name with fallback"""
         if value:
             return value
-        return format_html('<em class="text-gray-400">Unnamed</em>')
+        return mark_safe('<em class="text-gray-400">Unnamed</em>')
 
     def render_location(self, record):
         """Render location as city, county, state"""
@@ -69,7 +70,7 @@ class ReligiousBodyTable(tables.Table):
             if record.location.state:
                 parts.append(record.location.state)
             return ", ".join(parts) if parts else "—"
-        return format_html('<span class="text-gray-400">No location</span>')
+        return mark_safe('<span class="text-gray-400">No location</span>')
 
     def render_num_edifices(self, value):
         """Render edifices with fallback"""
