@@ -35,6 +35,16 @@ urlpatterns = [
     ),
     # Census browser views
     path("browser/", views.census_browser_view, name="census_browser"),
+    path(
+        "browser/<str:state_code>/",
+        views.census_browser_view,
+        name="census_browser_state",
+    ),
+    path(
+        "browser/<str:state_code>/<str:county_name>/",
+        views.census_browser_view,
+        name="census_browser_county",
+    ),
     path("record/<int:resource_id>/", views.census_detail_view, name="census_detail"),
     # Browse views
     path(

@@ -155,13 +155,13 @@
 
     <!-- States and Counties -->
         <div class="browse-card">
-            {% for state_name, state_data in states_data.items %}
+            {% for state_code, state_data in states_data.items %}
                 <div class="state-section">
                     <div class="state-header">
                         <div class="state-title">
-                            <a href="{% url 'census_browser' %}?location={{ state_name }}"
+                            <a href="{% url 'census_browser_state' state_code %}"
                                class="text-white hover:text-gray-200 no-underline">
-                                {{ state_name }}
+                                {{ state_data.name }} ({{ state_code }})
                             </a>
                         </div>
                         <div class="flex items-center gap-3">
@@ -176,7 +176,7 @@
                         <div class="counties-list">
                             {% for county in state_data.counties %}
                                 <div class="county-item">
-                                    <a href="{% url 'census_browser' %}?location={{ state_name }}&county={{ county.name }}"
+                                    <a href="{% url 'census_browser_county' state_code county.name %}"
                                        class="county-link">
                                         {{ county.name }} County
                                     </a>

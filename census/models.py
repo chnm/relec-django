@@ -2,10 +2,9 @@ import logging
 
 from django.contrib.auth.models import User
 from django.db import models
-from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
-from location.models import Location
+from location.models import County, Location, PopulatedPlace
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +148,37 @@ class CensusSchedule(models.Model):
         help_text="High-resolution image of the original census schedule",
     )
 
+    # Location fields
+    county = models.ForeignKey(
+        County,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="census_schedules",
+        verbose_name="County",
+        help_text="The county where this census was taken",
+    )
+    populated_place = models.ForeignKey(
+        PopulatedPlace,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="census_schedules",
+        verbose_name="Populated Place",
+        help_text="The specific city/town where this census was taken as city, county, state (optional)",
+    )
+
+    # Denomination (moved from ReligiousBody for schedule-level assignment)
+    schedule_denomination = models.ForeignKey(
+        "Denomination",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="census_schedules",
+        verbose_name="Denomination",
+        help_text="The denomination associated with this census schedule",
+    )
+
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -161,10 +191,18 @@ class CensusSchedule(models.Model):
             models.Index(fields=["transcription_status"]),
             models.Index(fields=["assigned_transcriber"]),
             models.Index(fields=["assigned_reviewer"]),
+            models.Index(fields=["county"]),
+            models.Index(fields=["populated_place"]),
+            models.Index(fields=["schedule_denomination"]),
             # Composite index for common filter combinations
             models.Index(
                 fields=["transcription_status", "assigned_transcriber"],
                 name="census_status_transcriber_idx",
+            ),
+            # Location-based query index
+            models.Index(
+                fields=["county", "schedule_denomination"],
+                name="census_county_denom_idx",
             ),
         ]
 
@@ -341,52 +379,8 @@ class ReligiousBody(models.Model):
         # if name return name, otherwise "no name provided"
         return self.name if self.name is not None else "No name provided"
 
-    def save(self, *args, **kwargs):
-        """
-        Override save to automatically geocode address on save.
-        """
-        # Check if geocoding should be performed
-        from census.geocoding import GeocodingError, geocode_address, should_geocode
-
-        if should_geocode(self):
-            logger.info(f"Attempting to geocode ReligiousBody: {self.name}")
-
-            # Extract location context from related Location
-            city = None
-            county = None
-            state = None
-
-            if self.location:
-                city = self.location.city
-                county = self.location.county
-                state = self.location.state
-
-            try:
-                # Perform geocoding
-                lat, lon, status = geocode_address(
-                    address=self.address, city=city, county=county, state=state
-                )
-
-                # Update geocoding fields
-                self.latitude = lat
-                self.longitude = lon
-                self.geocode_status = status
-                self.geocoded_at = timezone.now()
-
-                if status == "success":
-                    logger.info(
-                        f"Successfully geocoded {self.name} to ({lat:.6f}, {lon:.6f})"
-                    )
-                elif status == "failed":
-                    logger.warning(f"Geocoding failed for {self.name}")
-
-            except GeocodingError as e:
-                logger.error(f"Geocoding error for {self.name}: {e}")
-                self.geocode_status = "failed"
-                self.geocoded_at = timezone.now()
-
-        # Call parent save
-        super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #    super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Religious Body"

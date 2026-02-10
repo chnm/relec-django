@@ -225,9 +225,6 @@ class MembershipInline(StackedInline):
 
 class ReligiousBodyInline(StackedInline):
     model = ReligiousBody
-    raw_id_fields = [
-        "location",
-    ]
     autocomplete_fields = ["denomination"]
     extra = 0  # Changed from 1 to 0 to reduce initial queries
     tab = True
@@ -235,10 +232,30 @@ class ReligiousBodyInline(StackedInline):
         True  # Add link to edit in separate page instead of loading all data
     )
 
+    # Only show fields relevant to the religious body itself
+    # Location is now tracked at the CensusSchedule level
+    fields = [
+        "name",
+        "denomination",
+        "census_code",
+        "division",
+        "address",
+        "urban_rural_code",
+        "num_edifices",
+        "edifice_value",
+        "edifice_debt",
+        "has_pastors_residence",
+        "residence_value",
+        "residence_debt",
+        "expenses",
+        "benevolences",
+        "total_expenditures",
+    ]
+
     def get_queryset(self, request):
         """Optimize queries for religious body inline"""
         qs = super().get_queryset(request)
-        return qs.select_related("census_record", "denomination", "location")
+        return qs.select_related("census_record", "denomination")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """Cache denomination queryset to avoid repeated database hits"""
@@ -519,6 +536,7 @@ class CensusScheduleAdmin(ModelAdmin):
         "schedule_title",
         "schedule_id",
         "resource_id",
+        "get_location_display",
         "transcription_status_display",
         "assigned_transcriber",
         "assigned_reviewer",
@@ -527,8 +545,10 @@ class CensusScheduleAdmin(ModelAdmin):
         "schedule_title",
         "schedule_id",
         "resource_id",
-        "location__city",
-        "location__state",
+        "county__name",
+        "county__state__name",
+        "populated_place__name",
+        "schedule_denomination__name",
     ]
     list_filter = [
         TranscriptionWorkflowFilter,
@@ -536,6 +556,8 @@ class CensusScheduleAdmin(ModelAdmin):
         AssignmentStatusFilter,
         "assigned_transcriber",
         "assigned_reviewer",
+        "county__state",
+        "schedule_denomination",
         CensusScheduleLocationFilter,
     ]
     actions = [
@@ -858,6 +880,17 @@ class CensusScheduleAdmin(ModelAdmin):
             },
         ),
         (
+            "Location & Denomination",
+            {
+                "fields": [
+                    "county",
+                    "populated_place",
+                    "schedule_denomination",
+                ],
+                "description": "Primary location and denomination for this schedule.",
+            },
+        ),
+        (
             "Project Management",
             {
                 "fields": [
@@ -890,6 +923,7 @@ class CensusScheduleAdmin(ModelAdmin):
             },
         ),
     ]
+    autocomplete_fields = ["county", "populated_place", "schedule_denomination"]
     inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
 
     def location_export_view(self, request):
@@ -990,12 +1024,29 @@ class CensusScheduleAdmin(ModelAdmin):
 
     transcription_status_display.short_description = "Status"
 
+    @admin.display(description="Location")
+    def get_location_display(self, obj):
+        """Display location from county/state hierarchy"""
+        if obj.populated_place:
+            return str(obj.populated_place)
+        elif obj.county:
+            return str(obj.county)
+        return "-"
+
     def get_queryset(self, request):
         """Filter records based on user permissions and optimize queries"""
         qs = super().get_queryset(request)
 
-        # Optimize foreign key lookups
-        qs = qs.select_related("assigned_transcriber", "assigned_reviewer")
+        # Optimize foreign key lookups (including new location hierarchy)
+        qs = qs.select_related(
+            "assigned_transcriber",
+            "assigned_reviewer",
+            "county",
+            "county__state",
+            "populated_place",
+            "populated_place__county",
+            "schedule_denomination",
+        )
 
         # Prefetch related inlines to reduce queries
         qs = qs.prefetch_related(
@@ -1117,18 +1168,15 @@ class ReligiousBodyAdmin(ModelAdmin):
         "name",
         "denomination",
         "census_record",
-        "location",
+        "get_schedule_location",
         "num_edifices",
         "edifice_value",
     ]
     list_filter = [
         "denomination",
-        "location__state",
-        HasLocationFilter,
-        HasCountyFilter,
+        "census_record__county__state",
     ]
     search_fields = ["name", "denomination__name", "census_record__schedule_title"]
-    raw_id_fields = ["location"]
     autocomplete_fields = ["denomination", "census_record"]
 
     readonly_fields = [
@@ -1138,10 +1186,26 @@ class ReligiousBodyAdmin(ModelAdmin):
         "updated_at",
     ]
 
+    @admin.display(description="Location")
+    def get_schedule_location(self, obj):
+        """Display location from the parent CensusSchedule"""
+        if obj.census_record:
+            if obj.census_record.populated_place:
+                return str(obj.census_record.populated_place)
+            elif obj.census_record.county:
+                return str(obj.census_record.county)
+        return "-"
+
     def get_queryset(self, request):
         """Optimize queries for list display"""
         qs = super().get_queryset(request)
-        return qs.select_related("denomination", "census_record", "location")
+        return qs.select_related(
+            "denomination",
+            "census_record",
+            "census_record__county",
+            "census_record__county__state",
+            "census_record__populated_place",
+        )
 
     def get_search_results(self, request, queryset, search_term):
         """Optimize autocomplete search"""
@@ -1167,13 +1231,13 @@ class ReligiousBodyAdmin(ModelAdmin):
             },
         ),
         (
-            "Location",
+            "Street Address",
             {
                 "fields": [
                     "address",
-                    "location",
                     "urban_rural_code",
-                ]
+                ],
+                "description": "Street-level address for this specific church. County/city location is set on the Census Schedule.",
             },
         ),
         (
