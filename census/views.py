@@ -325,3 +325,24 @@ def urban_congregations_simple_view(request):
     Much simpler to maintain than separate JS modules.
     """
     return render(request, "census/visualizations/urban_congregations_simple.html")
+
+
+def api_documentation_view(request):
+    """
+    API Documentation page for the Religious Ecologies Census Data API.
+
+    Provides comprehensive documentation for internal and external users
+    who want to access the 1926 Census of Religious Bodies data.
+    """
+    from .models import ReligiousBody
+
+    # Get some live stats for the documentation
+    context = {
+        "total_denominations": Denomination.objects.count(),
+        "total_congregations": ReligiousBody.objects.count(),
+        "total_states": State.objects.count(),
+        "total_counties": County.objects.count(),
+        "api_base_url": request.build_absolute_uri("/census/api/"),
+    }
+
+    return render(request, "census/api_documentation.html", context)

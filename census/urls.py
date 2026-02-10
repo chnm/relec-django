@@ -10,6 +10,8 @@ router.register(r"religious-bodies", ReligiousBodyViewSet)
 router.register(r"denominations", DenominationViewSet)
 
 urlpatterns = [
+    # API Documentation
+    path("api/docs/", views.api_documentation_view, name="api_documentation"),
     # Custom API root
     path("api/", api_root, name="census-api-root"),
     # API endpoints
