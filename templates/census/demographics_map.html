@@ -364,6 +364,9 @@
             const markers = L.markerClusterGroup();
             const individualMarkers = L.layerGroup();
 
+          // Default family for initial load and resets
+            const DEFAULT_FAMILY = 'Adventist bodies';
+
             // Track clustering state and filters
             let clusteringEnabled = false;
             let currentFamily = null;
@@ -857,12 +860,12 @@
                 return true;
             }
 
-            // Function to load families data (same as original)
+          // Function to load families data (returns Promise for chaining)
             function loadFamilies() {
                 const familyList = document.getElementById('familyList');
                 familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
 
-                fetch('/census/api/denominations/families/')
+                return fetch('/census/api/denominations/families/')
                     .then(response => {
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
@@ -907,6 +910,9 @@
                                     loadMarkers({family_census: familyName});
                                 });
                             });
+
+                          // Auto-select the default family after cards are rendered
+                            selectFamily(DEFAULT_FAMILY);
                         } else {
                             familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No families found</div>';
                         }
@@ -1000,15 +1006,23 @@
             // Marker size selector
             document.getElementById('markerSizeBy').addEventListener('change', updateMarkerSizes);
 
-            // Clear filters
-            document.getElementById('clearFamilyFilter').addEventListener('click', () => {
+          // Helper function to select a family and load its data
+            function selectFamily(familyName) {
                 document.querySelectorAll('.family-card').forEach(card => {
                     card.classList.remove('active');
+                    if (card.dataset.family === familyName) {
+                        card.classList.add('active');
+                    }
                 });
-                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
-                currentFamily = null;
+                currentFamily = familyName;
                 currentDenomination = null;
-                loadMarkers({});
+                loadDenominations(familyName);
+                loadMarkers({family_census: familyName});
+            }
+
+          // Clear filters - reset to default family
+            document.getElementById('clearFamilyFilter').addEventListener('click', () => {
+                selectFamily(DEFAULT_FAMILY);
             });
 
             document.getElementById('clearDenominationFilter').addEventListener('click', () => {
@@ -1034,16 +1048,12 @@
             });
 
 
-            // Clear all filters button
+          // Clear all filters button - reset to default family
             document.getElementById('clearAllFilters').addEventListener('click', () => {
-                // Clear denomination filters
-                document.querySelectorAll('.family-card').forEach(card => {
-                    card.classList.remove('active');
-                });
+              // Clear denomination item selection
                 document.querySelectorAll('.denomination-item').forEach(item => {
                     item.classList.remove('active');
                 });
-                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
 
                 // Clear demographic filters
                 document.getElementById('minMembers').value = '';
@@ -1054,9 +1064,8 @@
                 document.getElementById('hasParochialSchool').checked = false;
                 document.getElementById('hasWeekdaySchool').checked = false;
 
-                currentFamily = null;
-                currentDenomination = null;
-                loadMarkers({});
+              // Reset to default family
+                selectFamily(DEFAULT_FAMILY);
             });
 
             // Track map movement to load data for visible area only
@@ -1079,9 +1088,8 @@
                 }
             });
 
-            // Initial data load
+          // Initial data load - loadFamilies auto-selects DEFAULT_FAMILY
             loadFamilies();
-            loadMarkers({}); // Load all data initially
         });
     </script>
 {% endblock %}

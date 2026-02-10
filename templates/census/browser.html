@@ -196,9 +196,28 @@
                         </select>
                     </div>
 
-                <!-- Has Image -->
+                  <!-- Has Membership Data -->
                     <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Membership Data</label>
+                        <select name="has_membership"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">Any</option>
+                            <option value="yes" {% if has_membership == "yes" %}selected{% endif %}>Has Membership Data
+                            </option>
+                            <option value="no" {% if has_membership == "no" %}selected{% endif %}>No Membership Data
+                            </option>
+                        </select>
+                    </div>
 
+                  <!-- Urban/Rural -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Urban/Rural</label>
+                        <select name="urban_rural"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">Any</option>
+                            <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
+                            <option value="rural" {% if urban_rural == "rural" %}selected{% endif %}>Rural</option>
+                        </select>
                     </div>
 
                 <!-- State (no name attr - handled via URL path) -->
@@ -332,12 +351,14 @@
                 const search = this.querySelector('[name="search"]').value;
                 const family = this.querySelector('[name="family"]').value;
                 const denomination = this.querySelector('[name="denomination"]').value;
-                const hasImage = this.querySelector('[name="has_image"]').value;
+                const hasMembership = this.querySelector('[name="has_membership"]').value;
+                const urbanRural = this.querySelector('[name="urban_rural"]').value;
 
                 if (search) params.set('search', search);
                 if (family) params.set('family', family);
                 if (denomination) params.set('denomination', denomination);
-                if (hasImage) params.set('has_image', hasImage);
+                if (hasMembership) params.set('has_membership', hasMembership);
+                if (urbanRural) params.set('urban_rural', urbanRural);
 
                 // Navigate to the new URL
                 const queryString = params.toString();
@@ -365,7 +386,7 @@
                 </div>
                 <div class="flex gap-2">
                     <span class="badge badge-blue">{{ page_obj.paginator.count }} Total</span>
-                    {% if search or denomination_filter or family_filter or location_filter or has_image %}
+                    {% if search or denomination_filter or family_filter or location_filter or has_membership or urban_rural %}
                         <span class="badge badge-amber">Filtered</span>
                     {% endif %}
                 </div>

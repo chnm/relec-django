@@ -78,7 +78,8 @@ def census_browser_view(request, state_code=None, county_name=None):
     county_filter = (
         unquote(county_name) if county_name else request.GET.get("county", "")
     )
-    has_image = request.GET.get("has_image", "")
+    has_membership = request.GET.get("has_membership", "")
+    urban_rural = request.GET.get("urban_rural", "")
 
     # Base queryset with related data (using new location hierarchy)
     queryset = (
@@ -127,14 +128,15 @@ def census_browser_view(request, state_code=None, county_name=None):
     if county_filter:
         queryset = queryset.filter(county__name__icontains=county_filter)
 
-    if has_image == "yes":
-        queryset = queryset.exclude(original_image__isnull=True).exclude(
-            original_image=""
-        )
-    elif has_image == "no":
-        queryset = queryset.filter(
-            Q(original_image__isnull=True) | Q(original_image="")
-        )
+    if has_membership == "yes":
+        queryset = queryset.filter(membership_details__isnull=False).distinct()
+    elif has_membership == "no":
+        queryset = queryset.filter(membership_details__isnull=True)
+
+    if urban_rural == "urban":
+        queryset = queryset.filter(church_details__urban_rural_code="Urban")
+    elif urban_rural == "rural":
+        queryset = queryset.filter(church_details__urban_rural_code="Rural")
 
     # Pagination
     paginator = Paginator(queryset.distinct(), 20)  # Show 20 records per page
@@ -192,7 +194,8 @@ def census_browser_view(request, state_code=None, county_name=None):
         "location_filter": state_filter,
         "county_filter": county_filter,
         "current_state": current_state,
-        "has_image": has_image,
+        "has_membership": has_membership,
+        "urban_rural": urban_rural,
         "total_records": paginator.count,
     }
 

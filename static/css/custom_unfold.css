@@ -303,3 +303,42 @@ form[action*="search"] button:focus,
   border: none !important;
   box-shadow: none !important;
 }
+
+/* Filter button - ensure white text when active/blue background */
+.bg-primary-600,
+.bg-primary-500,
+[class*="bg-primary-"] {
+  color: white !important;
+}
+
+/* Unfold filter button specific fix */
+button.bg-primary-600,
+button.bg-primary-500,
+a.bg-primary-600,
+a.bg-primary-500,
+[data-filter] button,
+.filter-button,
+button[class*="filter"],
+[class*="filter"] button.bg-primary-600 {
+  color: white !important;
+}
+
+/* Active filter button in Unfold */
+button[class*="bg-primary"],
+a[class*="bg-primary"] {
+  color: white !important;
+}
+
+/* Ensure any button with primary background has white text */
+.btn.bg-primary-500,
+.btn.bg-primary-600,
+button.bg-primary-500,
+button.bg-primary-600 {
+  color: white !important;
+}
+
+/* Fix for Unfold's filter toggle when active */
+[data-controller="filter"] button[class*="bg-primary"],
+[data-action*="filter"] button[class*="bg-primary"] {
+  color: white !important;
+}

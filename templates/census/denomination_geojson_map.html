@@ -151,6 +151,8 @@
             <div class="filter-section">
                 <h2 class="text-lg font-semibold mb-4">Filter Options</h2>
                 <form id="filterForm">
+                  <!-- Default to approved transcription status for verified data -->
+                    <input type="hidden" name="transcription_status" value="approved">
                     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
                         <div>
                             <label class="filter-label" for="family_census">Census Family</label>
@@ -165,32 +167,18 @@
                             </select>
                         </div>
                         <div>
-                            <label class="filter-label" for="transcription_status">Transcription Status</label>
-                            <select id="transcription_status" name="transcription_status" class="filter-input">
+                            <label class="filter-label" for="urban_rural">Urban/Rural</label>
+                            <select id="urban_rural" name="urban_rural" class="filter-input">
                                 <option value="">All</option>
-                                <option value="approved" selected>Approved</option>
-                                <option value="completed">Completed</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="needs_review">Needs Review</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="filter-label" for="limit">Location Limit</label>
-                            <select id="limit" name="limit" class="filter-input">
-                                <option value="200">200 locations</option>
-                                <option value="500">500 locations</option>
-                                <option value="2000">2000 locations</option>
-                                <option value="99999" selected>All locations</option>
+                                <option value="urban">Urban</option>
+                                <option value="rural">Rural</option>
                             </select>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end mt-4">
-                        <div>
-                            <button type="submit" class="btn-primary">Apply Filters</button>
-                        </div>
-                        <div>
-                            <button type="button" id="clearBtn" class="btn-secondary">Clear Filters</button>
-                        </div>
+                    <div class="flex gap-4 mt-4">
+                        <button type="submit" class="btn-primary" style="width: auto;">Apply Filters</button>
+                        <button type="button" id="clearBtn" class="btn-secondary" style="width: auto;">Clear Filters
+                        </button>
                     </div>
                 </form>
                 <div class="info-box">
@@ -437,15 +425,10 @@
             // Clear filters
             document.getElementById('clearBtn').addEventListener('click', function() {
                 document.getElementById('filterForm').reset();
-                document.getElementById('transcription_status').value = 'approved';
-                document.getElementById('limit').value = '500';
+                document.getElementById('urban_rural').value = '';
                 // Reload all denominations when clearing family filter
                 loadDenominations();
-                if (geoJsonLayer) {
-                    map.removeLayer(geoJsonLayer);
-                }
-                document.getElementById('placeCount').textContent = '0';
-                document.getElementById('congregationCount').textContent = '0';
+              // Reset details panel
                 document.getElementById('detailsContent').innerHTML = `
                     <div class="empty-state">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -455,7 +438,9 @@
                         <p>Click a marker on the map to see congregations at that location</p>
                     </div>
                 `;
-                map.setView([41.7658, -72.6734], 9);
+                map.setView([41.7658, -72.6734], 8);
+              // Reload data with cleared filters
+                loadGeoJSON();
             });
 
             // Initialize dropdowns and load default view on page load

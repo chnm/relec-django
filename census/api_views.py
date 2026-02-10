@@ -275,8 +275,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     total_members=Value(0, output_field=IntegerField())
                 )
 
-            # Add a reasonable limit to prevent overloading
-            queryset = queryset[:2000]
+            # Filter by transcription status (default to approved for verified data)
+            transcription_status = request.query_params.get(
+                "transcription_status", "approved"
+            )
+            if transcription_status:
+                queryset = queryset.filter(
+                    census_record__transcription_status=transcription_status
+                )
 
             # Use the demographics serializer
             serializer = DemographicsMapSerializer(queryset, many=True)
@@ -554,6 +560,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                         census_record__transcription_status=status
                     )
 
+            # Filter by urban/rural status (urban_rural_code is on ReligiousBody)
+            if "urban_rural" in request.query_params:
+                urban_rural = request.query_params.get("urban_rural")
+                if urban_rural == "urban":
+                    queryset = queryset.filter(urban_rural_code="Urban")
+                elif urban_rural == "rural":
+                    queryset = queryset.filter(urban_rural_code="Rural")
+
             # Apply bounding box filter if provided
             if "bounds" in request.query_params:
                 bounds = request.query_params.get("bounds")
@@ -578,8 +592,8 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     location_key = body.location.id
                     places[location_key].append(body)
 
-            # Apply limit to number of places (default 500, no max for "All")
-            limit = int(request.query_params.get("limit", 500))
+            # Apply limit to number of places (default: all locations)
+            limit = int(request.query_params.get("limit", 99999))
             limited_places = (
                 dict(list(places.items())[:limit]) if limit < 99999 else places
             )
@@ -656,7 +670,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     },
                     "properties": {
                         "location_id": location.id,
-                        "populated_place": location.map_name or location.city,
+                        "populated_place": location.city,
                         "city": location.city,
                         "county": location.county,
                         "state": location.state,
