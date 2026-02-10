@@ -69,7 +69,9 @@
                     <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
                         <div class="text-sm text-content-secondary mb-1">Place IDs</div>
                         <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.place_ids.percentage }}%</div>
-                        <div class="text-sm text-content-tertiary">{{ completeness.place_ids.count }} of {{ total_locations }} locations</div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.place_ids.count }}
+                            of {{ total_places }} places
+                        </div>
                         <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
                             <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.place_ids.percentage }}%"></div>
                         </div>
@@ -109,20 +111,29 @@
                     </div>
 
                     <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                        <div class="text-sm text-content-secondary mb-1">Location Data</div>
-                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.location.percentage }}%</div>
-                        <div class="text-sm text-content-tertiary">{{ completeness.location.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="text-sm text-content-secondary mb-1">County Data</div>
+                        <div
+                            class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.county.percentage }}%
+                        </div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.county.count }}
+                            of {{ total_schedules }} schedules
+                        </div>
                         <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.location.percentage }}%"></div>
+                            <div class="bg-religious-primary h-2 rounded-full"
+                                 style="width: {{ completeness.county.percentage }}%"></div>
                         </div>
                     </div>
 
                     <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                        <div class="text-sm text-content-secondary mb-1">County Data</div>
-                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.county.percentage }}%</div>
-                        <div class="text-sm text-content-tertiary">{{ completeness.county.count }} of {{ total_religious_bodies }} bodies</div>
+                        <div class="text-sm text-content-secondary mb-1">Place Data</div>
+                        <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness.place.percentage }}%
+                        </div>
+                        <div class="text-sm text-content-tertiary">{{ completeness.place.count }} of {{ total_schedules }}
+                            schedules
+                        </div>
                         <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-religious-primary h-2 rounded-full" style="width: {{ completeness.county.percentage }}%"></div>
+                            <div class="bg-religious-primary h-2 rounded-full"
+                                 style="width: {{ completeness.place.percentage }}%"></div>
                         </div>
                     </div>
 

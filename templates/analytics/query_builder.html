@@ -90,7 +90,7 @@
                         <select name="state" id="state" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-religious-primary">
                             <option value="">-- All States --</option>
                             {% for state in states %}
-                                <option value="{{ state }}">{{ state }}</option>
+                                <option value="{{ state.code }}">{{ state.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
