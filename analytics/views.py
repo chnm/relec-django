@@ -9,7 +9,7 @@ from django_tables2 import RequestConfig
 
 from analytics.tables import ReligiousBodyTable
 from census.models import CensusSchedule, Denomination, ReligiousBody
-from location.models import Location
+from location.models import County, PopulatedPlace, State
 
 
 def is_staff_or_reviewer(user):
@@ -26,7 +26,9 @@ def analytics_home(request):
         "total_schedules": CensusSchedule.objects.count(),
         "total_religious_bodies": ReligiousBody.objects.count(),
         "total_denominations": Denomination.objects.count(),
-        "total_locations": Location.objects.count(),
+        "total_states": State.objects.count(),
+        "total_counties": County.objects.count(),
+        "total_places": PopulatedPlace.objects.count(),
     }
     return render(request, "analytics/home.html", context)
 
@@ -37,9 +39,7 @@ def query_builder(request):
     """Advanced query builder interface"""
     # Get filter options
     denominations = Denomination.objects.all().order_by("name")
-    states = (
-        Location.objects.values_list("state", flat=True).distinct().order_by("state")
-    )
+    states = State.objects.all().order_by("name")
 
     # Get distinct denomination families
     family_census_list = (
@@ -86,7 +86,11 @@ def run_query(request):
     """Execute advanced query and return results"""
     # Start with all religious bodies
     queryset = ReligiousBody.objects.select_related(
-        "census_record", "denomination", "location"
+        "census_record",
+        "census_record__county",
+        "census_record__county__state",
+        "census_record__populated_place",
+        "denomination",
     ).prefetch_related("membership", "census_record__clergy")
 
     # Apply denomination filters (support families OR individual denominations)
@@ -108,15 +112,15 @@ def run_query(request):
 
     state = request.GET.get("state")
     if state:
-        queryset = queryset.filter(location__state=state)
+        queryset = queryset.filter(census_record__county__state__code=state)
 
     county = request.GET.get("county")
     if county:
-        queryset = queryset.filter(location__county__icontains=county)
+        queryset = queryset.filter(census_record__county__name__icontains=county)
 
     city = request.GET.get("city")
     if city:
-        queryset = queryset.filter(location__city__icontains=city)
+        queryset = queryset.filter(census_record__populated_place__name__icontains=city)
 
     transcription_status = request.GET.get("transcription_status")
     if transcription_status:
@@ -138,12 +142,12 @@ def run_query(request):
     elif has_clergy == "no":
         queryset = queryset.filter(census_record__clergy__isnull=True)
 
-    # Has location data filter
+    # Has location data filter (location is now on census_record)
     has_location = request.GET.get("has_location")
     if has_location == "yes":
-        queryset = queryset.filter(location__isnull=False)
+        queryset = queryset.filter(census_record__county__isnull=False)
     elif has_location == "no":
-        queryset = queryset.filter(location__isnull=True)
+        queryset = queryset.filter(census_record__county__isnull=True)
 
     # Property value ranges
     min_edifice_value = request.GET.get("min_edifice_value")
@@ -262,8 +266,8 @@ def location_analysis(request):
     if state:
         # County-level analysis for selected state
         counties = (
-            ReligiousBody.objects.filter(location__state=state)
-            .values("location__county")
+            ReligiousBody.objects.filter(census_record__county__state__code=state)
+            .values("census_record__county__name")
             .annotate(
                 total_bodies=Count("id"),
                 total_denominations=Count("denomination", distinct=True),
@@ -271,17 +275,25 @@ def location_analysis(request):
             .order_by("-total_bodies")
         )
 
+        # Get state name for display
+        state_obj = State.objects.filter(code=state).first()
+        state_name = state_obj.name if state_obj else state
+
         context = {
-            "title": f"Location Analysis - {state}",
+            "title": f"Location Analysis - {state_name}",
             "state": state,
+            "state_name": state_name,
             "counties": counties,
         }
         template = "analytics/county_analysis.html"
     else:
         # State-level analysis
         states = (
-            ReligiousBody.objects.filter(location__isnull=False)
-            .values("location__state")
+            ReligiousBody.objects.filter(census_record__county__isnull=False)
+            .values(
+                "census_record__county__state__code",
+                "census_record__county__state__name",
+            )
             .annotate(
                 total_bodies=Count("id"),
                 total_denominations=Count("denomination", distinct=True),
@@ -311,7 +323,7 @@ def export_to_csv(queryset):
             "Denomination",
             "State",
             "County",
-            "City",
+            "Place",
             "Address",
             "Num Edifices",
             "Edifice Value",
@@ -321,14 +333,26 @@ def export_to_csv(queryset):
     )
 
     for rb in queryset:
+        # Get location from census_record
+        state = ""
+        county = ""
+        place = ""
+        if rb.census_record:
+            if rb.census_record.county:
+                county = rb.census_record.county.name
+                if rb.census_record.county.state:
+                    state = rb.census_record.county.state.code
+            if rb.census_record.populated_place:
+                place = rb.census_record.populated_place.name
+
         writer.writerow(
             [
                 rb.census_record.schedule_id if rb.census_record else "",
                 rb.name or "",
                 rb.denomination.name if rb.denomination else "",
-                rb.location.state if rb.location else "",
-                rb.location.county if rb.location else "",
-                rb.location.city if rb.location else "",
+                state,
+                county,
+                place,
                 rb.address or "",
                 rb.num_edifices or "",
                 rb.edifice_value or "",
@@ -349,6 +373,16 @@ def export_to_json(queryset):
     data = []
 
     for rb in queryset:
+        # Get location from census_record
+        location_data = {"state": None, "county": None, "place": None}
+        if rb.census_record:
+            if rb.census_record.county:
+                location_data["county"] = rb.census_record.county.name
+                if rb.census_record.county.state:
+                    location_data["state"] = rb.census_record.county.state.code
+            if rb.census_record.populated_place:
+                location_data["place"] = rb.census_record.populated_place.name
+
         data.append(
             {
                 "schedule_id": rb.census_record.schedule_id
@@ -356,11 +390,7 @@ def export_to_json(queryset):
                 else None,
                 "religious_body_name": rb.name,
                 "denomination": rb.denomination.name if rb.denomination else None,
-                "location": {
-                    "state": rb.location.state if rb.location else None,
-                    "county": rb.location.county if rb.location else None,
-                    "city": rb.location.city if rb.location else None,
-                },
+                "location": location_data,
                 "address": rb.address,
                 "num_edifices": rb.num_edifices,
                 "edifice_value": float(rb.edifice_value) if rb.edifice_value else None,
@@ -384,7 +414,7 @@ def data_completeness(request):
     """Analyze data completeness across the dataset"""
     total_schedules = CensusSchedule.objects.count()
     total_religious_bodies = ReligiousBody.objects.count()
-    total_locations = Location.objects.count()
+    total_places = PopulatedPlace.objects.count()
 
     # Count schedules with various types of data
     with_religious_bodies = (
@@ -399,28 +429,21 @@ def data_completeness(request):
 
     with_clergy = CensusSchedule.objects.filter(clergy__isnull=False).distinct().count()
 
-    # Core Data metrics
-    with_location = ReligiousBody.objects.filter(location__isnull=False).count()
+    # Core Data metrics - location now on CensusSchedule
+    with_county = CensusSchedule.objects.filter(county__isnull=False).count()
+    with_place = CensusSchedule.objects.filter(populated_place__isnull=False).count()
     with_denomination = ReligiousBody.objects.filter(denomination__isnull=False).count()
     with_name = ReligiousBody.objects.exclude(Q(name__isnull=True) | Q(name="")).count()
     with_address = ReligiousBody.objects.exclude(
         Q(address__isnull=True) | Q(address="")
     ).count()
 
-    with_county = (
-        ReligiousBody.objects.filter(
-            location__isnull=False, location__county__isnull=False
-        )
-        .exclude(location__county="")
-        .count()
-    )
-
     # Assets metrics
     with_images = CensusSchedule.objects.exclude(
         Q(original_image__isnull=True) | Q(original_image="")
     ).count()
 
-    locations_with_place_id = Location.objects.filter(place_id__isnull=False).count()
+    places_with_place_id = PopulatedPlace.objects.filter(place_id__isnull=False).count()
 
     # Supplementary Data metrics
     with_edifice_value = ReligiousBody.objects.filter(
@@ -433,7 +456,7 @@ def data_completeness(request):
         "title": "Data Completeness Analysis",
         "total_schedules": total_schedules,
         "total_religious_bodies": total_religious_bodies,
-        "total_locations": total_locations,
+        "total_places": total_places,
         "completeness": {
             # Original metrics
             "religious_bodies": {
@@ -454,17 +477,17 @@ def data_completeness(request):
                 if total_schedules > 0
                 else 0,
             },
-            # Core Data
-            "location": {
-                "count": with_location,
-                "percentage": round((with_location / total_religious_bodies * 100), 1)
-                if total_religious_bodies > 0
-                else 0,
-            },
+            # Core Data - location now on schedules
             "county": {
                 "count": with_county,
-                "percentage": round((with_county / total_religious_bodies * 100), 1)
-                if total_religious_bodies > 0
+                "percentage": round((with_county / total_schedules * 100), 1)
+                if total_schedules > 0
+                else 0,
+            },
+            "place": {
+                "count": with_place,
+                "percentage": round((with_place / total_schedules * 100), 1)
+                if total_schedules > 0
                 else 0,
             },
             "denomination": {
@@ -495,11 +518,9 @@ def data_completeness(request):
                 else 0,
             },
             "place_ids": {
-                "count": locations_with_place_id,
-                "percentage": round(
-                    (locations_with_place_id / total_locations * 100), 1
-                )
-                if total_locations > 0
+                "count": places_with_place_id,
+                "percentage": round((places_with_place_id / total_places * 100), 1)
+                if total_places > 0
                 else 0,
             },
             # Supplementary Data
@@ -534,38 +555,39 @@ def data_completeness(request):
 @login_required
 @user_passes_test(is_staff_or_reviewer)
 def missing_place_ids(request):
-    """Show locations that don't have place_id attached"""
-    # Get locations without place_id
-    locations_without_place_id = (
-        Location.objects.filter(Q(place_id__isnull=True))
-        .annotate(usage_count=Count("religiousbody"))
-        .order_by("-usage_count", "state", "county", "map_name")
+    """Show populated places that don't have place_id attached"""
+    # Get places without place_id
+    places_without_place_id = (
+        PopulatedPlace.objects.filter(Q(place_id__isnull=True))
+        .select_related("county", "county__state")
+        .annotate(usage_count=Count("census_schedules"))
+        .order_by("-usage_count", "county__state__code", "county__name", "name")
     )
 
     # Get statistics
-    total_locations = Location.objects.count()
-    missing_count = locations_without_place_id.count()
+    total_places = PopulatedPlace.objects.count()
+    missing_count = places_without_place_id.count()
 
-    # Count how many religious bodies are affected
-    affected_bodies = ReligiousBody.objects.filter(
-        location__place_id__isnull=True
+    # Count how many schedules are affected
+    affected_schedules = CensusSchedule.objects.filter(
+        populated_place__place_id__isnull=True
     ).count()
 
     missing_percentage = (
-        round((missing_count / total_locations * 100), 1) if total_locations > 0 else 0
+        round((missing_count / total_places * 100), 1) if total_places > 0 else 0
     )
     completeness_percentage = (
-        round(100 - missing_percentage, 1) if total_locations > 0 else 100
+        round(100 - missing_percentage, 1) if total_places > 0 else 100
     )
 
     context = {
-        "title": "Locations Missing Place IDs",
-        "locations": locations_without_place_id,
-        "total_locations": total_locations,
+        "title": "Places Missing Place IDs",
+        "places": places_without_place_id,
+        "total_places": total_places,
         "missing_count": missing_count,
         "missing_percentage": missing_percentage,
         "completeness_percentage": completeness_percentage,
-        "affected_bodies": affected_bodies,
+        "affected_schedules": affected_schedules,
     }
 
     return render(request, "analytics/missing_place_ids.html", context)

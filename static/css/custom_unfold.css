@@ -239,3 +239,106 @@ input[type="radio"]:checked {
   color: #6b7280;
   padding: 0 0.5rem;
 }
+
+/* Delete button - ensure white text on red background */
+.deletelink,
+a.deletelink,
+.btn-danger,
+.button.danger,
+[class*="delete"] a,
+a[href*="delete"],
+.bg-red-500 a,
+.bg-red-600 a,
+.bg-red-700 a,
+input[type="submit"][name*="delete"],
+button[name*="delete"] {
+  color: white !important;
+}
+
+.deletelink:hover,
+a.deletelink:hover,
+.btn-danger:hover {
+  color: white !important;
+}
+
+/* Fix for Unfold's delete link styling */
+.object-tools a.deletelink,
+.object-tools .deletelink-box a {
+  color: white !important;
+  background-color: #dc2626;
+}
+
+/* Search icon - remove blue box/outline */
+.search-icon,
+button[type="submit"] .material-symbols-outlined,
+.input-group button[type="submit"],
+form button[type="submit"]:has(.material-symbols-outlined),
+[class*="search"] button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* Search input button styling */
+.search-form button,
+form[action*="search"] button,
+.input-group-append button {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.search-form button:focus,
+form[action*="search"] button:focus,
+.input-group-append button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Unfold specific search button fix */
+[data-search] button,
+.unfold-search button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Filter button - ensure white text when active/blue background */
+.bg-primary-600,
+.bg-primary-500,
+[class*="bg-primary-"] {
+  color: white !important;
+}
+
+/* Unfold filter button specific fix */
+button.bg-primary-600,
+button.bg-primary-500,
+a.bg-primary-600,
+a.bg-primary-500,
+[data-filter] button,
+.filter-button,
+button[class*="filter"],
+[class*="filter"] button.bg-primary-600 {
+  color: white !important;
+}
+
+/* Active filter button in Unfold */
+button[class*="bg-primary"],
+a[class*="bg-primary"] {
+  color: white !important;
+}
+
+/* Ensure any button with primary background has white text */
+.btn.bg-primary-500,
+.btn.bg-primary-600,
+button.bg-primary-500,
+button.bg-primary-600 {
+  color: white !important;
+}
+
+/* Fix for Unfold's filter toggle when active */
+[data-controller="filter"] button[class*="bg-primary"],
+[data-action*="filter"] button[class*="bg-primary"] {
+  color: white !important;
+}

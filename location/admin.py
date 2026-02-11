@@ -1,11 +1,46 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from location.models import Location
+from location.models import County, Location, PopulatedPlace, State
+
+
+@admin.register(State)
+class StateAdmin(ModelAdmin):
+    list_display = ["code", "name"]
+    search_fields = ["code", "name"]
+    ordering = ["name"]
+
+
+@admin.register(County)
+class CountyAdmin(ModelAdmin):
+    list_display = ["name", "state", "ahcb_id"]
+    list_filter = ["state"]
+    search_fields = ["name", "ahcb_id", "state__name"]
+    ordering = ["state", "name"]
+    autocomplete_fields = ["state"]
+
+
+@admin.register(PopulatedPlace)
+class PopulatedPlaceAdmin(ModelAdmin):
+    list_display = ["name", "county", "get_state", "lat", "lon"]
+    list_filter = ["county__state"]
+    search_fields = ["name", "county__name", "county__state__name"]
+    ordering = ["county__state", "county", "name"]
+    autocomplete_fields = ["county"]
+    list_per_page = 50
+
+    @admin.display(description="State")
+    def get_state(self, obj):
+        return obj.county.state.code
 
 
 @admin.register(Location)
 class LocationAdmin(ModelAdmin):
+    """
+    DEPRECATED: Legacy location model admin.
+    Use State, County, and PopulatedPlace instead.
+    """
+
     search_fields = [
         "map_name",
         "city",

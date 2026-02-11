@@ -13,9 +13,9 @@
         </div>
 
     <!-- Quick Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow p-6">
-                <div class="text-sm text-content-secondary mb-1">Total Census Schedules</div>
+                <div class="text-sm text-content-secondary mb-1">Census Schedules</div>
                 <div class="text-3xl font-bold text-religious-primary">{{ total_schedules|default:"0" }}</div>
             </div>
             <div class="bg-white rounded-lg shadow p-6">
@@ -27,8 +27,16 @@
                 <div class="text-3xl font-bold text-religious-primary">{{ total_denominations|default:"0" }}</div>
             </div>
             <div class="bg-white rounded-lg shadow p-6">
-                <div class="text-sm text-content-secondary mb-1">Locations</div>
-                <div class="text-3xl font-bold text-religious-primary">{{ total_locations|default:"0" }}</div>
+                <div class="text-sm text-content-secondary mb-1">States</div>
+                <div class="text-3xl font-bold text-religious-primary">{{ total_states|default:"0" }}</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-content-secondary mb-1">Counties</div>
+                <div class="text-3xl font-bold text-religious-primary">{{ total_counties|default:"0" }}</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="text-sm text-content-secondary mb-1">Places</div>
+                <div class="text-3xl font-bold text-religious-primary">{{ total_places|default:"0" }}</div>
             </div>
         </div>
 

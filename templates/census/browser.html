@@ -118,8 +118,39 @@
 
 {% block content %}
     <div>
-        <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">Census Records Browser</h1>
-        <p class="text-content-secondary mb-6">Explore {{ total_records|floatformat:0 }} religious census records with detailed filtering and search capabilities.</p>
+        {% if location_filter %}
+        <!-- Breadcrumb for location filtering -->
+            <nav class="flex items-center gap-2 text-sm text-content-secondary mb-4">
+                <a href="{% url 'census_browser' %}" class="text-religious-primary hover:underline">All Records</a>
+                <span>›</span>
+                {% if current_state %}
+                    {% if county_filter %}
+                        <a href="{% url 'census_browser_state' location_filter %}" class="text-religious-primary hover:underline">{{ current_state.name }}</a>
+                        <span>›</span>
+                        <span class="font-medium text-content-primary">{{ county_filter }} County</span>
+                    {% else %}
+                        <span class="font-medium text-content-primary">{{ current_state.name }}</span>
+                    {% endif %}
+                {% endif %}
+            </nav>
+        {% endif %}
+
+        <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">
+            {% if county_filter and current_state %}
+                {{ county_filter }} County, {{ current_state.name }}
+            {% elif current_state %}
+                {{ current_state.name }}
+            {% else %}
+                Census Records Browser
+            {% endif %}
+        </h1>
+        <p class="text-content-secondary mb-6">
+            {% if location_filter %}
+                {{ total_records|floatformat:0 }} religious census record{{ total_records|pluralize }} found.
+            {% else %}
+                Explore {{ total_records|floatformat:0 }} religious census records with detailed filtering and search capabilities.
+            {% endif %}
+        </p>
 
     <!-- Filters -->
         <div class="filter-card">
@@ -165,33 +196,47 @@
                         </select>
                     </div>
 
-                <!-- Has Image -->
+                  <!-- Has Membership Data -->
                     <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Images</label>
-                        <select name="has_image" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                            <option value="">All Records</option>
-                            <option value="yes" {% if has_image == 'yes' %}selected{% endif %}>With Images</option>
-                            <option value="no" {% if has_image == 'no' %}selected{% endif %}>Without Images</option>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Membership Data</label>
+                        <select name="has_membership"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">Any</option>
+                            <option value="yes" {% if has_membership == "yes" %}selected{% endif %}>Has Membership Data
+                            </option>
+                            <option value="no" {% if has_membership == "no" %}selected{% endif %}>No Membership Data
+                            </option>
                         </select>
                     </div>
 
-                <!-- State -->
+                  <!-- Urban/Rural -->
+                    <div>
+                        <label class="block text-sm font-medium text-content-secondary mb-2">Urban/Rural</label>
+                        <select name="urban_rural"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                            <option value="">Any</option>
+                            <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
+                            <option value="rural" {% if urban_rural == "rural" %}selected{% endif %}>Rural</option>
+                        </select>
+                    </div>
+
+                <!-- State (no name attr - handled via URL path) -->
                     <div>
                         <label class="block text-sm font-medium text-content-secondary mb-2">State</label>
-                        <select name="location" id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                        <select id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                             <option value="">All States</option>
                             {% for state in states %}
-                                <option value="{{ state }}" {% if state == location_filter %}selected{% endif %}>
-                                    {{ state }}
+                                <option value="{{ state.code }}" {% if state.code == location_filter %}selected{% endif %}>
+                                    {{ state.name }}
                                 </option>
                             {% endfor %}
                         </select>
                     </div>
 
-                <!-- County -->
+                <!-- County (no name attr - handled via URL path) -->
                     <div>
                         <label class="block text-sm font-medium text-content-secondary mb-2">County</label>
-                        <select name="county" id="county-select"
+                        <select id="county-select"
                                 {% if not location_filter %}disabled{% endif %}
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
                             <option value="">All Counties</option>
@@ -285,6 +330,41 @@
                 countySelect.value = ''; // Reset county when state changes
             });
 
+            // Handle form submission - build URL with path-based state/county
+            document.getElementById('filter-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const state = stateSelect.value;
+                const county = countySelect.value;
+
+                // Build base path
+                let basePath = '{% url "census_browser" %}';
+                if (state) {
+                    basePath = `/census/browser/${state}/`;
+                    if (county) {
+                        basePath = `/census/browser/${state}/${encodeURIComponent(county)}/`;
+                    }
+                }
+
+                // Build query params for other filters
+                const params = new URLSearchParams();
+                const search = this.querySelector('[name="search"]').value;
+                const family = this.querySelector('[name="family"]').value;
+                const denomination = this.querySelector('[name="denomination"]').value;
+                const hasMembership = this.querySelector('[name="has_membership"]').value;
+                const urbanRural = this.querySelector('[name="urban_rural"]').value;
+
+                if (search) params.set('search', search);
+                if (family) params.set('family', family);
+                if (denomination) params.set('denomination', denomination);
+                if (hasMembership) params.set('has_membership', hasMembership);
+                if (urbanRural) params.set('urban_rural', urbanRural);
+
+                // Navigate to the new URL
+                const queryString = params.toString();
+                window.location.href = basePath + (queryString ? '?' + queryString : '');
+            });
+
             // Initialize on page load
             document.addEventListener('DOMContentLoaded', function() {
                 updateDenominationOptions();
@@ -306,7 +386,7 @@
                 </div>
                 <div class="flex gap-2">
                     <span class="badge badge-blue">{{ page_obj.paginator.count }} Total</span>
-                    {% if search or denomination_filter or family_filter or location_filter or has_image %}
+                    {% if search or denomination_filter or family_filter or location_filter or has_membership or urban_rural %}
                         <span class="badge badge-amber">Filtered</span>
                     {% endif %}
                 </div>
@@ -370,11 +450,10 @@
                                                                 <p class="text-xs text-content-tertiary">{{ church.denomination.family_census }}</p>
                                                             {% endif %}
                                                         {% endif %}
-                                                        {% if church.location %}
+                                                        {% if record.county or record.populated_place %}
                                                             <p class="text-sm text-content-tertiary mt-1">
-                                                                {% if church.location.city %}{{ church.location.city }}, {% endif %}
-                                                                {% if church.location.county %}{{ church.location.county }} county, {% endif %}
-                                                                {{ church.location.state }}
+                                                                {% if record.populated_place %}{{ record.populated_place.name }}, {% endif %}
+                                                                {% if record.county %}{{ record.county.name }} County, {{ record.county.state.code }}{% endif %}
                                                             </p>
                                                         {% endif %}
                                                     </div>

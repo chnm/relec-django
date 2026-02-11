@@ -30,7 +30,8 @@
                             {% for state in states %}
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-4 py-3 text-sm font-medium text-content-primary">
-                                        {{ state.location__state }}
+                                        {{ state.census_record__county__state__name }}
+                                        ({{ state.census_record__county__state__code }})
                                     </td>
                                     <td class="px-4 py-3 text-sm text-right text-content-secondary">
                                         {{ state.total_bodies }}
@@ -39,10 +40,14 @@
                                         {{ state.total_denominations }}
                                     </td>
                                     <td class="px-4 py-3 text-sm space-x-3">
-                                        <a href="{% url 'analytics:location_analysis' %}?state={{ state.location__state }}" class="text-religious-primary hover:text-primary-700">
+                                        <a
+                                            href="{% url 'analytics:location_analysis' %}?state={{ state.census_record__county__state__code }}"
+                                            class="text-religious-primary hover:text-primary-700">
                                             View Counties &rarr;
                                         </a>
-                                        <a href="{% url 'analytics:run_query' %}?state={{ state.location__state }}" class="text-blue-600 hover:text-blue-700">
+                                        <a
+                                            href="{% url 'analytics:run_query' %}?state={{ state.census_record__county__state__code }}"
+                                            class="text-blue-600 hover:text-blue-700">
                                             Query Records
                                         </a>
                                     </td>

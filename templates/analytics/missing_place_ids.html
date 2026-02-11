@@ -18,9 +18,9 @@
             <!-- Summary Stats -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-content-secondary mb-1">Locations Missing Place ID</div>
+                    <div class="text-sm text-content-secondary mb-1">Places Missing Place ID</div>
                     <div class="text-3xl font-bold text-red-600 mb-2">{{ missing_count }}</div>
-                    <div class="text-sm text-content-tertiary">out of {{ total_locations }} total locations</div>
+                    <div class="text-sm text-content-tertiary">out of {{ total_places }} total places</div>
                     <div class="mt-4 w-full bg-gray-200 rounded-full h-2">
                         <div class="bg-red-600 h-2 rounded-full" style="width: {{ missing_percentage }}%"></div>
                     </div>
@@ -29,26 +29,27 @@
                 <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
                     <div class="text-sm text-content-secondary mb-1">Completeness Rate</div>
                     <div class="text-3xl font-bold text-religious-primary mb-2">{{ completeness_percentage }}%</div>
-                    <div class="text-sm text-content-tertiary">locations have place_id</div>
+                    <div class="text-sm text-content-tertiary">places have place_id</div>
                 </div>
 
                 <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-content-secondary mb-1">Affected Religious Bodies</div>
-                    <div class="text-3xl font-bold text-orange-600 mb-2">{{ affected_bodies }}</div>
-                    <div class="text-sm text-content-tertiary">religious bodies using locations without place_id</div>
+                    <div class="text-sm text-content-secondary mb-1">Affected Census Schedules</div>
+                    <div class="text-3xl font-bold text-orange-600 mb-2">{{ affected_schedules }}</div>
+                    <div class="text-sm text-content-tertiary">schedules using places without place_id</div>
                 </div>
             </div>
 
-            <!-- Locations Table -->
-            {% if locations %}
+          <!-- Places Table -->
+            {% if places %}
                 <div class="border-t border-gray-200 pt-6">
-                    <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Locations Missing Place IDs</h2>
+                    <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Places Missing Place
+                        IDs</h2>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Location
+                                        Place Name
                                     </th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         County
@@ -68,27 +69,31 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                {% for location in locations %}
+                                {% for place in places %}
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ location.map_name }}
+                                            {{ place.name }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ location.county }}
+                                            {{ place.county.name }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ location.state }}
+                                            {{ place.county.state.code }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ location.lat|floatformat:4 }}, {{ location.lon|floatformat:4 }}
+                                            {% if place.lat and place.lon %}
+                                                {{ place.lat|floatformat:4 }}, {{ place.lon|floatformat:4 }}
+                                            {% else %}
+                                                <em class="text-gray-400">No coordinates</em>
+                                            {% endif %}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {{ location.usage_count }} religious bod{{ location.usage_count|pluralize:"y,ies" }}
+                                                {{ place.usage_count }} schedule{{ place.usage_count|pluralize }}
                                             </span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            <a href="/admin/location/location/{{ location.id }}/change/"
+                                            <a href="/admin/location/populatedplace/{{ place.id }}/change/"
                                                class="text-religious-primary hover:text-primary-700 font-medium"
                                                target="_blank">
                                                 Edit in Admin
@@ -111,7 +116,7 @@
                             </div>
                             <div class="ml-3">
                                 <p class="text-sm text-green-700">
-                                    Great! All locations have place_id values assigned.
+                                    Great! All places have place_id values assigned.
                                 </p>
                             </div>
                         </div>

@@ -15,7 +15,7 @@
         <div class="bg-white rounded-lg shadow-md p-6">
             <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
             <p class="text-content-secondary mb-6">
-                County-level breakdown for {{ state }}.
+                County-level breakdown for {{ state_name }}.
             </p>
 
             {% if counties %}
@@ -33,7 +33,7 @@
                             {% for county in counties %}
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-4 py-3 text-sm font-medium text-content-primary">
-                                        {{ county.location__county|default:"<em class='text-gray-400'>Unknown County</em>" }}
+                                        {{ county.census_record__county__name|default:"<em class='text-gray-400'>Unknown County</em>" }}
                                     </td>
                                     <td class="px-4 py-3 text-sm text-right text-content-secondary">
                                         {{ county.total_bodies }}
@@ -42,7 +42,9 @@
                                         {{ county.total_denominations }}
                                     </td>
                                     <td class="px-4 py-3 text-sm">
-                                        <a href="{% url 'analytics:run_query' %}?state={{ state }}&county={{ county.location__county }}" class="text-religious-primary hover:text-primary-700">
+                                        <a
+                                            href="{% url 'analytics:run_query' %}?state={{ state }}&county={{ county.census_record__county__name }}"
+                                            class="text-religious-primary hover:text-primary-700">
                                             View Records &rarr;
                                         </a>
                                     </td>

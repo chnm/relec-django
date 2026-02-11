@@ -310,10 +310,15 @@ UNFOLD = {
                         "icon": "checklist",
                         "link": lambda request: "/analytics/analysis/completeness/",
                     },
+                    {
+                        "title": "Export by Location",
+                        "icon": "download",
+                        "link": lambda request: "/admin/census/censusschedule/location-export/",
+                    },
                 ],
             },
             {
-                "title": "Transcription Project",
+                "title": "Transcriptions",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -321,11 +326,6 @@ UNFOLD = {
                         "title": "Census Schedules",
                         "icon": "description",
                         "link": lambda request: "/admin/census/censusschedule/",
-                    },
-                    {
-                        "title": "Export by Location",
-                        "icon": "download",
-                        "link": lambda request: "/admin/census/censusschedule/location-export/",
                     },
                     {
                         "title": "Religious Bodies",
@@ -345,7 +345,7 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Reference Data",
+                "title": "Location Data",
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -355,9 +355,19 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/denomination/",
                     },
                     {
-                        "title": "Locations",
-                        "icon": "place",
-                        "link": lambda request: "/admin/location/location/",
+                        "title": "States",
+                        "icon": "flag",
+                        "link": lambda request: "/admin/location/state/",
+                    },
+                    {
+                        "title": "Counties",
+                        "icon": "map",
+                        "link": lambda request: "/admin/location/county/",
+                    },
+                    {
+                        "title": "Populated Places",
+                        "icon": "location_city",
+                        "link": lambda request: "/admin/location/populatedplace/",
                     },
                 ],
             },

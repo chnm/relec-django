@@ -2,7 +2,9 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
 
-from .models import CensusSchedule, Denomination, ReligiousBody
+from location.models import County, State
+
+from .models import CensusSchedule, Denomination
 
 
 def map_view(request):
@@ -62,27 +64,37 @@ def denomination_geojson_map_view(request):
     return render(request, "census/denomination_geojson_map.html")
 
 
-def census_browser_view(request):
+def census_browser_view(request, state_code=None, county_name=None):
     """Render the census records browser with filtering and pagination"""
+    import json
+    from urllib.parse import unquote
 
-    # Get filter parameters
+    # Get filter parameters - path params take precedence over query params
     search = request.GET.get("search", "")
     denomination_filter = request.GET.get("denomination", "")
     family_filter = request.GET.get("family", "")
-    location_filter = request.GET.get("location", "")
-    county_filter = request.GET.get("county", "")
-    has_image = request.GET.get("has_image", "")
+    # Support both path parameters and legacy query parameters
+    state_filter = state_code or request.GET.get("location", "")
+    county_filter = (
+        unquote(county_name) if county_name else request.GET.get("county", "")
+    )
+    has_membership = request.GET.get("has_membership", "")
+    urban_rural = request.GET.get("urban_rural", "")
 
-    # Base queryset with related data
+    # Base queryset with related data (using new location hierarchy)
     queryset = (
-        CensusSchedule.objects.select_related()
+        CensusSchedule.objects.select_related(
+            "county",
+            "county__state",
+            "populated_place",
+            "schedule_denomination",
+        )
         .prefetch_related(
             "church_details__denomination",
-            "church_details__location",
             "membership_details",
             "clergy",
         )
-        .order_by("-created_at")
+        .order_by("schedule_denomination")
     )
 
     # Apply filters
@@ -91,38 +103,43 @@ def census_browser_view(request):
             Q(schedule_title__icontains=search)
             | Q(church_details__name__icontains=search)
             | Q(church_details__denomination__name__icontains=search)
+            | Q(schedule_denomination__name__icontains=search)
             | Q(notes__icontains=search)
+            | Q(county__name__icontains=search)
+            | Q(populated_place__name__icontains=search)
         )
 
     if denomination_filter:
-        queryset = queryset.filter(church_details__denomination_id=denomination_filter)
+        # Check both schedule-level and religious body level denomination
+        queryset = queryset.filter(
+            Q(schedule_denomination_id=denomination_filter)
+            | Q(church_details__denomination_id=denomination_filter)
+        )
 
     if family_filter:
         queryset = queryset.filter(
-            church_details__denomination__family_census=family_filter
+            Q(schedule_denomination__family_census=family_filter)
+            | Q(church_details__denomination__family_census=family_filter)
         )
 
-    if location_filter:
-        queryset = queryset.filter(
-            church_details__location__state__icontains=location_filter
-        )
+    if state_filter:
+        queryset = queryset.filter(county__state__code=state_filter)
 
     if county_filter:
-        queryset = queryset.filter(
-            church_details__location__county__icontains=county_filter
-        )
+        queryset = queryset.filter(county__name__icontains=county_filter)
 
-    if has_image == "yes":
-        queryset = queryset.exclude(original_image__isnull=True).exclude(
-            original_image=""
-        )
-    elif has_image == "no":
-        queryset = queryset.filter(
-            Q(original_image__isnull=True) | Q(original_image="")
-        )
+    if has_membership == "yes":
+        queryset = queryset.filter(membership_details__isnull=False).distinct()
+    elif has_membership == "no":
+        queryset = queryset.filter(membership_details__isnull=True)
+
+    if urban_rural == "urban":
+        queryset = queryset.filter(church_details__urban_rural_code="Urban")
+    elif urban_rural == "rural":
+        queryset = queryset.filter(church_details__urban_rural_code="Rural")
 
     # Pagination
-    paginator = Paginator(queryset, 20)  # Show 20 records per page
+    paginator = Paginator(queryset.distinct(), 20)  # Show 20 records per page
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
@@ -134,28 +151,19 @@ def census_browser_view(request):
         .order_by("family_census")
     )
 
-    # Get states for location dropdown
-    states = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .values_list("location__state", flat=True)
-        .distinct()
-        .order_by("location__state")
-    )
+    # Get states for location dropdown (from new State model)
+    states = State.objects.all().order_by("name")
 
-    # Get counties grouped by state for JavaScript
-    import json
-
+    # Get counties grouped by state for JavaScript (from new County model)
     counties_by_state = {}
     county_data = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .exclude(Q(location__county__isnull=True) | Q(location__county=""))
-        .values("location__state", "location__county")
-        .distinct()
-        .order_by("location__state", "location__county")
+        County.objects.select_related("state")
+        .values("state__code", "name")
+        .order_by("state__code", "name")
     )
     for item in county_data:
-        state = item["location__state"]
-        county = item["location__county"]
+        state = item["state__code"]
+        county = item["name"]
         if state not in counties_by_state:
             counties_by_state[state] = []
         counties_by_state[state].append(county)
@@ -168,6 +176,11 @@ def census_browser_view(request):
             denominations_by_family[family] = []
         denominations_by_family[family].append({"id": denom.id, "name": denom.name})
 
+    # Get current state object for display
+    current_state = None
+    if state_filter:
+        current_state = State.objects.filter(code=state_filter).first()
+
     context = {
         "page_obj": page_obj,
         "denominations": denominations,
@@ -178,9 +191,11 @@ def census_browser_view(request):
         "search": search,
         "denomination_filter": denomination_filter,
         "family_filter": family_filter,
-        "location_filter": location_filter,
+        "location_filter": state_filter,
         "county_filter": county_filter,
-        "has_image": has_image,
+        "current_state": current_state,
+        "has_membership": has_membership,
+        "urban_rural": urban_rural,
         "total_records": paginator.count,
     }
 
@@ -191,9 +206,14 @@ def census_detail_view(request, resource_id):
     """Render detailed view of a single census record"""
 
     census_record = get_object_or_404(
-        CensusSchedule.objects.select_related().prefetch_related(
+        CensusSchedule.objects.select_related(
+            "county",
+            "county__state",
+            "populated_place",
+            "populated_place__county",
+            "schedule_denomination",
+        ).prefetch_related(
             "church_details__denomination",
-            "church_details__location",
             "membership_details",
             "clergy",
         ),
@@ -242,38 +262,40 @@ def denominations_browse_view(request):
 def locations_browse_view(request):
     """Browse locations (states and counties) with counts"""
 
-    # Get state-level counts
+    # Get state-level counts using new location hierarchy
     states_with_counts = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .values("location__state")
-        .annotate(schedule_count=Count("census_record"))
+        CensusSchedule.objects.filter(county__isnull=False)
+        .values("county__state__code", "county__state__name")
+        .annotate(schedule_count=Count("id"))
         .filter(schedule_count__gt=0)
-        .order_by("location__state")
+        .order_by("county__state__name")
     )
 
     # Get county-level counts for each state
     counties_with_counts = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .values("location__state", "location__county")
-        .annotate(schedule_count=Count("census_record"))
+        CensusSchedule.objects.filter(county__isnull=False)
+        .values("county__state__code", "county__name")
+        .annotate(schedule_count=Count("id"))
         .filter(schedule_count__gt=0)
-        .order_by("location__state", "location__county")
+        .order_by("county__state__code", "county__name")
     )
 
     # Group counties by state
     states_data = {}
     for state in states_with_counts:
-        state_name = state["location__state"]
-        states_data[state_name] = {
+        state_code = state["county__state__code"]
+        state_name = state["county__state__name"]
+        states_data[state_code] = {
+            "name": state_name,
             "total_count": state["schedule_count"],
             "counties": [],
         }
 
     for county in counties_with_counts:
-        state_name = county["location__state"]
-        if state_name in states_data:
-            states_data[state_name]["counties"].append(
-                {"name": county["location__county"], "count": county["schedule_count"]}
+        state_code = county["county__state__code"]
+        if state_code in states_data:
+            states_data[state_code]["counties"].append(
+                {"name": county["county__name"], "count": county["schedule_count"]}
             )
 
     # Calculate total counties across all states
@@ -306,3 +328,24 @@ def urban_congregations_simple_view(request):
     Much simpler to maintain than separate JS modules.
     """
     return render(request, "census/visualizations/urban_congregations_simple.html")
+
+
+def api_documentation_view(request):
+    """
+    API Documentation page for the Religious Ecologies Census Data API.
+
+    Provides comprehensive documentation for internal and external users
+    who want to access the 1926 Census of Religious Bodies data.
+    """
+    from .models import ReligiousBody
+
+    # Get some live stats for the documentation
+    context = {
+        "total_denominations": Denomination.objects.count(),
+        "total_congregations": ReligiousBody.objects.count(),
+        "total_states": State.objects.count(),
+        "total_counties": County.objects.count(),
+        "api_base_url": request.build_absolute_uri("/census/api/"),
+    }
+
+    return render(request, "census/api_documentation.html", context)

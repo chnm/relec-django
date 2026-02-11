@@ -207,52 +207,14 @@
                         {% endif %}
                     </div>
                 </div>
+
+            <!-- Schedule Information -->
+
             </div>
 
         <!-- Main Data Column -->
             <div class="lg:col-span-2">
-
-            <!-- Schedule Information -->
-                <div class="detail-card">
-                    <div class="section-title">
-                        <h2>Schedule Information</h2>
-                    </div>
-
-                    <table class="data-table">
-                        <tbody>
-                            <tr>
-                                <th>Resource ID</th>
-                                <td>{{ census_record.resource_id }}</td>
-                            </tr>
-                            <tr>
-                                <th>Schedule ID</th>
-                                <td>{{ census_record.schedule_id }}</td>
-                            </tr>
-                            <tr>
-                                <th>Title</th>
-                                <td>{{ census_record.schedule_title|default:"—" }}</td>
-                            </tr>
-                            {% if census_record.box %}
-                                <tr>
-                                    <th>Box</th>
-                                    <td>{{ census_record.box }}</td>
-                                </tr>
-                            {% endif %}
-                            {% if census_record.notes %}
-                                <tr>
-                                    <th>Notes</th>
-                                    <td>{{ census_record.notes }}</td>
-                                </tr>
-                            {% endif %}
-                            <tr>
-                                <th>Created</th>
-                                <td>{{ census_record.created_at|date:"F j, Y" }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            <!-- Religious Bodies -->
+              <!-- Religious Bodies -->
                 {% for church in census_record.church_details.all %}
                     <div class="detail-card">
                         <div class="section-title">
@@ -265,29 +227,34 @@
                                 <h3 class="text-lg font-semibold text-content-primary mb-3">Basic Information</h3>
                                 <table class="data-table">
                                     <tbody>
-                                        <tr>
-                                            <th>Name</th>
-                                            <td>{{ church.name|default:"—" }}</td>
-                                        </tr>
                                         {% if church.denomination %}
-                                            <tr>
-                                                <th>Denomination</th>
-                                                <td>
-                                                    {{ church.denomination.name }}
-                                                    {% if church.denomination.family_census %}
-                                                        <div class="text-sm text-content-tertiary mt-1">{{ church.denomination.family_census }}</div>
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                        {% endif %}
-                                        {% if church.location %}
-                                            <tr>
-                                                <th>Location</th>
-                                                <td>
-                                                    {% if church.location.city %}{{ church.location.city }}, {% endif %}
-                                                    {{ church.location.state }}
-                                                </td>
-                                            </tr>
+                                            {% if census_record.schedule_denomination %}
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <td>
+                                                        <a href="{% url 'census_browser' %}?denomination={{ census_record.schedule_denomination.id }}"
+                                                           class="text-religious-primary hover:underline">
+                                                            {{ census_record.schedule_denomination.name }}
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                                {% if census_record.schedule_denomination.family_census %}
+                                                    <tr>
+                                                        <th>Census Family</th>
+                                                        <td>
+                                                            <a href="{% url 'census_browser' %}?family={{ census_record.schedule_denomination.family_census|urlencode }}"
+                                                               class="text-religious-primary hover:underline">
+                                                                {{ census_record.schedule_denomination.family_census }}
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% else %}
+                                                <tr>
+                                                    <td colspan="2" class="text-content-tertiary italic">No denomination assigned</td>
+                                                </tr>
+                                            {% endif %}
+
                                         {% endif %}
                                         {% if church.address %}
                                             <tr>
@@ -364,6 +331,58 @@
                         </div>
                     </div>
                 {% endfor %}
+
+            <!-- Location -->
+                <div class="detail-card">
+                    <div class="section-title">
+                        <h2>Location</h2>
+                    </div>
+
+                    <table class="data-table">
+                        <tbody>
+
+                            {% if census_record.populated_place %}
+                                <tr>
+                                    <th>City/Town</th>
+                                    <td>{{ census_record.populated_place.name }}</td>
+                                </tr>
+                            {% endif %}
+                            {% if census_record.county %}
+                                <tr>
+                                    <th>County</th>
+                                    <td>
+                                        {% if census_record.county.state %}
+                                            <a href="{% url 'census_browser_county' census_record.county.state.code census_record.county.name %}"
+                                               class="text-religious-primary hover:underline">
+                                                {{ census_record.county.name }}
+                                            </a>
+                                        {% else %}
+                                            {{ census_record.county.name }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            {% if census_record.county.state %}
+                                <tr>
+                                    <th>State</th>
+                                    <td>
+                                        <a href="{% url 'census_browser_state' census_record.county.state.code %}"
+                                           class="text-religious-primary hover:underline">
+                                            {{ census_record.county.state.name }}
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            {% if not census_record.county and not census_record.populated_place %}
+                                <tr>
+                                    <td colspan="2" class="text-content-tertiary italic">No location data available</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+
 
             <!-- Membership Details -->
                 {% for membership in census_record.membership_details.all %}
