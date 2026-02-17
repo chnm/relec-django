@@ -3,7 +3,6 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
 
 from location.models import County, State
-
 from .models import CensusSchedule, Denomination
 
 
@@ -118,8 +117,8 @@ def census_browser_view(request, state_code=None, county_name=None):
 
     if family_filter:
         queryset = queryset.filter(
-            Q(schedule_denomination__family_census=family_filter)
-            | Q(church_details__denomination__family_census=family_filter)
+            Q(schedule_denomination__family_relec=family_filter)
+            | Q(church_details__denomination__family_relec=family_filter)
         )
 
     if state_filter:
@@ -146,9 +145,9 @@ def census_browser_view(request, state_code=None, county_name=None):
     # Get filter options
     denominations = Denomination.objects.all().order_by("name")
     census_families = (
-        Denomination.objects.values_list("family_census", flat=True)
+        Denomination.objects.values_list("family_relec", flat=True)
         .distinct()
-        .order_by("family_census")
+        .order_by("family_relec")
     )
 
     # Get states for location dropdown (from new State model)
@@ -171,7 +170,7 @@ def census_browser_view(request, state_code=None, county_name=None):
     # Get denominations grouped by family for JavaScript
     denominations_by_family = {}
     for denom in denominations:
-        family = denom.family_census if denom.family_census else "Other"
+        family = denom.family_relec if denom.family_relec else "Other"
         if family not in denominations_by_family:
             denominations_by_family[family] = []
         denominations_by_family[family].append({"id": denom.id, "name": denom.name})
@@ -241,7 +240,7 @@ def denominations_browse_view(request):
     # Get family groupings
     families = {}
     for denomination in denominations_with_counts:
-        family = denomination.family_census or "Other"
+        family = denomination.family_relec or "Other"
         if family not in families:
             families[family] = []
         families[family].append(denomination)
@@ -301,13 +300,108 @@ def locations_browse_view(request):
     # Calculate total counties across all states
     total_counties = sum(len(state["counties"]) for state in states_data.values())
 
+    # Count distinct populated places that have schedules
+    from location.models import PopulatedPlace
+
+    total_populated_places = PopulatedPlace.objects.filter(
+        census_schedules__isnull=False
+    ).distinct().count()
+
     context = {
         "states_data": states_data,
         "total_states": len(states_data),
         "total_counties": total_counties,
+        "total_populated_places": total_populated_places,
     }
 
     return render(request, "census/locations_browse.html", context)
+
+
+def populated_places_browse_view(request):
+    """Browse populated places organized by state and county with counts"""
+    from location.models import PopulatedPlace
+
+    # Get all populated places with schedules, grouped by state and county
+    places_with_counts = (
+        CensusSchedule.objects.filter(
+            populated_place__isnull=False, county__isnull=False
+        )
+        .values(
+            "county__state__code",
+            "county__state__name",
+            "county__name",
+            "populated_place__name",
+            "populated_place__id",
+        )
+        .annotate(schedule_count=Count("id"))
+        .filter(schedule_count__gt=0)
+        .order_by("county__state__name", "county__name", "populated_place__name")
+    )
+
+    # Build hierarchical structure: State -> County -> Places
+    states_data = {}
+    for item in places_with_counts:
+        state_code = item["county__state__code"]
+        state_name = item["county__state__name"]
+        county_name = item["county__name"]
+        place_name = item["populated_place__name"]
+        place_id = item["populated_place__id"]
+        count = item["schedule_count"]
+
+        # Initialize state if not exists
+        if state_code not in states_data:
+            states_data[state_code] = {
+                "name": state_name,
+                "total_count": 0,
+                "counties": {},
+            }
+
+        # Initialize county if not exists
+        if county_name not in states_data[state_code]["counties"]:
+            states_data[state_code]["counties"][county_name] = {
+                "name": county_name,
+                "total_count": 0,
+                "places": [],
+            }
+
+        # Add place to county
+        states_data[state_code]["counties"][county_name]["places"].append(
+            {"name": place_name, "id": place_id, "count": count}
+        )
+
+        # Update counts
+        states_data[state_code]["counties"][county_name]["total_count"] += count
+        states_data[state_code]["total_count"] += count
+
+    # Convert counties dict to list for easier template iteration
+    for state_code in states_data:
+        counties_dict = states_data[state_code]["counties"]
+        states_data[state_code]["counties"] = [
+            {
+                "name": county_name,
+                "total_count": data["total_count"],
+                "places": data["places"],
+            }
+            for county_name, data in sorted(counties_dict.items())
+        ]
+
+    # Calculate totals
+    total_states = len(states_data)
+    total_counties = sum(
+        len(state["counties"]) for state in states_data.values()
+    )
+    total_places = PopulatedPlace.objects.filter(
+        census_schedules__isnull=False
+    ).distinct().count()
+
+    context = {
+        "states_data": states_data,
+        "total_states": total_states,
+        "total_counties": total_counties,
+        "total_places": total_places,
+    }
+
+    return render(request, "census/populated_places_browse.html", context)
 
 
 def urban_congregations_map_view(request):

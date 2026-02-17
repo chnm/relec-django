@@ -403,9 +403,9 @@
 
     // Build the query string
                 let queryParams = new URLSearchParams();
-                if (filters.family_census) {
-                    queryParams.append('family_census', filters.family_census);
-                    currentFamily = filters.family_census;
+              if (filters.family_relec) {
+                queryParams.append('family_relec', filters.family_relec);
+                currentFamily = filters.family_relec;
                 } else {
                     currentFamily = null;
                 }
@@ -529,7 +529,7 @@
                         return response.json();
                     })
                     .then(data => {
-                        allFamilies = data.census_families || [];
+                      allFamilies = data.relec_families || [];
 
                 // Check if we have families data
                         if (allFamilies.length > 0) {
@@ -566,7 +566,7 @@
                                     loadDenominations(familyName);
 
                             // Apply filter to map
-                                    loadMarkers({family_census: familyName});
+                                  loadMarkers({family_relec: familyName});
                                 });
                             });
 
@@ -598,7 +598,7 @@
                 const denominationList = document.getElementById('denominationList');
                 denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
 
-                fetch(`/census/api/denominations/by_family/?family_census=${encodeURIComponent(familyName)}`)
+              fetch(`/census/api/denominations/by_family/?family_relec=${encodeURIComponent(familyName)}`)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
@@ -630,7 +630,7 @@
                                     if (item.classList.contains('active')) {
                                 // If already selected, deselect it
                                         item.classList.remove('active');
-                                        loadMarkers({family_census: currentFamily});
+                                      loadMarkers({family_relec: currentFamily});
                                         currentDenomination = null;
                                     } else {
                                 // Select this denomination
@@ -639,7 +639,7 @@
                                         });
                                         item.classList.add('active');
                                         loadMarkers({
-                                            family_census: currentFamily,
+                                          family_relec: currentFamily,
                                             denomination: denominationId
                                         });
                                         currentDenomination = denominationName;
@@ -699,7 +699,7 @@
 
         // Keep family filter, remove denomination filter
                 currentDenomination = null;
-                loadMarkers({family_census: currentFamily});
+              loadMarkers({family_relec: currentFamily});
             });
 
     // Denomination search
@@ -717,7 +717,7 @@
 
             // Keep existing filters
                     if (currentFamily) {
-                        filters.family_census = currentFamily;
+                      filters.family_relec = currentFamily;
                     }
 
                     if (currentDenomination) {

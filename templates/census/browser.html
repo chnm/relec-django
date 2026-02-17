@@ -188,7 +188,7 @@
                             <option value="">All Denominations</option>
                             {% for denomination in denominations %}
                                 <option value="{{ denomination.id }}"
-                                        data-family="{{ denomination.family_census|default:'Other' }}"
+                                        data-family="{{ denomination.family_relec|default:'Other' }}"
                                         {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
                                     {{ denomination.name }}
                                 </option>
@@ -446,8 +446,9 @@
                                                         <h4 class="font-medium text-content-primary">{{ church.name|default:"Unnamed Church" }}</h4>
                                                         {% if church.denomination %}
                                                             <p class="text-sm text-content-secondary">{{ church.denomination.name }}</p>
-                                                            {% if church.denomination.family_census %}
-                                                                <p class="text-xs text-content-tertiary">{{ church.denomination.family_census }}</p>
+                                                          {% if church.denomination.family_relec %}
+                                                            <p
+                                                              class="text-xs text-content-tertiary">{{ church.denomination.family_relec }}</p>
                                                             {% endif %}
                                                         {% endif %}
                                                         {% if record.county or record.populated_place %}

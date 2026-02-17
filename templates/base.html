@@ -38,11 +38,21 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                 </svg>
                             </button>
-                            <div class="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                          <div
+                            class="absolute left-0 mt-2 w-52 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                                 <div class="py-1">
-                                    <a href="{% url 'census_browser' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse</a>
-                                    <a href="{% url 'locations_browse' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Locations</a>
-                                    <a href="{% url 'denominations_browse' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Denominations</a>
+                                  <a href="{% url 'census_browser' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse
+                                    Schedules</a>
+                                  <a href="{% url 'locations_browse' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by
+                                    Counties</a>
+                                  <a href="{% url 'browse_popplaces' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by Populated
+                                    Places</a>
+                                  <a href="{% url 'denominations_browse' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by
+                                    Denominations</a>
                                 </div>
                             </div>
                         </div>
@@ -75,9 +85,14 @@
                             </svg>
                         </button>
                         <div id="mobile-records-submenu" class="hidden pl-6 space-y-1">
-                            <a href="{% url 'census_browser' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse</a>
-                            <a href="{% url 'locations_browse' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Locations</a>
-                            <a href="{% url 'denominations_browse' %}" class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Denominations</a>
+                          <a href="{% url 'census_browser' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Schedules</a>
+                          <a href="{% url 'locations_browse' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Counties</a>
+                          <a href="{% url 'browse_popplaces' %} class=" block px-3 py-2 rounded-md text-sm
+                             hover:bg-primary-500">Browse Populated Places</a>
+                          <a href="{% url 'denominations_browse' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Denominations</a>
                         </div>
                     </div>
                     <a href="{% url 'blog-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Blog</a>

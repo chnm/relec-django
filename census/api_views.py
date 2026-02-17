@@ -28,12 +28,10 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
     def families(self, request):
         """Return unique denomination families for filtering - only those with location data"""
         # Get families that have at least one ReligiousBody with location data
-        # religiousbody is the default reverse relation name (lowercase model name)
+        # Filter through census_record -> populated_place for the new location hierarchy
         census_families = (
             Denomination.objects.filter(
-                religiousbody__location__isnull=False,
-                religiousbody__location__lat__isnull=False,
-                religiousbody__location__lon__isnull=False,
+                religiousbody__census_record__populated_place__isnull=False,
             )
             .values_list("family_census", flat=True)
             .distinct()
@@ -42,57 +40,69 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
         relec_families = (
             Denomination.objects.filter(
-                religiousbody__location__isnull=False,
-                religiousbody__location__lat__isnull=False,
-                religiousbody__location__lon__isnull=False,
+                religiousbody__census_record__populated_place__isnull=False,
             )
             .values_list("family_relec", flat=True)
             .distinct()
             .order_by("family_relec")
         )
 
-        # Count denominations in each family that have location data
-        family_counts = {}
+        # Count denominations in each census family that have location data
+        census_family_counts = {}
         for family in census_families:
             if family:  # Skip empty family names
                 count = (
                     Denomination.objects.filter(
                         family_census=family,
-                        religiousbody__location__isnull=False,
-                        religiousbody__location__lat__isnull=False,
-                        religiousbody__location__lon__isnull=False,
+                        religiousbody__census_record__populated_place__isnull=False,
                     )
                     .distinct()
                     .count()
                 )
-                family_counts[family] = count
+                census_family_counts[family] = count
+
+        # Count denominations in each RelEc family that have location data
+        relec_family_counts = {}
+        for family in relec_families:
+            if family:  # Skip empty family names
+                count = (
+                    Denomination.objects.filter(
+                        family_relec=family,
+                        religiousbody__census_record__populated_place__isnull=False,
+                    )
+                    .distinct()
+                    .count()
+                )
+                relec_family_counts[family] = count
 
         return Response(
             {
                 "census_families": [
-                    {"name": family, "count": family_counts.get(family, 0)}
+                    {"name": family, "count": census_family_counts.get(family, 0)}
                     for family in census_families
                     if family
                 ],
-                "relec_families": list(relec_families),
+                "relec_families": [
+                    {"name": family, "count": relec_family_counts.get(family, 0)}
+                    for family in relec_families
+                    if family
+                ],
             }
         )
 
     @action(detail=False, methods=["get"])
     def by_family(self, request):
         """Return denominations grouped by family - only those with location data"""
-        family = request.query_params.get("family_census", None)
+        family = request.query_params.get("family_relec", None)
 
-        # Base filter for location data - use religiousbody (the default reverse relation)
+        # Base filter for location data - use new location hierarchy through census_record
         location_filter = {
-            "religiousbody__location__isnull": False,
-            "religiousbody__location__lat__isnull": False,
-            "religiousbody__location__lon__isnull": False,
+            "religiousbody__census_record__populated_place__isnull": False,
         }
 
         if family:
             denominations = (
-                Denomination.objects.filter(family_census=family, **location_filter)
+                Denomination.objects.filter(family_relec=family, **location_filter)
                 .distinct()
                 .order_by("name")
             )
@@ -100,7 +110,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
             denominations = (
                 Denomination.objects.filter(**location_filter)
                 .distinct()
-                .order_by("family_census", "name")
+                .order_by("family_relec", "name")
             )
 
         serializer = self.get_serializer(denominations, many=True)
@@ -125,27 +135,22 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 location__isnull=False
             ).select_related("location", "denomination")
 
-            # Apply filtering with explicit logging and error handling
-            if "family_census" in request.query_params:
+            # Apply filtering - support both family_relec and family_census
+            if "family_relec" in request.query_params:
+                family_relec = request.query_params.get("family_relec")
+                queryset = queryset.filter(
+                    denomination__family_relec=family_relec
+                )
+            elif "family_census" in request.query_params:
                 family_census = request.query_params.get("family_census")
-                print(f"Filtering by family_census: {family_census}")
-                try:
-                    queryset = queryset.filter(
-                        denomination__family_census=family_census
-                    )
-                except Exception as e:
-                    print(f"Error filtering by family_census: {e}")
-                    # Continue with unfiltered queryset instead of failing
+                queryset = queryset.filter(
+                    denomination__family_census=family_census
+                )
 
             # Add denomination filtering
             if "denomination" in request.query_params:
                 denomination_id = request.query_params.get("denomination")
-                print(f"Filtering by denomination_id: {denomination_id}")
-                try:
-                    queryset = queryset.filter(denomination_id=denomination_id)
-                except Exception as e:
-                    print(f"Error filtering by denomination_id: {e}")
-                    # Continue with previously filtered queryset
+                queryset = queryset.filter(denomination_id=denomination_id)
 
             # Add bounds filtering if present
             if "bounds" in request.query_params:
@@ -158,7 +163,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                         location__lon__gte=west,
                         location__lon__lte=east,
                     )
-                    print(f"Applied bounds filter: {bounds}")
                 except Exception as e:
                     print(f"Error applying bounds filter: {e}")
 
@@ -192,7 +196,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             serializer = MapMarkerSerializer(queryset, many=True)
             data = serializer.data
 
-            print(f"Returning {len(data)} map markers")
             return Response(data)
 
         except Exception as e:
@@ -215,27 +218,22 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 .prefetch_related("membership")
             )
 
-            # Apply filtering with explicit logging and error handling
-            if "family_census" in request.query_params:
+            # Apply filtering - support both family_relec and family_census
+            if "family_relec" in request.query_params:
+                family_relec = request.query_params.get("family_relec")
+                queryset = queryset.filter(
+                    denomination__family_relec=family_relec
+                )
+            elif "family_census" in request.query_params:
                 family_census = request.query_params.get("family_census")
-                print(f"Filtering by family_census: {family_census}")
-                try:
-                    queryset = queryset.filter(
-                        denomination__family_census=family_census
-                    )
-                except Exception as e:
-                    print(f"Error filtering by family_census: {e}")
-                    # Continue with unfiltered queryset instead of failing
+                queryset = queryset.filter(
+                    denomination__family_census=family_census
+                )
 
             # Add denomination filtering
             if "denomination" in request.query_params:
                 denomination_id = request.query_params.get("denomination")
-                print(f"Filtering by denomination_id: {denomination_id}")
-                try:
-                    queryset = queryset.filter(denomination_id=denomination_id)
-                except Exception as e:
-                    print(f"Error filtering by denomination_id: {e}")
-                    # Continue with previously filtered queryset
+                queryset = queryset.filter(denomination_id=denomination_id)
 
             # Add bounds filtering if present
             if "bounds" in request.query_params:
@@ -248,7 +246,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                         location__lon__gte=west,
                         location__lon__lte=east,
                     )
-                    print(f"Applied bounds filter: {bounds}")
                 except Exception as e:
                     print(f"Error applying bounds filter: {e}")
 
@@ -336,22 +333,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     queryset = queryset.filter(
                         denomination__family_census__in=family_census
                     )
-            else:
-                # Default: when no family is specified, only show families that have location data
-                # This matches what appears in the family dropdown
-                available_families = (
-                    Denomination.objects.filter(
-                        religiousbody__location__isnull=False,
-                        religiousbody__location__lat__isnull=False,
-                        religiousbody__location__lon__isnull=False,
-                    )
-                    .values_list("family_census", flat=True)
-                    .distinct()
-                )
-                queryset = queryset.filter(
-                    denomination__family_census__in=available_families
-                )
-
             # Filter by denomination family (relec)
             if "family_relec" in request.query_params:
                 family_relec = request.query_params.getlist("family_relec")
@@ -515,22 +496,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     queryset = queryset.filter(
                         denomination__family_census__in=family_census
                     )
-            else:
-                # Default: when no family is specified, only show families that have location data
-                # This matches what appears in the family dropdown
-                available_families = (
-                    Denomination.objects.filter(
-                        religiousbody__location__isnull=False,
-                        religiousbody__location__lat__isnull=False,
-                        religiousbody__location__lon__isnull=False,
-                    )
-                    .values_list("family_census", flat=True)
-                    .distinct()
-                )
-                queryset = queryset.filter(
-                    denomination__family_census__in=available_families
-                )
-
             # Filter by denomination family (relec)
             if "family_relec" in request.query_params:
                 family_relec = request.query_params.getlist("family_relec")
@@ -839,9 +804,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     congregation_count_with_location = (
                         Denomination.objects.filter(
                             family_census=family_name,
-                            religiousbody__location__isnull=False,
-                            religiousbody__location__lat__isnull=False,
-                            religiousbody__location__lon__isnull=False,
+                            religiousbody__census_record__populated_place__isnull=False,
                         )
                         .values("religiousbody")
                         .distinct()
@@ -881,9 +844,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     congregation_count_with_location = (
                         Denomination.objects.filter(
                             family_relec=family_name,
-                            religiousbody__location__isnull=False,
-                            religiousbody__location__lat__isnull=False,
-                            religiousbody__location__lon__isnull=False,
+                            religiousbody__census_record__populated_place__isnull=False,
                         )
                         .values("religiousbody")
                         .distinct()
