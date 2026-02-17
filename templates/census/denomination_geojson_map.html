@@ -155,8 +155,8 @@
                     <input type="hidden" name="transcription_status" value="approved">
                     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
                         <div>
-                            <label class="filter-label" for="family_census">Census Family</label>
-                            <select id="family_census" name="family_census" class="filter-input">
+                          <label class="filter-label" for="family_relec">Family</label>
+                          <select id="family_relec" name="family_relec" class="filter-input">
                                 <option value="">All Families</option>
                             </select>
                         </div>
@@ -237,9 +237,9 @@
                     const response = await fetch('/census/api/denominations/families/');
                     const data = await response.json();
 
-                    const familySelect = document.getElementById('family_census');
-                    // Use census_families from the response
-                    data.census_families.forEach(familyData => {
+                  const familySelect = document.getElementById('family_relec');
+                  // Use relec_families from the response
+                  data.relec_families.forEach(familyData => {
                         const option = document.createElement('option');
                         option.value = familyData.name;
                         option.textContent = `${familyData.name} (${familyData.count})`;
@@ -259,7 +259,7 @@
 
                     // Always use by_family endpoint (it filters by location and returns all if no family specified)
                     const url = family
-                        ? `/census/api/denominations/by_family/?family_census=${encodeURIComponent(family)}`
+                      ? `/census/api/denominations/by_family/?family_relec=${encodeURIComponent(family)}`
                         : '/census/api/denominations/by_family/';
 
                     const response = await fetch(url);
@@ -277,7 +277,7 @@
             }
 
             // Family dropdown change handler
-            document.getElementById('family_census').addEventListener('change', function() {
+          document.getElementById('family_relec').addEventListener('change', function () {
                 const selectedFamily = this.value;
                 loadDenominations(selectedFamily);
             });

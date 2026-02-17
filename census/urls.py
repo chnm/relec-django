@@ -53,4 +53,9 @@ urlpatterns = [
         "denominations/", views.denominations_browse_view, name="denominations_browse"
     ),
     path("locations/", views.locations_browse_view, name="locations_browse"),
+    path(
+        "populated-places/",
+        views.populated_places_browse_view,
+        name="browse_popplaces",
+    ),
 ]

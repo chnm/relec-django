@@ -646,9 +646,9 @@
                 let queryParams = new URLSearchParams();
 
                 // Add denomination filters
-                if (filters.family_census) {
-                    queryParams.append('family_census', filters.family_census);
-                    currentFamily = filters.family_census;
+              if (filters.family_relec) {
+                queryParams.append('family_relec', filters.family_relec);
+                currentFamily = filters.family_relec;
                 } else {
                     currentFamily = null;
                 }
@@ -873,7 +873,7 @@
                         return response.json();
                     })
                     .then(data => {
-                        allFamilies = data.census_families || [];
+                      allFamilies = data.relec_families || [];
 
                         if (allFamilies.length > 0) {
                             allFamilies.sort((a, b) => a.name.localeCompare(b.name));
@@ -907,7 +907,7 @@
                                     loadDenominations(familyName);
 
                                     // Apply filter to map
-                                    loadMarkers({family_census: familyName});
+                                  loadMarkers({family_relec: familyName});
                                 });
                             });
 
@@ -928,7 +928,7 @@
                 const denominationList = document.getElementById('denominationList');
                 denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
 
-                fetch(`/census/api/denominations/by_family/?family_census=${encodeURIComponent(familyName)}`)
+              fetch(`/census/api/denominations/by_family/?family_relec=${encodeURIComponent(familyName)}`)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
@@ -959,7 +959,7 @@
                                     // Toggle active state
                                     if (item.classList.contains('active')) {
                                         item.classList.remove('active');
-                                        loadMarkers({family_census: currentFamily});
+                                      loadMarkers({family_relec: currentFamily});
                                         currentDenomination = null;
                                     } else {
                                         document.querySelectorAll('.denomination-item').forEach(i => {
@@ -967,7 +967,7 @@
                                         });
                                         item.classList.add('active');
                                         loadMarkers({
-                                            family_census: currentFamily,
+                                          family_relec: currentFamily,
                                             denomination: denominationId
                                         });
                                         currentDenomination = denominationName;
@@ -1017,7 +1017,7 @@
                 currentFamily = familyName;
                 currentDenomination = null;
                 loadDenominations(familyName);
-                loadMarkers({family_census: familyName});
+              loadMarkers({family_relec: familyName});
             }
 
           // Clear filters - reset to default family
@@ -1030,7 +1030,7 @@
                     item.classList.remove('active');
                 });
                 currentDenomination = null;
-                loadMarkers({family_census: currentFamily});
+              loadMarkers({family_relec: currentFamily});
             });
 
             // Denomination search
@@ -1042,7 +1042,7 @@
             document.getElementById('applyFilters').addEventListener('click', () => {
                 // Reapply current filters which will trigger client-side filtering
                 const filters = {};
-                if (currentFamily) filters.family_census = currentFamily;
+              if (currentFamily) filters.family_relec = currentFamily;
                 if (currentDenomination) filters.denomination = currentDenomination;
                 loadMarkers(filters);
             });
@@ -1077,7 +1077,7 @@
                     let filters = {bounds: boundsParam};
 
                     if (currentFamily) {
-                        filters.family_census = currentFamily;
+                      filters.family_relec = currentFamily;
                     }
 
                     if (currentDenomination) {
