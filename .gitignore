@@ -12,6 +12,7 @@ CLAUDE.md
 AGENTS.md
 hugo_site/
 .idea/
+census_schedules.json
 
 # Poetry to UV migration backups
 .venv.poetry.backup/
