@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static thumbnail %}
+{% load static thumbnail humanize %}
 
 {% block title %}Census Records Browser{% endblock %}
 
@@ -113,6 +113,41 @@
             justify-content: between;
             align-items: center;
         }
+
+        #filter-body {
+            overflow: hidden;
+            transition: opacity 0.2s ease;
+        }
+
+        #filter-body.collapsed {
+            display: none;
+        }
+
+        #filter-toggle {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .filter-group-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #9ca3af;
+            margin-bottom: 0.75rem;
+        }
+
+        .filter-group-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
     </style>
 {% endblock %}
 
@@ -146,105 +181,112 @@
         </h1>
         <p class="text-content-secondary mb-6">
             {% if location_filter %}
-                {{ total_records|floatformat:0 }} religious census record{{ total_records|pluralize }} found.
+                {{ total_records|intcomma }} religious census record{{ total_records|pluralize }} found.
             {% else %}
-                Explore {{ total_records|floatformat:0 }} religious census records with detailed filtering and search capabilities.
+                Explore {{ total_records|intcomma }} religious census records.
             {% endif %}
         </p>
 
     <!-- Filters -->
-        <div class="filter-card">
-            <form method="get" class="space-y-4" id="filter-form">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="filter-card" id="filter-card">
+            <!-- Collapsible header -->
+            <button type="button" id="filter-toggle"
+                    class="w-full flex justify-between items-center text-left mb-4 group"
+                    aria-expanded="true" aria-controls="filter-body">
+                <span class="font-semibold text-content-primary text-sm uppercase tracking-wide">Filters</span>
+                <svg id="filter-caret" class="w-4 h-4 text-content-secondary transition-transform duration-200"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+
+            <div id="filter-body">
+            <form method="get" class="space-y-5" id="filter-form">
                 <!-- Search -->
-                    <div class="lg:col-span-3">
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Search</label>
-                        <input type="text" name="search" value="{{ search }}"
-                               placeholder="Search records, churches, denominations..."
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                    </div>
+                <div>
+                    <label class="block text-sm font-medium text-content-secondary mb-2">Search</label>
+                    <input type="text" name="search" value="{{ search }}"
+                           placeholder="Search records, churches, denominations..."
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                </div>
 
-                <!-- Denomination Family -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Family</label>
-                        <select name="family" id="family-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                            <option value="">All Families</option>
-                            {% for family in census_families %}
-                                {% if family %}
-                                    <option value="{{ family }}" {% if family == family_filter %}selected{% endif %}>
-                                        {{ family }}
+                <!-- Denomination group -->
+                <div>
+                    <div class="filter-group-label">Denomination</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">Denomination Family</label>
+                            <select name="family" id="family-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">All Families</option>
+                                {% for family in census_families %}
+                                    {% if family %}
+                                        <option value="{{ family }}" {% if family == family_filter %}selected{% endif %}>{{ family }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
+                            <select name="denomination" id="denomination-select"
+                                    {% if not family_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Denominations</option>
+                                {% for denomination in denominations %}
+                                    <option value="{{ denomination.id }}"
+                                            data-family="{{ denomination.family_relec|default:'Other' }}"
+                                            {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
+                                        {{ denomination.name }}
                                     </option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                <!-- Denomination -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
-                        <select name="denomination" id="denomination-select"
-                                {% if not family_filter %}disabled{% endif %}
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
-                            <option value="">All Denominations</option>
-                            {% for denomination in denominations %}
-                                <option value="{{ denomination.id }}"
-                                        data-family="{{ denomination.family_relec|default:'Other' }}"
-                                        {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
-                                    {{ denomination.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                  <!-- Has Membership Data -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Membership Data</label>
-                        <select name="has_membership"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                            <option value="">Any</option>
-                            <option value="yes" {% if has_membership == "yes" %}selected{% endif %}>Has Membership Data
-                            </option>
-                            <option value="no" {% if has_membership == "no" %}selected{% endif %}>No Membership Data
-                            </option>
-                        </select>
-                    </div>
-
-                  <!-- Urban/Rural -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">Urban/Rural</label>
-                        <select name="urban_rural"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                            <option value="">Any</option>
-                            <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
-                            <option value="rural" {% if urban_rural == "rural" %}selected{% endif %}>Rural</option>
-                        </select>
-                    </div>
-
-                <!-- State (no name attr - handled via URL path) -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">State</label>
-                        <select id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
-                            <option value="">All States</option>
-                            {% for state in states %}
-                                <option value="{{ state.code }}" {% if state.code == location_filter %}selected{% endif %}>
-                                    {{ state.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                <!-- County (no name attr - handled via URL path) -->
-                    <div>
-                        <label class="block text-sm font-medium text-content-secondary mb-2">County</label>
-                        <select id="county-select"
-                                {% if not location_filter %}disabled{% endif %}
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
-                            <option value="">All Counties</option>
-                        </select>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex gap-3">
+                <!-- Location group -->
+                <div>
+                    <div class="filter-group-label">Location</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">State</label>
+                            <select id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">All States</option>
+                                {% for state in states %}
+                                    <option value="{{ state.code }}" {% if state.code == location_filter %}selected{% endif %}>
+                                        {{ state.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">County</label>
+                            <select id="county-select"
+                                    {% if not location_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Counties</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">Populated Place</label>
+                            <select id="place-select"
+                                    {% if not county_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Places</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-content-secondary mb-2">Urban or Rural</label>
+                            <select name="urban_rural"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">Any</option>
+                                <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
+                                <option value="rural" {% if urban_rural == "rural" %}selected{% endif %}>Rural</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-1">
                     <button type="submit" class="bg-religious-primary text-white px-6 py-2 rounded-md hover:bg-primary-700 transition-colors">
                         Apply Filters
                     </button>
@@ -253,11 +295,13 @@
                     </a>
                 </div>
             </form>
+            </div>
         </div>
 
         <script>
             // Data from Django
             const countiesByState = {{ counties_by_state_json|safe }};
+            const placesByCounty = {{ places_by_county_json|safe }};
             const denominationsByFamily = {{ denominations_by_family_json|safe }};
 
             // Get form elements
@@ -265,10 +309,12 @@
             const denominationSelect = document.getElementById('denomination-select');
             const stateSelect = document.getElementById('state-select');
             const countySelect = document.getElementById('county-select');
+            const placeSelect = document.getElementById('place-select');
 
             // Store original values
             const selectedDenomination = "{{ denomination_filter }}";
             const selectedCounty = "{{ county_filter }}";
+            const selectedPlace = "{{ place_filter }}";
 
             // Update denomination dropdown based on family selection
             function updateDenominationOptions() {
@@ -323,11 +369,44 @@
                 }
             }
 
+            // Update populated place dropdown based on state + county selection
+            function updatePlaceOptions() {
+                const selectedState = stateSelect.value;
+                const selectedCountyVal = countySelect.value;
+
+                placeSelect.innerHTML = '<option value="">All Places</option>';
+
+                if (!selectedState || !selectedCountyVal) {
+                    placeSelect.disabled = true;
+                } else {
+                    const places = ((placesByCounty[selectedState] || {})[selectedCountyVal]) || [];
+                    if (places.length > 0) {
+                        placeSelect.disabled = false;
+                        places.forEach(place => {
+                            const option = document.createElement('option');
+                            option.value = place;
+                            option.textContent = place;
+                            if (place === selectedPlace) {
+                                option.selected = true;
+                            }
+                            placeSelect.appendChild(option);
+                        });
+                    } else {
+                        placeSelect.disabled = true;
+                    }
+                }
+            }
+
             // Add event listeners
             familySelect.addEventListener('change', updateDenominationOptions);
             stateSelect.addEventListener('change', function() {
                 updateCountyOptions();
-                countySelect.value = ''; // Reset county when state changes
+                countySelect.value = '';
+                updatePlaceOptions();
+            });
+            countySelect.addEventListener('change', function() {
+                updatePlaceOptions();
+                placeSelect.value = '';
             });
 
             // Handle form submission - build URL with path-based state/county
@@ -351,14 +430,14 @@
                 const search = this.querySelector('[name="search"]').value;
                 const family = this.querySelector('[name="family"]').value;
                 const denomination = this.querySelector('[name="denomination"]').value;
-                const hasMembership = this.querySelector('[name="has_membership"]').value;
                 const urbanRural = this.querySelector('[name="urban_rural"]').value;
+                const place = placeSelect.value;
 
                 if (search) params.set('search', search);
                 if (family) params.set('family', family);
                 if (denomination) params.set('denomination', denomination);
-                if (hasMembership) params.set('has_membership', hasMembership);
                 if (urbanRural) params.set('urban_rural', urbanRural);
+                if (place) params.set('place', place);
 
                 // Navigate to the new URL
                 const queryString = params.toString();
@@ -369,6 +448,19 @@
             document.addEventListener('DOMContentLoaded', function() {
                 updateDenominationOptions();
                 updateCountyOptions();
+                updatePlaceOptions();
+
+                // Collapsible filter panel
+                const toggle = document.getElementById('filter-toggle');
+                const body = document.getElementById('filter-body');
+                const caret = document.getElementById('filter-caret');
+
+                toggle.addEventListener('click', function() {
+                    const isOpen = !body.classList.contains('collapsed');
+                    body.classList.toggle('collapsed', isOpen);
+                    caret.style.transform = isOpen ? 'rotate(-90deg)' : '';
+                    toggle.setAttribute('aria-expanded', String(!isOpen));
+                });
             });
         </script>
 
@@ -378,15 +470,14 @@
                 <div>
                     <span class="text-content-primary font-medium">
                         {% if page_obj.paginator.count %}
-                            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} records
+                            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count|intcomma }} records
                         {% else %}
                             No records found
                         {% endif %}
                     </span>
                 </div>
                 <div class="flex gap-2">
-                    <span class="badge badge-blue">{{ page_obj.paginator.count }} Total</span>
-                    {% if search or denomination_filter or family_filter or location_filter or has_membership or urban_rural %}
+                    {% if search or denomination_filter or family_filter or location_filter or urban_rural or place_filter %}
                         <span class="badge badge-amber">Filtered</span>
                     {% endif %}
                 </div>

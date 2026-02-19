@@ -87,11 +87,15 @@
       border-radius: 4px;
       border: 1px solid #e5e7eb;
       transition: all 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
     }
 
     .place-item:hover {
       border-color: #0060b1;
       box-shadow: 0 2px 4px rgba(0, 96, 177, 0.1);
+      background: #eff6ff;
     }
 
     .place-name {
@@ -332,10 +336,11 @@
                     </div>
                     <div class="places-grid">
                       {% for place in county.places %}
-                        <div class="place-item">
+                        <a class="place-item"
+                           href="{% url 'census_browser_county' state_code county.name %}?place={{ place.name|urlencode }}">
                           <span class="place-name">{{ place.name }}</span>
                           <span class="place-count">{{ place.count }}</span>
-                        </div>
+                        </a>
                       {% endfor %}
                     </div>
                   </div>
