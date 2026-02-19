@@ -1009,7 +1009,6 @@ class CensusScheduleAdmin(ModelAdmin):
         qs = qs.prefetch_related(
             "church_details",
             "church_details__denomination",
-            "church_details__location",
             "membership_details",
             "membership_details__religious_body",
             "clergy",
