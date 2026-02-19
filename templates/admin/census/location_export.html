@@ -16,15 +16,14 @@
 
                 <div class="form-row">
                     <div>
-                        <label for="location_id">{% trans "Select Location:" %}</label>
-                        <select name="location_id" id="location_id" required class="admin-autocomplete">
+                        <label for="place_id">{% trans "Select Location:" %}</label>
+                        <select name="place_id" id="place_id" required class="admin-autocomplete">
                             <option value="">---------</option>
-                            {% for state, locations in locations_by_state %}
+                            {% for state, places in places_by_state %}
                                 <optgroup label="{{ state }}">
-                                    {% for location in locations %}
-                                        <option value="{{ location.id }}">
-                                            {{ location.city }}{% if location.county %}, {{ location.county }}{% endif %}, {{ location.state }}
-                                            ({{ location.religiousbody_set.count }} schedule{% if location.religiousbody_set.count != 1 %}s{% endif %})
+                                    {% for place in places %}
+                                        <option value="{{ place.id }}">
+                                            {{ place.name }}{% if place.county %}, {{ place.county.name }}{% endif %}, {{ state }}
                                         </option>
                                     {% endfor %}
                                 </optgroup>

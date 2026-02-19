@@ -8,7 +8,6 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -18,7 +17,7 @@ from requests.exceptions import RequestException
 from unfold.admin import ModelAdmin, StackedInline
 from urllib3.util.retry import Retry
 
-from location.models import Location
+from location.models import PopulatedPlace
 
 from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
 from .resources import CensusScheduleResource
@@ -38,9 +37,9 @@ class HasLocationFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value() == "yes":
-            return queryset.filter(location__isnull=False)
+            return queryset.filter(census_record__populated_place__isnull=False)
         if self.value() == "no":
-            return queryset.filter(location__isnull=True)
+            return queryset.filter(census_record__populated_place__isnull=True)
         return queryset
 
 
@@ -58,15 +57,9 @@ class HasCountyFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value() == "yes":
-            return queryset.filter(
-                location__isnull=False, location__county__isnull=False
-            ).exclude(location__county__exact="")
+            return queryset.filter(census_record__county__isnull=False)
         if self.value() == "no":
-            return queryset.filter(
-                Q(location__isnull=True)
-                | Q(location__county__isnull=True)
-                | Q(location__county__exact="")
-            )
+            return queryset.filter(census_record__county__isnull=True)
         return queryset
 
 
@@ -85,21 +78,11 @@ class CensusScheduleLocationFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value() == "has_county":
-            return (
-                queryset.filter(
-                    church_details__location__isnull=False,
-                    church_details__location__county__isnull=False,
-                )
-                .exclude(church_details__location__county__exact="")
-                .distinct()
-            )
+            return queryset.filter(county__isnull=False)
         if self.value() == "missing_county":
-            return queryset.filter(
-                Q(church_details__location__county__isnull=True)
-                | Q(church_details__location__county__exact="")
-            ).distinct()
+            return queryset.filter(county__isnull=True)
         if self.value() == "missing_location":
-            return queryset.filter(church_details__location__isnull=True).distinct()
+            return queryset.filter(county__isnull=True, populated_place__isnull=True)
         return queryset
 
 
@@ -704,16 +687,15 @@ class CensusScheduleAdmin(ModelAdmin):
     def missing_county_analysis_view(self, request):
         """View to analyze census schedules missing county information"""
 
-        # Get all census schedules with their religious body relationships
-        all_schedules = CensusSchedule.objects.select_related().prefetch_related(
-            "church_details__denomination", "church_details__location"
-        )
+        # Get all census schedules with their location hierarchy
+        all_schedules = CensusSchedule.objects.select_related(
+            "county__state", "populated_place"
+        ).prefetch_related("church_details__denomination")
 
         # Categorize schedules by location status
         schedules_with_county = []
         schedules_missing_location = []
         schedules_missing_county = []
-        schedules_with_blank_county = []
 
         # Group by state for easier analysis
         state_analysis = defaultdict(
@@ -736,81 +718,46 @@ class CensusScheduleAdmin(ModelAdmin):
         }
 
         for schedule in all_schedules:
-            has_location = False
-            has_county = False
-            state_code = None
-            county_name = None
+            if schedule.county:
+                state_code = (
+                    schedule.county.state.code if schedule.county.state else None
+                )
+                county_name = schedule.county.name
 
-            # Check through all religious bodies for this schedule
-            for religious_body in schedule.church_details.all():
-                if religious_body.location:
-                    has_location = True
-                    state_code = religious_body.location.state
-                    county_name = religious_body.location.county
+                schedules_with_county.append(
+                    {
+                        "schedule": schedule,
+                        "county": county_name,
+                    }
+                )
 
-                    if county_name and county_name.strip():
-                        has_county = True
-                        schedules_with_county.append(
-                            {
-                                "schedule": schedule,
-                                "location": religious_body.location,
-                                "county": county_name,
-                            }
-                        )
-                        # Add to state analysis
-                        state_analysis[state_code]["state_name"] = state_code
-                        state_analysis[state_code]["with_county"] += 1
-                        state_analysis[state_code]["counties_represented"].add(
-                            county_name
-                        )
-                        state_analysis[state_code]["schedules_by_county"][
-                            county_name
-                        ].append(schedule)
-                    else:
-                        # Has location but county is null/blank
-                        if county_name is None:
-                            schedules_missing_county.append(
-                                {
-                                    "schedule": schedule,
-                                    "location": religious_body.location,
-                                    "issue": "County field is null",
-                                }
-                            )
-                        else:
-                            schedules_with_blank_county.append(
-                                {
-                                    "schedule": schedule,
-                                    "location": religious_body.location,
-                                    "issue": "County field is empty string",
-                                }
-                            )
-                    break  # Only need to check first religious body with location
-
-            # Update state totals
-            if state_code:
-                state_analysis[state_code]["total_schedules"] += 1
-                if not has_location:
-                    state_analysis[state_code]["missing_location"] += 1
-                elif not has_county:
-                    if county_name is None:
-                        state_analysis[state_code]["missing_county"] += 1
-                    else:
-                        state_analysis[state_code]["blank_county"] += 1
+                if state_code:
+                    state_analysis[state_code]["state_name"] = state_code
+                    state_analysis[state_code]["with_county"] += 1
+                    state_analysis[state_code]["counties_represented"].add(county_name)
+                    state_analysis[state_code]["schedules_by_county"][
+                        county_name
+                    ].append(schedule)
+                    state_analysis[state_code]["total_schedules"] += 1
             else:
-                # No state information available
-                if not has_location:
+                # No county assigned — check if we have any state info at all
+                if schedule.populated_place:
+                    # Has a place but no county (shouldn't happen, but handle it)
+                    schedules_missing_county.append(
+                        {
+                            "schedule": schedule,
+                            "issue": "Populated place set but no county",
+                        }
+                    )
+                    no_state_schedules["missing_county"].append(schedule)
+                else:
                     schedules_missing_location.append(
                         {
                             "schedule": schedule,
-                            "issue": "No location assigned to religious body",
+                            "issue": "No county or populated place assigned",
                         }
                     )
                     no_state_schedules["missing_location"].append(schedule)
-                elif not has_county:
-                    if county_name is None:
-                        no_state_schedules["missing_county"].append(schedule)
-                    else:
-                        no_state_schedules["blank_county"].append(schedule)
 
         # Convert state analysis to list and sort
         state_summary = []
@@ -827,10 +774,8 @@ class CensusScheduleAdmin(ModelAdmin):
         total_with_county = len(schedules_with_county)
         total_missing_location = len(schedules_missing_location)
         total_missing_county = len(schedules_missing_county)
-        total_blank_county = len(schedules_with_blank_county)
-        total_issues = (
-            total_missing_location + total_missing_county + total_blank_county
-        )
+        total_blank_county = 0
+        total_issues = total_missing_location + total_missing_county
 
         context = {
             "title": "Missing County Analysis",
@@ -850,7 +795,7 @@ class CensusScheduleAdmin(ModelAdmin):
                 :50
             ],  # Limit for performance
             "schedules_missing_county": schedules_missing_county[:50],
-            "schedules_with_blank_county": schedules_with_blank_county[:50],
+            "schedules_with_blank_county": [],
             "no_state_schedules": no_state_schedules,
             "opts": self.model._meta,
         }
@@ -928,44 +873,50 @@ class CensusScheduleAdmin(ModelAdmin):
 
     def location_export_view(self, request):
         """View to filter and export census schedules by location"""
-        # Get all unique locations with census schedules
-        locations = (
-            Location.objects.filter(religiousbody__census_record__isnull=False)
+        # Get all unique populated places with census schedules
+        places = (
+            PopulatedPlace.objects.filter(census_schedules__isnull=False)
             .distinct()
-            .order_by("state", "county", "city")
+            .select_related("county__state")
+            .order_by("county__state__code", "county__name", "name")
         )
 
-        # Organize locations by state for better display
-        locations_by_state = defaultdict(list)
-        for location in locations:
-            state = location.state or "Unknown"
-            locations_by_state[state].append(location)
+        # Organize places by state for better display
+        places_by_state = defaultdict(list)
+        for place in places:
+            state = (
+                place.county.state.code
+                if place.county and place.county.state
+                else "Unknown"
+            )
+            places_by_state[state].append(place)
 
         # Sort states
-        sorted_states = sorted(locations_by_state.items())
+        sorted_states = sorted(places_by_state.items())
 
         if request.method == "POST":
-            location_id = request.POST.get("location_id")
+            place_id = request.POST.get("place_id")
             export_format = request.POST.get("export_format", "xlsx")
 
-            if not location_id:
+            if not place_id:
                 messages.error(request, "Please select a location.")
                 return HttpResponseRedirect(request.path)
 
-            # Get the location
+            # Get the populated place
             try:
-                location = Location.objects.get(pk=location_id)
-            except Location.DoesNotExist:
+                place = PopulatedPlace.objects.select_related("county__state").get(
+                    pk=place_id
+                )
+            except PopulatedPlace.DoesNotExist:
                 messages.error(request, "Location not found.")
                 return HttpResponseRedirect(request.path)
 
-            # Get all census schedules for this location
+            # Get all census schedules for this populated place
             schedules = (
-                CensusSchedule.objects.filter(church_details__location=location)
-                .select_related()
+                CensusSchedule.objects.filter(populated_place=place)
+                .select_related("county__state", "populated_place")
                 .prefetch_related(
                     "church_details__denomination",
-                    "church_details__location",
                     "membership_details",
                     "clergy",
                 )
@@ -977,8 +928,14 @@ class CensusScheduleAdmin(ModelAdmin):
             dataset = resource.export(schedules)
 
             # Generate filename
-            location_str = (
-                f"{location.city}_{location.county}_{location.state}".replace(" ", "_")
+            county_name = place.county.name if place.county else "Unknown"
+            state_code = (
+                place.county.state.code
+                if place.county and place.county.state
+                else "Unknown"
+            )
+            location_str = f"{place.name}_{county_name}_{state_code}".replace(
+                " ", "_"
             )
             filename = f"census_schedules_{location_str}"
 
@@ -1007,7 +964,7 @@ class CensusScheduleAdmin(ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             "title": "Export Census Schedules by Location",
-            "locations_by_state": sorted_states,
+            "places_by_state": sorted_states,
             "opts": self.model._meta,
         }
 

@@ -5,10 +5,10 @@ Usage:
     # List all locations with schedule counts
     python manage.py export_by_location --list
 
-    # Export by location ID
-    python manage.py export_by_location --location-id 123 --format xlsx
+    # Export by populated place ID
+    python manage.py export_by_location --place-id 123 --format xlsx
 
-    # Export by city and state
+    # Export by city name and state
     python manage.py export_by_location --city "Boston" --state "MA" --format csv
 
     # Export all schedules for a state
@@ -20,7 +20,7 @@ from django.db.models import Count
 
 from census.models import CensusSchedule
 from census.resources import CensusScheduleResource
-from location.models import Location
+from location.models import PopulatedPlace
 
 
 class Command(BaseCommand):
@@ -33,9 +33,9 @@ class Command(BaseCommand):
             help="List all locations with census schedule counts",
         )
         parser.add_argument(
-            "--location-id",
+            "--place-id",
             type=int,
-            help="Location ID to export schedules for",
+            help="PopulatedPlace ID to export schedules for",
         )
         parser.add_argument(
             "--city",
@@ -72,18 +72,18 @@ class Command(BaseCommand):
             return
 
         # Determine which filters to apply
-        location_id = options.get("location_id")
+        place_id = options.get("place_id")
         city = options.get("city")
         county = options.get("county")
         state = options.get("state")
 
-        if not any([location_id, city, state]):
+        if not any([place_id, city, state]):
             raise CommandError(
-                "You must provide at least one filter: --location-id, --city, --state, or use --list to see available locations"
+                "You must provide at least one filter: --place-id, --city, --state, or use --list to see available locations"
             )
 
         # Get schedules based on filters
-        schedules = self.get_schedules(location_id, city, county, state)
+        schedules = self.get_schedules(place_id, city, county, state)
 
         if not schedules.exists():
             self.stdout.write(
@@ -93,70 +93,76 @@ class Command(BaseCommand):
 
         # Generate output filename
         output_file = self.generate_filename(
-            options["output"], options["format"], location_id, city, county, state
+            options["output"], options["format"], place_id, city, county, state
         )
 
         # Export the data
         self.export_schedules(schedules, output_file, options["format"])
 
     def list_locations(self):
-        """List all locations with census schedule counts"""
+        """List all populated places with census schedule counts"""
         self.stdout.write(self.style.SUCCESS("\nLocations with Census Schedules:"))
         self.stdout.write("=" * 80)
 
-        locations = (
-            Location.objects.filter(religiousbody__census_record__isnull=False)
-            .annotate(
-                schedule_count=Count("religiousbody__census_record", distinct=True)
-            )
-            .order_by("state", "county", "city")
+        places = (
+            PopulatedPlace.objects.filter(census_schedules__isnull=False)
+            .select_related("county__state")
+            .annotate(schedule_count=Count("census_schedules", distinct=True))
+            .order_by("county__state__code", "county__name", "name")
         )
 
         current_state = None
-        for location in locations:
-            if location.state != current_state:
-                current_state = location.state
+        for place in places:
+            state_code = (
+                place.county.state.code
+                if place.county and place.county.state
+                else "Unknown"
+            )
+            if state_code != current_state:
+                current_state = state_code
                 self.stdout.write(
                     f"\n{self.style.WARNING(current_state or 'Unknown State')}"
                 )
 
-            location_str = f"  ID: {location.id:<6} | {location.city}"
-            if location.county:
-                location_str += f", {location.county}"
-            location_str += f" ({location.schedule_count} schedule"
-            if location.schedule_count != 1:
+            county_name = place.county.name if place.county else ""
+            location_str = f"  ID: {place.id:<6} | {place.name}"
+            if county_name:
+                location_str += f", {county_name}"
+            location_str += f" ({place.schedule_count} schedule"
+            if place.schedule_count != 1:
                 location_str += "s"
             location_str += ")"
 
             self.stdout.write(location_str)
 
         self.stdout.write("\n" + "=" * 80)
-        self.stdout.write(f"\nTotal locations: {locations.count()}\n")
+        self.stdout.write(f"\nTotal locations: {places.count()}\n")
 
-    def get_schedules(self, location_id, city, county, state):
+    def get_schedules(self, place_id, city, county, state):
         """Get census schedules based on filter criteria"""
-        queryset = CensusSchedule.objects.select_related().prefetch_related(
+        queryset = CensusSchedule.objects.select_related(
+            "county__state", "populated_place"
+        ).prefetch_related(
             "church_details__denomination",
-            "church_details__location",
             "membership_details",
             "clergy",
         )
 
         # Build filters
         filters = {}
-        if location_id:
-            filters["church_details__location__id"] = location_id
+        if place_id:
+            filters["populated_place__id"] = place_id
         else:
             if city:
-                filters["church_details__location__city__iexact"] = city
+                filters["populated_place__name__iexact"] = city
             if county:
-                filters["church_details__location__county__iexact"] = county
+                filters["county__name__iexact"] = county
             if state:
-                filters["church_details__location__state__iexact"] = state
+                filters["county__state__code__iexact"] = state
 
         return queryset.filter(**filters).distinct()
 
-    def generate_filename(self, output_path, format, location_id, city, county, state):
+    def generate_filename(self, output_path, format, place_id, city, county, state):
         """Generate output filename based on filters"""
         if output_path:
             return output_path
@@ -164,8 +170,8 @@ class Command(BaseCommand):
         # Build filename from filters
         parts = ["census_schedules"]
 
-        if location_id:
-            parts.append(f"loc_{location_id}")
+        if place_id:
+            parts.append(f"place_{place_id}")
         else:
             if city:
                 parts.append(city.replace(" ", "_"))

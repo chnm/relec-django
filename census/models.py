@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from location.models import County, Location, PopulatedPlace
+from location.models import County, PopulatedPlace
 
 logger = logging.getLogger(__name__)
 
@@ -252,13 +252,6 @@ class ReligiousBody(models.Model):
 
     # Location fields
     address = models.CharField(max_length=255, null=True, blank=True)
-    location = models.ForeignKey(
-        Location,
-        on_delete=models.CASCADE,
-        blank=True,
-        null=True,
-        help_text="Use the magnifying glass to the right to search for a location. Do not manually edit this number.",
-    )
     urban_rural_code = models.CharField(
         blank=True, null=True, max_length=50, verbose_name="Urban/rural code"
     )
@@ -388,7 +381,6 @@ class ReligiousBody(models.Model):
 
         indexes = [
             models.Index(fields=["denomination"]),
-            models.Index(fields=["location"]),
             models.Index(fields=["census_record"]),
             # Composite index for common queries
             models.Index(

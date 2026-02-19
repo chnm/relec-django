@@ -119,7 +119,10 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ReligiousBody.objects.all().select_related(
-        "location", "denomination", "census_record"
+        "denomination",
+        "census_record",
+        "census_record__county__state",
+        "census_record__populated_place",
     )
     serializer_class = ReligiousBodySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -132,8 +135,12 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             # Start with base queryset - only select what we need
             queryset = ReligiousBody.objects.filter(
-                location__isnull=False
-            ).select_related("location", "denomination")
+                census_record__populated_place__isnull=False
+            ).select_related(
+                "census_record__populated_place",
+                "census_record__county__state",
+                "denomination",
+            )
 
             # Apply filtering - support both family_relec and family_census
             if "family_relec" in request.query_params:
@@ -158,10 +165,10 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 try:
                     south, west, north, east = map(float, bounds.split(","))
                     queryset = queryset.filter(
-                        location__lat__gte=south,
-                        location__lat__lte=north,
-                        location__lon__gte=west,
-                        location__lon__lte=east,
+                        census_record__populated_place__lat__gte=south,
+                        census_record__populated_place__lat__lte=north,
+                        census_record__populated_place__lon__gte=west,
+                        census_record__populated_place__lon__lte=east,
                     )
                 except Exception as e:
                     print(f"Error applying bounds filter: {e}")
@@ -213,8 +220,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             # Start with base queryset - only select what we need for demographics
             queryset = (
-                ReligiousBody.objects.filter(location__isnull=False)
-                .select_related("location", "denomination")
+                ReligiousBody.objects.filter(
+                    census_record__populated_place__isnull=False
+                )
+                .select_related(
+                    "census_record__populated_place",
+                    "census_record__county__state",
+                    "denomination",
+                )
                 .prefetch_related("membership")
             )
 
@@ -241,10 +254,10 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 try:
                     south, west, north, east = map(float, bounds.split(","))
                     queryset = queryset.filter(
-                        location__lat__gte=south,
-                        location__lat__lte=north,
-                        location__lon__gte=west,
-                        location__lon__lte=east,
+                        census_record__populated_place__lat__gte=south,
+                        census_record__populated_place__lat__lte=north,
+                        census_record__populated_place__lon__gte=west,
+                        census_record__populated_place__lon__lte=east,
                     )
                 except Exception as e:
                     print(f"Error applying bounds filter: {e}")
@@ -320,10 +333,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             # Start with base queryset - ReligiousBody (congregations) with populated place coordinates
             queryset = ReligiousBody.objects.filter(
-                location__isnull=False,
-                location__lat__isnull=False,
-                location__lon__isnull=False,
-            ).select_related("location", "denomination", "census_record")
+                census_record__populated_place__isnull=False,
+                census_record__populated_place__lat__isnull=False,
+                census_record__populated_place__lon__isnull=False,
+            ).select_related(
+                "census_record__populated_place__county__state",
+                "census_record__county__state",
+                "denomination",
+            )
 
             # Filter by denomination family (census)
             if "family_census" in request.query_params:
@@ -368,10 +385,10 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 try:
                     south, west, north, east = map(float, bounds.split(","))
                     queryset = queryset.filter(
-                        location__lat__gte=south,
-                        location__lat__lte=north,
-                        location__lon__gte=west,
-                        location__lon__lte=east,
+                        census_record__populated_place__lat__gte=south,
+                        census_record__populated_place__lat__lte=north,
+                        census_record__populated_place__lon__gte=west,
+                        census_record__populated_place__lon__lte=east,
                     )
                 except (ValueError, TypeError) as e:
                     return Response(
@@ -385,14 +402,16 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             # Build GeoJSON FeatureCollection
             features = []
             for body in queryset:
-                if body.location and body.location.lat and body.location.lon:
+                pp = body.census_record.populated_place if body.census_record else None
+                county = body.census_record.county if body.census_record else None
+                if pp and pp.lat and pp.lon:
                     feature = {
                         "type": "Feature",
                         "geometry": {
                             "type": "Point",
                             "coordinates": [
-                                float(body.location.lon),
-                                float(body.location.lat),
+                                float(pp.lon),
+                                float(pp.lat),
                             ],
                         },
                         "properties": {
@@ -417,14 +436,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                                 else None
                             ),
                             "address": body.address,
-                            "populated_place": (
-                                body.location.map_name or body.location.city
-                                if body.location
+                            "populated_place": pp.name,
+                            "city": pp.name,
+                            "county": county.name if county else None,
+                            "state": (
+                                county.state.code
+                                if county and county.state
                                 else None
                             ),
-                            "city": body.location.city if body.location else None,
-                            "county": body.location.county if body.location else None,
-                            "state": body.location.state if body.location else None,
                             "num_edifices": body.num_edifices,
                             "edifice_value": (
                                 float(body.edifice_value)
@@ -483,10 +502,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
 
             # Start with base queryset - ReligiousBody with populated place coordinates
             queryset = ReligiousBody.objects.filter(
-                location__isnull=False,
-                location__lat__isnull=False,
-                location__lon__isnull=False,
-            ).select_related("location", "denomination", "census_record")
+                census_record__populated_place__isnull=False,
+                census_record__populated_place__lat__isnull=False,
+                census_record__populated_place__lon__isnull=False,
+            ).select_related(
+                "census_record__populated_place__county__state",
+                "census_record__county__state",
+                "denomination",
+            )
 
             # Filter by denomination family (census)
             if "family_census" in request.query_params:
@@ -539,23 +562,22 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 try:
                     south, west, north, east = map(float, bounds.split(","))
                     queryset = queryset.filter(
-                        location__lat__gte=south,
-                        location__lat__lte=north,
-                        location__lon__gte=west,
-                        location__lon__lte=east,
+                        census_record__populated_place__lat__gte=south,
+                        census_record__populated_place__lat__lte=north,
+                        census_record__populated_place__lon__gte=west,
+                        census_record__populated_place__lon__lte=east,
                     )
                 except (ValueError, TypeError) as e:
                     return Response(
                         {"error": f"Invalid bounds format: {e}"}, status=400
                     )
 
-            # Group congregations by location
+            # Group congregations by populated place
             places = defaultdict(list)
             for body in queryset:
-                if body.location and body.location.lat and body.location.lon:
-                    # Use location ID as the key to group
-                    location_key = body.location.id
-                    places[location_key].append(body)
+                pp = body.census_record.populated_place if body.census_record else None
+                if pp and pp.lat and pp.lon:
+                    places[pp.id].append(body)
 
             # Apply limit to number of places (default: all locations)
             limit = int(request.query_params.get("limit", 99999))
@@ -565,12 +587,13 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
 
             # Build GeoJSON FeatureCollection
             features = []
-            for location_id, congregations in limited_places.items():
+            for place_id, congregations in limited_places.items():
                 if not congregations:
                     continue
 
-                # Get location from first congregation
-                location = congregations[0].location
+                # Get populated place and county from first congregation
+                pp = congregations[0].census_record.populated_place
+                county = congregations[0].census_record.county
 
                 # Collect unique denominations at this place
                 denominations = set()
@@ -631,14 +654,16 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     "type": "Feature",
                     "geometry": {
                         "type": "Point",
-                        "coordinates": [float(location.lon), float(location.lat)],
+                        "coordinates": [float(pp.lon), float(pp.lat)],
                     },
                     "properties": {
-                        "location_id": location.id,
-                        "populated_place": location.city,
-                        "city": location.city,
-                        "county": location.county,
-                        "state": location.state,
+                        "place_id": place_id,
+                        "populated_place": pp.name,
+                        "city": pp.name,
+                        "county": county.name if county else None,
+                        "state": (
+                            county.state.code if county and county.state else None
+                        ),
                         "congregation_count": len(congregations),
                         "denominations": sorted(list(denominations)),
                         "denominations_count": len(denominations),
@@ -692,21 +717,22 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 denom_filter = Q(denomination__name=denom_name)
 
             # Use database aggregation for better performance
-            # Group by city location and aggregate
+            # Group by populated place and aggregate
             city_aggregates = (
                 ReligiousBody.objects.filter(
-                    location__isnull=False,
-                    location__lat__isnull=False,
-                    location__lon__isnull=False,
+                    census_record__populated_place__isnull=False,
+                    census_record__populated_place__lat__isnull=False,
+                    census_record__populated_place__lon__isnull=False,
                 )
                 .filter(family_filter)
                 .filter(denom_filter)
                 .values(
-                    "location__city",
-                    "location__state",
-                    "location__county",
-                    "location__lat",
-                    "location__lon",
+                    "census_record__populated_place",
+                    "census_record__populated_place__name",
+                    "census_record__county__state__code",
+                    "census_record__county__name",
+                    "census_record__populated_place__lat",
+                    "census_record__populated_place__lon",
                 )
                 .annotate(
                     congregations=Count("id"),
@@ -715,41 +741,43 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 .order_by("-total_members")
             )
 
-            # Get denomination names per city (separate query for efficiency)
-            denom_by_city = defaultdict(set)
+            # Get denomination names per place (separate query for efficiency)
+            denom_by_place = defaultdict(set)
             denom_query = (
                 ReligiousBody.objects.filter(
-                    location__isnull=False,
-                    location__lat__isnull=False,
-                    location__lon__isnull=False,
+                    census_record__populated_place__isnull=False,
+                    census_record__populated_place__lat__isnull=False,
+                    census_record__populated_place__lon__isnull=False,
                 )
                 .filter(family_filter)
                 .filter(denom_filter)
-                .select_related("denomination", "location")
-                .only("location__city", "location__state", "denomination__name")
+                .select_related(
+                    "denomination",
+                    "census_record__populated_place",
+                )
             )
 
             for body in denom_query:
-                if body.denomination:
-                    city_key = (body.location.city, body.location.state)
-                    denom_by_city[city_key].add(body.denomination.name)
+                if body.denomination and body.census_record:
+                    place_pk = body.census_record.populated_place_id
+                    denom_by_place[place_pk].add(body.denomination.name)
 
             # Format response
             response_data = []
             for item in city_aggregates:
-                city_key = (item["location__city"], item["location__state"])
-                denoms = sorted(list(denom_by_city.get(city_key, set())))
+                place_pk = item["census_record__populated_place"]
+                denoms = sorted(list(denom_by_place.get(place_pk, set())))
 
                 response_data.append(
                     {
-                        "city": item["location__city"],
-                        "state": item["location__state"],
-                        "county": item["location__county"],
-                        "lat": float(item["location__lat"])
-                        if item["location__lat"]
+                        "city": item["census_record__populated_place__name"],
+                        "state": item["census_record__county__state__code"],
+                        "county": item["census_record__county__name"],
+                        "lat": float(item["census_record__populated_place__lat"])
+                        if item["census_record__populated_place__lat"]
                         else None,
-                        "lon": float(item["location__lon"])
-                        if item["location__lon"]
+                        "lon": float(item["census_record__populated_place__lon"])
+                        if item["census_record__populated_place__lon"]
                         else None,
                         "total_members": item["total_members"] or 0,
                         "congregations": item["congregations"],

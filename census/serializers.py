@@ -1,7 +1,5 @@
 from rest_framework import serializers
 
-from location.models import Location
-
 from .models import Denomination, Membership, ReligiousBody
 
 
@@ -35,13 +33,13 @@ class MapMarkerSerializer(serializers.ModelSerializer):
         ]
 
     def get_lat(self, obj):
-        if obj.location:
-            return obj.location.lat
+        if obj.census_record and obj.census_record.populated_place:
+            return obj.census_record.populated_place.lat
         return None
 
     def get_lon(self, obj):
-        if obj.location:
-            return obj.location.lon
+        if obj.census_record and obj.census_record.populated_place:
+            return obj.census_record.populated_place.lon
         return None
 
     def get_family(self, obj):
@@ -102,13 +100,13 @@ class DemographicsMapSerializer(serializers.ModelSerializer):
         ]
 
     def get_lat(self, obj):
-        if obj.location:
-            return obj.location.lat
+        if obj.census_record and obj.census_record.populated_place:
+            return obj.census_record.populated_place.lat
         return None
 
     def get_lon(self, obj):
-        if obj.location:
-            return obj.location.lon
+        if obj.census_record and obj.census_record.populated_place:
+            return obj.census_record.populated_place.lon
         return None
 
     def get_family(self, obj):
@@ -165,26 +163,6 @@ class DemographicsMapSerializer(serializers.ModelSerializer):
         return membership.weekday_num_scholars if membership else 0
 
 
-class LocationSerializer(serializers.ModelSerializer):
-    # Direct mapping to string fields in the Location model
-    state_name = serializers.CharField(source="state", read_only=True)
-    county_name = serializers.CharField(source="county", read_only=True)
-    city_name = serializers.CharField(source="city", read_only=True)
-
-    class Meta:
-        model = Location
-        fields = [
-            "id",
-            "place_id",
-            "lat",
-            "lon",
-            "map_name",
-            "state_name",
-            "county_name",
-            "city_name",
-        ]
-
-
 class DenominationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Denomination
@@ -216,7 +194,7 @@ class MembershipSerializer(serializers.ModelSerializer):
 
 
 class ReligiousBodySerializer(serializers.ModelSerializer):
-    location_details = LocationSerializer(source="location", read_only=True)
+    location_details = serializers.SerializerMethodField()
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
     pastors = serializers.SerializerMethodField()
@@ -246,6 +224,21 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "total_expenditures",
             "pastors",
         ]
+
+    def get_location_details(self, obj):
+        if obj.census_record:
+            pp = obj.census_record.populated_place
+            county = obj.census_record.county
+            return {
+                "lat": pp.lat if pp else None,
+                "lon": pp.lon if pp else None,
+                "city_name": pp.name if pp else None,
+                "map_name": pp.name if pp else None,
+                "place_id": pp.place_id if pp else None,
+                "county_name": county.name if county else None,
+                "state_name": county.state.code if county and county.state else None,
+            }
+        return None
 
     def get_membership_details(self, obj):
         try:
