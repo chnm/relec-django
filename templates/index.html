@@ -307,9 +307,9 @@
                                 {% for county in top_counties %}
                                     <tr class="hover:bg-gray-50 transition-colors">
                                         <td class="px-4 py-3">
-                                            <a href="{% url 'census_browser' %}?location={{ county.location__state }}&county={{ county.location__county }}"
+                                            <a href="{% url 'census_browser' %}?location={{ county.county__state__code }}&county={{ county.county__name }}"
                                                class="text-religious-primary hover:text-primary-700 font-medium">
-                                                {{ county.location__county }}, {{ county.location__state }}
+                                                {{ county.county__name }}, {{ county.county__state__code }}
                                             </a>
                                         </td>
                                         <td class="px-4 py-3 text-right font-medium">{{ county.schedule_count }}</td>

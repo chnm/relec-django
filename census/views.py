@@ -77,6 +77,7 @@ def census_browser_view(request, state_code=None, county_name=None):
     county_filter = (
         unquote(county_name) if county_name else request.GET.get("county", "")
     )
+    place_filter = request.GET.get("place", "")
     has_membership = request.GET.get("has_membership", "")
     urban_rural = request.GET.get("urban_rural", "")
 
@@ -127,6 +128,9 @@ def census_browser_view(request, state_code=None, county_name=None):
     if county_filter:
         queryset = queryset.filter(county__name__icontains=county_filter)
 
+    if place_filter:
+        queryset = queryset.filter(populated_place__name__iexact=place_filter)
+
     if has_membership == "yes":
         queryset = queryset.filter(membership_details__isnull=False).distinct()
     elif has_membership == "no":
@@ -167,6 +171,26 @@ def census_browser_view(request, state_code=None, county_name=None):
             counties_by_state[state] = []
         counties_by_state[state].append(county)
 
+    # Get populated places grouped by state+county for JavaScript
+    places_by_county = {}
+    place_data = (
+        CensusSchedule.objects.filter(
+            populated_place__isnull=False, county__isnull=False
+        )
+        .values("county__state__code", "county__name", "populated_place__name")
+        .distinct()
+        .order_by("county__state__code", "county__name", "populated_place__name")
+    )
+    for item in place_data:
+        state = item["county__state__code"]
+        county = item["county__name"]
+        place = item["populated_place__name"]
+        if state not in places_by_county:
+            places_by_county[state] = {}
+        if county not in places_by_county[state]:
+            places_by_county[state][county] = []
+        places_by_county[state][county].append(place)
+
     # Get denominations grouped by family for JavaScript
     denominations_by_family = {}
     for denom in denominations:
@@ -186,12 +210,14 @@ def census_browser_view(request, state_code=None, county_name=None):
         "census_families": census_families,
         "states": states,
         "counties_by_state_json": json.dumps(counties_by_state),
+        "places_by_county_json": json.dumps(places_by_county),
         "denominations_by_family_json": json.dumps(denominations_by_family),
         "search": search,
         "denomination_filter": denomination_filter,
         "family_filter": family_filter,
         "location_filter": state_filter,
         "county_filter": county_filter,
+        "place_filter": place_filter,
         "current_state": current_state,
         "has_membership": has_membership,
         "urban_rural": urban_rural,

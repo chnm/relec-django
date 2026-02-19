@@ -61,14 +61,16 @@ class ReligiousBodyTable(tables.Table):
 
     def render_location(self, record):
         """Render location as city, county, state"""
-        if record.location:
+        if record.census_record:
             parts = []
-            if record.location.city:
-                parts.append(record.location.city)
-            if record.location.county:
-                parts.append(record.location.county)
-            if record.location.state:
-                parts.append(record.location.state)
+            pp = record.census_record.populated_place
+            county = record.census_record.county
+            if pp:
+                parts.append(pp.name)
+            if county:
+                parts.append(county.name)
+                if county.state:
+                    parts.append(county.state.code)
             return ", ".join(parts) if parts else "—"
         return mark_safe('<span class="text-gray-400">No location</span>')
 

@@ -13,7 +13,7 @@ import os
 import django
 
 from census.models import CensusSchedule, ReligiousBody
-from location.models import Location
+from location.models import County, PopulatedPlace
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
@@ -26,36 +26,53 @@ def check_county_data(state_code, county_name):
     print(f"Data Check: {county_name} County, {state_code}")
     print(f"{'=' * 60}\n")
 
-    # Check if locations exist
-    locations = Location.objects.filter(state=state_code, county=county_name)
-    location_count = locations.count()
+    # Check if county exists in the hierarchy
+    counties = County.objects.filter(
+        state__code=state_code, name__icontains=county_name
+    )
+    county_count = counties.count()
 
-    print(f"Location Records: {location_count}")
-    if location_count > 0:
-        cities = list(locations.values_list("city", flat=True).distinct()[:10])
-        print(f"   Example cities: {', '.join(cities)}")
-        if location_count > 10:
-            print(f"   ... and {location_count - 10} more")
+    print(f"County Records: {county_count}")
+    if county_count > 0:
+        places = list(
+            PopulatedPlace.objects.filter(county__in=counties)
+            .values_list("name", flat=True)
+            .distinct()[:10]
+        )
+        print(f"   Example cities: {', '.join(places)}")
+        if county_count > 10:
+            print(f"   ... and {county_count - 10} more")
     else:
-        print("   No location data found for this county")
+        print("   No county data found for this county")
         return
 
     print()
 
     # Check religious bodies
     bodies = ReligiousBody.objects.filter(
-        location__state=state_code, location__county=county_name
+        census_record__county__state__code=state_code,
+        census_record__county__name__icontains=county_name,
     )
     body_count = bodies.count()
 
     print(f"Religious Bodies: {body_count}")
     if body_count > 0:
         print("   Sample records:")
-        for body in bodies[:5]:
+        for body in bodies.select_related(
+            "denomination",
+            "census_record__populated_place",
+            "census_record__county__state",
+        )[:5]:
             denom = body.denomination.name if body.denomination else "Unknown"
+            pp = (
+                body.census_record.populated_place
+                if body.census_record
+                else None
+            )
+            county = body.census_record.county if body.census_record else None
             loc = (
-                f"{body.location.city}, {body.location.state}"
-                if body.location
+                f"{pp.name}, {county.state.code}"
+                if pp and county and county.state
                 else "No location"
             )
             print(f"   - {body.name or 'Unnamed'} ({denom}) at {loc}")
@@ -68,8 +85,8 @@ def check_county_data(state_code, county_name):
 
     # Check census schedules
     schedules = CensusSchedule.objects.filter(
-        church_details__location__state=state_code,
-        church_details__location__county=county_name,
+        county__state__code=state_code,
+        county__name__icontains=county_name,
     ).distinct()
     schedule_count = schedules.count()
 
@@ -81,29 +98,19 @@ def check_county_data(state_code, county_name):
 
     print()
 
-    # Summary
-    # print(f"{'='*60}")
-    # if body_count > 0:
-    #     print("VERDICT: County has complete data")
-    # elif location_count > 0:
-    #     print("VERDICT: County locations exist but NO religious body data")
-    #     print("   This is likely a data gap in the original transcription.")
-    # else:
-    #     print("VERDICT: County not found in database")
-    # print(f"{'='*60}\n")
-
     # Comparison with nearby counties
-    if body_count == 0 and location_count > 0:
+    if body_count == 0 and county_count > 0:
         print("Checking nearby counties for comparison:\n")
         nearby_counties = (
-            Location.objects.filter(state=state_code)
-            .values_list("county", flat=True)
+            County.objects.filter(state__code=state_code)
+            .values_list("name", flat=True)
             .distinct()[:5]
         )
         for nearby in nearby_counties:
             if nearby != county_name:
                 nearby_count = ReligiousBody.objects.filter(
-                    location__state=state_code, location__county=nearby
+                    census_record__county__state__code=state_code,
+                    census_record__county__name=nearby,
                 ).count()
                 status = "✓" if nearby_count > 0 else "✗"
                 print(f"   {status} {nearby} County: {nearby_count} religious bodies")

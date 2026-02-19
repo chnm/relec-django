@@ -13,7 +13,7 @@ from census.models import (
     Membership,
     ReligiousBody,
 )
-from location.models import Location
+from location.models import PopulatedPlace
 
 # Constants for special values in the data
 MISSING = "MISSING"
@@ -290,7 +290,7 @@ class Command(BaseCommand):
                     )
                 )
 
-        # Find location by place_id if it exists
+        # Find populated place by place_id and link to census schedule
         if row.get("(d, e, f) Location") and row.get("(d, e, f) Location") not in [
             MISSING,
             ILLEGIBLE,
@@ -298,13 +298,17 @@ class Command(BaseCommand):
             NULL,
             None,
         ]:
-            try:
-                location = Location.objects.get(place_id=row["(d, e, f) Location"])
-                religious_body.location = location
-            except Location.DoesNotExist:
+            place = PopulatedPlace.objects.filter(
+                place_id=row["(d, e, f) Location"]
+            ).select_related("county").first()
+            if place:
+                census_schedule.populated_place = place
+                census_schedule.county = place.county
+                census_schedule.save(update_fields=["populated_place", "county"])
+            else:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"Location not found: {row.get('(d, e, f) Location')}"
+                        f"PopulatedPlace not found for place_id: {row.get('(d, e, f) Location')}"
                     )
                 )
 

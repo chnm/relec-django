@@ -28,19 +28,19 @@ def index(request):
         .order_by("-schedule_count")[:25]
     )
 
-    # Get top 25 counties by schedule count (using location data)
+    # Get top 25 counties by schedule count
     top_counties = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .values("location__county", "location__state")
-        .annotate(schedule_count=Count("census_record"))
+        CensusSchedule.objects.filter(county__isnull=False)
+        .values("county__name", "county__state__code")
+        .annotate(schedule_count=Count("id"))
         .filter(schedule_count__gt=0)
         .order_by("-schedule_count")[:25]
     )
 
     # Get total unique counties
     total_counties = (
-        ReligiousBody.objects.filter(location__isnull=False)
-        .values("location__county", "location__state")
+        CensusSchedule.objects.filter(county__isnull=False)
+        .values("county", "county__state")
         .distinct()
         .count()
     )

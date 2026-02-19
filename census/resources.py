@@ -70,28 +70,22 @@ class CensusScheduleResource(resources.ModelResource):
         return "; ".join(names) if names else ""
 
     def dehydrate_location_city(self, schedule):
-        """Get cities from all related religious bodies."""
-        cities = []
-        for rb in schedule.church_details.all():
-            if rb.location and rb.location.city:
-                cities.append(rb.location.city)
-        return "; ".join(set(cities)) if cities else ""
+        """Get city from the schedule's populated place."""
+        if schedule.populated_place:
+            return schedule.populated_place.name
+        return ""
 
     def dehydrate_location_county(self, schedule):
-        """Get counties from all related religious bodies."""
-        counties = []
-        for rb in schedule.church_details.all():
-            if rb.location and rb.location.county:
-                counties.append(rb.location.county)
-        return "; ".join(set(counties)) if counties else ""
+        """Get county from the schedule's county."""
+        if schedule.county:
+            return schedule.county.name
+        return ""
 
     def dehydrate_location_state(self, schedule):
-        """Get states from all related religious bodies."""
-        states = []
-        for rb in schedule.church_details.all():
-            if rb.location and rb.location.state:
-                states.append(rb.location.state)
-        return "; ".join(set(states)) if states else ""
+        """Get state from the schedule's county."""
+        if schedule.county and schedule.county.state:
+            return schedule.county.state.code
+        return ""
 
     def dehydrate_total_members(self, schedule):
         """Get total members from membership details."""
