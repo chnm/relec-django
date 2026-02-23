@@ -11,6 +11,7 @@ backups/
 hugo_site/
 .idea/
 census_schedules.json
+reports/
 
 # Poetry to UV migration backups
 .venv.poetry.backup/
