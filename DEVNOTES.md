@@ -1,4 +1,121 @@
 
+## Data Reconciliation & Production Maintenance
+
+### Overview
+
+The `data_reconciliation` management command compares data across three systems:
+- **Omeka API** — source of record for census schedules
+- **Django DB** — transcription management system (local or production)
+- **data.chnm.org** — published public API
+
+Results are written to a timestamped plain-text file in `reports/` (git-ignored).
+
+---
+
+### Running a Full Reconciliation (Local)
+
+The Omeka + data.chnm.org crawl takes ~107 minutes. Always use `--save-cache`
+on the first run so re-runs are instant.
+
+**On your local machine:**
+```bash
+# First run — crawls Omeka (~107 min) and saves cache
+uv run python manage.py data_reconciliation \
+  --omeka-delay 0.1 \
+  --save-cache reports/omeka_chnm_cache.json
+
+# Subsequent runs — uses cache, completes in seconds
+uv run python manage.py data_reconciliation \
+  --load-cache reports/omeka_chnm_cache.json
+```
+
+---
+
+### Running a Reconciliation Against Production
+
+The cache file contains only Omeka + data.chnm.org data (not Django DB data),
+so it's safe to reuse across environments.
+
+**Step 1 — Copy cache to production server (run on your local machine):**
+```bash
+scp reports/omeka_chnm_cache.json moby@<ip>:/tmp/omeka_chnm_cache.json
+```
+
+**Step 2 — Copy cache into the Docker container (run on the production server):**
+```bash
+docker compose -f /opt/docker/dev.database.religiousecologies.org/relec-django.git/docker-compose.yml \
+  cp /tmp/omeka_chnm_cache.json app:/app/reports/omeka_chnm_cache.json
+```
+
+**Step 3 — Run the reconciliation inside the container (run on the production server):**
+```bash
+docker compose -f /opt/docker/dev.database.religiousecologies.org/relec-django.git/docker-compose.yml \
+  exec app uv run python manage.py data_reconciliation \
+  --load-cache reports/omeka_chnm_cache.json
+```
+
+**Step 4 — Copy the report back to your local machine:**
+
+First, copy out of the container to the server host (run on the production server):
+```bash
+docker compose -f /opt/docker/dev.database.religiousecologies.org/relec-django.git/docker-compose.yml \
+  cp app:/app/reports/<report_filename>.txt /tmp/
+```
+
+Then copy from the server to your local machine (run on your local machine):
+```bash
+scp moby@<ip>:/tmp/<report_filename>.txt reports/reconciliation_production.txt
+```
+
+The report filename will be `reconciliation_YYYYMMDD_HHMMSS.txt` — check with
+`ls reports/` inside the container if you're unsure of the name.
+
+---
+
+### Fixing Missing County Links
+
+After running a reconciliation, if `Django schedules missing county` is high,
+run the county linking command. It uses the same cache file — no Omeka crawl needed.
+
+**Dry run first (local or production):**
+```bash
+uv run python manage.py link_counties_from_omeka \
+  --load-cache reports/omeka_chnm_cache.json \
+  --only-missing \
+  --dry-run
+```
+
+**Apply the fix:**
+```bash
+uv run python manage.py link_counties_from_omeka \
+  --load-cache reports/omeka_chnm_cache.json \
+  --only-missing
+```
+
+On production, wrap with `docker compose exec app` as above.
+
+**Note:** ~425 schedules have misspelled AHCB county IDs in Omeka (e.g.
+`als_escambria`, `kys_macgoffin`) and cannot be auto-linked. These require
+manual correction in Omeka or a typo-mapping fix.
+
+---
+
+### Comparing Local vs Production Reports
+
+```bash
+diff \
+  <(grep -v "Generated:\|Completed:\|Total time" reports/reconciliation_<local>.txt) \
+  <(grep -v "Generated:\|Completed:\|Total time" reports/reconciliation_production.txt)
+```
+
+Key things to watch for in the diff:
+- **Schedule counts** — any delta means an import ran on one but not the other
+- **County FK coverage** — should match after running `link_counties_from_omeka` on both
+- **Denomination alignment** — should be identical (reference data)
+- **Per-state schedule counts** — small drift (1–30) is normal; large gaps warrant investigation
+
+---
+
 ## Development Workflow
 
 ### Essential Commands
