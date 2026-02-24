@@ -334,6 +334,11 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/religiousbody/",
                     },
                     {
+                        "title": "Denominations",
+                        "icon": "category",
+                        "link": lambda request: "/admin/census/denomination/",
+                    },
+                    {
                         "title": "Membership Data",
                         "icon": "people",
                         "link": lambda request: "/admin/census/membership/",
@@ -350,11 +355,6 @@ UNFOLD = {
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    {
-                        "title": "Denominations",
-                        "icon": "category",
-                        "link": lambda request: "/admin/census/denomination/",
-                    },
                     {
                         "title": "States",
                         "icon": "flag",
