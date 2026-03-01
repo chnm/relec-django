@@ -11,16 +11,16 @@ packages = [{include = "religious_ecologies"}]
 python = "^3.12"
 python-dotenv = "^1.2.1"
 daphne = "^4.2.1"
-whitenoise = "^6.11.0"
-django = "^5.2.8"
-django-environ = "^0.12.0"
-django-allauth = {version="^65.13.0", extras=["github"]}
+whitenoise = "^6.12.0"
+django = "^6.0.2"
+django-environ = "^0.13.0"
+django-allauth = {version="^65.14.3", extras=["github"]}
 
-django-tailwind = "^4.4.1"
+django-tailwind = "^4.4.2"
 django-storages = "^1.14.6"
-boto3 = "^1.40.74"
-django-unfold = "^0.71.0"
-django-simple-history = "^3.10.1"
+boto3 = "^1.42.59"
+django-unfold = "^0.81.0"
+django-simple-history = "^3.11.0"
 requests = "^2.32.5"
 django-dbml = "^0.10.1"
 djangorestframework = "^3.16.1"
@@ -28,12 +28,12 @@ django-filter = "^25.2"
 psycopg2 = "^2.9.11"
 
 [tool.poetry.group.dev.dependencies]
-black = "^25.11.0"
+black = "^26.1.0"
 djhtml = "^3.0.10"
-pre-commit = "^4.4.0"
-django-debug-toolbar = "^6.1.0"
-pytest-django = "^4.11.1"
-pylint-django = "^2.6.1"
+pre-commit = "^4.5.1"
+django-debug-toolbar = "^6.2.0"
+pytest-django = "^4.12.0"
+pylint-django = "^2.7.0"
 
 # [tool.ruff]
 # # Use PEP8 line-length
