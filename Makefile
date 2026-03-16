@@ -106,6 +106,10 @@ import-images:
 fetch-images:
 	uv run python manage.py fetch_omeka_images
 
+# Import denomination census report PDFs from Omeka
+import-denom-pdfs:
+	uv run python manage.py import_denomination_pdfs
+
 # Setup user groups and permissions for transcription workflow
 setup-groups:
 	uv run python manage.py setup_transcription_groups
@@ -184,4 +188,4 @@ help:
 	@echo "  collectstatic   - Collect static files"
 	@echo "  help            - Show this help message"
 
-.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images setup-groups import-all fresh-start build-css watch-css superuser collectstatic help
+.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic help

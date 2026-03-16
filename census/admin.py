@@ -19,7 +19,14 @@ from urllib3.util.retry import Retry
 
 from location.models import PopulatedPlace
 
-from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+from .models import (
+    CensusSchedule,
+    Clergy,
+    Denomination,
+    DenominationCensusReport,
+    Membership,
+    ReligiousBody,
+)
 from .resources import CensusScheduleResource
 
 
@@ -321,6 +328,19 @@ def sync_denominations(modeladmin, request, queryset):
         error_log.close()
 
 
+class DenominationCensusReportInline(StackedInline):
+    model = DenominationCensusReport
+    extra = 0
+    readonly_fields = ["omeka_item_id", "omeka_media_id", "original_filename"]
+    fields = [
+        "title",
+        "pdf_file",
+        "original_filename",
+        "omeka_item_id",
+        "omeka_media_id",
+    ]
+
+
 @admin.register(Denomination)
 class DenominationAdmin(ModelAdmin):
     list_display = ["name", "denomination_id", "family_census", "family_relec"]
@@ -328,6 +348,7 @@ class DenominationAdmin(ModelAdmin):
     ordering = ["name"]
     list_filter = ["family_census", "family_relec"]
     actions = [sync_denominations]
+    inlines = [DenominationCensusReportInline]
 
     # Add history view
     history_list_display = ["changed_fields"]
