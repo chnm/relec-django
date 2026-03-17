@@ -2,10 +2,15 @@
 import requests
 from django.db.models import IntegerField, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+# Cache TTL: 1 hour (data changes infrequently)
+API_CACHE_TTL = 60 * 60
 
 from .filters import ReligiousBodyFilter
 from .models import Denomination, ReligiousBody
@@ -17,6 +22,7 @@ from .serializers import (
 )
 
 
+@method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
 class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Denomination.objects.all().order_by("name")
     serializer_class = DenominationSerializer
@@ -117,6 +123,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+@method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
 class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ReligiousBody.objects.all().select_related(
         "denomination",
@@ -196,8 +203,9 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     total_members=Value(0, output_field=IntegerField())
                 )
 
-            # Add a reasonable limit to prevent overloading
-            queryset = queryset[:2000]
+            # Apply optional limit
+            limit = min(int(request.query_params.get("limit", 5000)), 5000)
+            queryset = queryset[:limit]
 
             # Use the lightweight serializer
             serializer = MapMarkerSerializer(queryset, many=True)
@@ -216,7 +224,17 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def demographics_data(self, request):
-        """Enhanced geodata endpoint for demographics map display with membership data"""
+        """
+        Demographics endpoint with membership data for map display.
+
+        Query Parameters:
+            - family_relec: Filter by RelEc denomination family
+            - family_census: Filter by census denomination family
+            - denomination: Filter by denomination ID
+            - bounds: Bounding box as "south,west,north,east"
+            - transcription_status: Filter by status (default: "approved")
+            - limit: Maximum number of records (default: 5000, max: 5000)
+        """
         try:
             # Start with base queryset - only select what we need for demographics
             queryset = (
@@ -259,8 +277,8 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                         census_record__populated_place__lon__gte=west,
                         census_record__populated_place__lon__lte=east,
                     )
-                except Exception as e:
-                    print(f"Error applying bounds filter: {e}")
+                except (ValueError, TypeError):
+                    pass
 
             try:
                 # Try to annotate total_members, preferring the recorded total if available
@@ -294,11 +312,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     census_record__transcription_status=transcription_status
                 )
 
+            # Apply optional limit
+            limit = min(int(request.query_params.get("limit", 5000)), 5000)
+            queryset = queryset[:limit]
+
             # Use the demographics serializer
             serializer = DemographicsMapSerializer(queryset, many=True)
             data = serializer.data
 
-            print(f"Returning {len(data)} demographics map markers")
             return Response(data)
 
         except Exception as e:
@@ -686,105 +707,112 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def city_membership(self, request):
         """
-        City-level membership aggregation endpoint.
-        Matches the external data.chnm.org/relcensus/city-membership API structure.
+        Per-congregation membership endpoint with full demographic breakdown.
 
-        Aggregates membership data by city (Location), returning total members
-        per city with optional filtering by denomination or family.
+        Returns individual congregation records with their complete membership
+        data as recorded in the census, along with location and denomination info.
 
         Query Parameters:
-            - year: Year filter (currently only 1926 is supported)
             - denomination: Filter by specific denomination name
             - denominationFamily: Filter by family_relec value
+            - family_census: Filter by census denomination family
+            - bounds: Bounding box as "south,west,north,east"
+            - limit: Maximum number of records (default: 2000)
 
-        Returns: Array of objects with city name, state, coordinates, and total membership
+        Returns: Array of congregation objects with full membership breakdown
         """
         try:
-            from collections import defaultdict
+            queryset = (
+                ReligiousBody.objects.filter(
+                    census_record__populated_place__isnull=False,
+                    census_record__populated_place__lat__isnull=False,
+                    census_record__populated_place__lon__isnull=False,
+                )
+                .select_related(
+                    "census_record__populated_place",
+                    "census_record__county__state",
+                    "denomination",
+                )
+                .prefetch_related("membership")
+            )
 
-            from django.db.models import Count, Q, Sum
-
-            # Filter by denomination family if provided
-            family_filter = Q()
+            # Filter by denomination family (relec)
             if "denominationFamily" in request.query_params:
                 family = request.query_params.get("denominationFamily")
-                family_filter = Q(denomination__family_relec=family)
+                queryset = queryset.filter(denomination__family_relec=family)
 
-            # Filter by denomination name if provided
-            denom_filter = Q()
+            # Filter by denomination family (census)
+            if "family_census" in request.query_params:
+                family_census = request.query_params.get("family_census")
+                queryset = queryset.filter(
+                    denomination__family_census=family_census
+                )
+
+            # Filter by denomination name
             if "denomination" in request.query_params:
                 denom_name = request.query_params.get("denomination")
-                denom_filter = Q(denomination__name=denom_name)
+                queryset = queryset.filter(denomination__name=denom_name)
 
-            # Use database aggregation for better performance
-            # Group by populated place and aggregate
-            city_aggregates = (
-                ReligiousBody.objects.filter(
-                    census_record__populated_place__isnull=False,
-                    census_record__populated_place__lat__isnull=False,
-                    census_record__populated_place__lon__isnull=False,
-                )
-                .filter(family_filter)
-                .filter(denom_filter)
-                .values(
-                    "census_record__populated_place",
-                    "census_record__populated_place__name",
-                    "census_record__county__state__code",
-                    "census_record__county__name",
-                    "census_record__populated_place__lat",
-                    "census_record__populated_place__lon",
-                )
-                .annotate(
-                    congregations=Count("id"),
-                    total_members=Sum("membership__total_members_by_sex"),
-                )
-                .order_by("-total_members")
-            )
+            # Bounds filtering
+            if "bounds" in request.query_params:
+                bounds = request.query_params.get("bounds")
+                try:
+                    south, west, north, east = map(float, bounds.split(","))
+                    queryset = queryset.filter(
+                        census_record__populated_place__lat__gte=south,
+                        census_record__populated_place__lat__lte=north,
+                        census_record__populated_place__lon__gte=west,
+                        census_record__populated_place__lon__lte=east,
+                    )
+                except (ValueError, TypeError):
+                    pass
 
-            # Get denomination names per place (separate query for efficiency)
-            denom_by_place = defaultdict(set)
-            denom_query = (
-                ReligiousBody.objects.filter(
-                    census_record__populated_place__isnull=False,
-                    census_record__populated_place__lat__isnull=False,
-                    census_record__populated_place__lon__isnull=False,
-                )
-                .filter(family_filter)
-                .filter(denom_filter)
-                .select_related(
-                    "denomination",
-                    "census_record__populated_place",
-                )
-            )
+            limit = min(int(request.query_params.get("limit", 2000)), 5000)
+            queryset = queryset[:limit]
 
-            for body in denom_query:
-                if body.denomination and body.census_record:
-                    place_pk = body.census_record.populated_place_id
-                    denom_by_place[place_pk].add(body.denomination.name)
-
-            # Format response
             response_data = []
-            for item in city_aggregates:
-                place_pk = item["census_record__populated_place"]
-                denoms = sorted(list(denom_by_place.get(place_pk, set())))
+            for body in queryset:
+                pp = body.census_record.populated_place if body.census_record else None
+                county = body.census_record.county if body.census_record else None
+                membership = body.membership.first()
 
-                response_data.append(
-                    {
-                        "city": item["census_record__populated_place__name"],
-                        "state": item["census_record__county__state__code"],
-                        "county": item["census_record__county__name"],
-                        "lat": float(item["census_record__populated_place__lat"])
-                        if item["census_record__populated_place__lat"]
-                        else None,
-                        "lon": float(item["census_record__populated_place__lon"])
-                        if item["census_record__populated_place__lon"]
-                        else None,
-                        "total_members": item["total_members"] or 0,
-                        "congregations": item["congregations"],
-                        "denominations_count": len(denoms),
-                        "denominations": denoms,
+                record = {
+                    "id": body.id,
+                    "name": body.name,
+                    "city": pp.name if pp else None,
+                    "county": county.name if county else None,
+                    "state": county.state.code if county and county.state else None,
+                    "lat": float(pp.lat) if pp and pp.lat else None,
+                    "lon": float(pp.lon) if pp and pp.lon else None,
+                    "denomination": body.denomination.name if body.denomination else None,
+                    "family_census": body.denomination.family_census if body.denomination else None,
+                    "family_relec": body.denomination.family_relec if body.denomination else None,
+                }
+
+                if membership:
+                    record["membership"] = {
+                        "male_members": membership.male_members,
+                        "female_members": membership.female_members,
+                        "total_members_by_sex": membership.total_members_by_sex,
+                        "members_under_13": membership.members_under_13,
+                        "members_13_and_older": membership.members_13_and_older,
+                        "total_members_by_age": membership.total_members_by_age,
+                        "sunday_school_num_officers_teachers": membership.sunday_school_num_officers_teachers,
+                        "sunday_school_num_scholars": membership.sunday_school_num_scholars,
+                        "vbs_num_officers_teachers": membership.vbs_num_officers_teachers,
+                        "vbs_num_scholars": membership.vbs_num_scholars,
+                        "weekday_num_officers_teachers": membership.weekday_num_officers_teachers,
+                        "weekday_num_scholars": membership.weekday_num_scholars,
+                        "parochial_num_administrators": membership.parochial_num_administrators,
+                        "parochial_num_elementary_teachers": membership.parochial_num_elementary_teachers,
+                        "parochial_num_secondary_teachers": membership.parochial_num_secondary_teachers,
+                        "parochial_num_elementary_scholars": membership.parochial_num_elementary_scholars,
+                        "parochial_num_secondary_scholars": membership.parochial_num_secondary_scholars,
                     }
-                )
+                else:
+                    record["membership"] = None
+
+                response_data.append(record)
 
             return Response(response_data)
 
