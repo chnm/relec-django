@@ -33,6 +33,13 @@ class PopulatedPlaceAdmin(ModelAdmin):
     def get_state(self, obj):
         return obj.county.state.code
 
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        county_id = request.GET.get("county_id")
+        if county_id:
+            queryset = queryset.filter(county_id=county_id)
+        return queryset, use_distinct
+
 
 @admin.register(Location)
 class LocationAdmin(ModelAdmin):

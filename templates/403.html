@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Access Denied{% endblock title %}
+{% block content %}
+    <div class="container mx-auto px-4 py-16 text-center">
+        <h1 class="text-4xl font-bold mb-4">Access Denied</h1>
+        <p class="text-lg text-gray-600 mb-8">
+            You don't have permission to view this page.
+            If you think this is a mistake, please contact a project administrator.
+        </p>
+        <a href="/admin/" class="inline-block bg-religious-primary text-white px-6 py-3 rounded hover:opacity-90 transition">
+            Return to Admin
+        </a>
+    </div>
+{% endblock content %}

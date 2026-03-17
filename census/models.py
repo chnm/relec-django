@@ -56,6 +56,40 @@ class Denomination(models.Model):
         return self.name
 
 
+class DenominationCensusReport(models.Model):
+    """
+    PDF census report associated with a denomination, imported from Omeka.
+    """
+
+    denomination = models.ForeignKey(
+        Denomination,
+        on_delete=models.CASCADE,
+        related_name="census_reports",
+    )
+    pdf_file = models.FileField(
+        upload_to="denomination_reports/",
+        verbose_name="Census Report PDF",
+    )
+    title = models.CharField(max_length=255, blank=True)
+    original_filename = models.CharField(max_length=255, blank=True)
+
+    # Omeka tracking
+    omeka_item_id = models.IntegerField(null=True, blank=True)
+    omeka_media_id = models.IntegerField(null=True, blank=True, unique=True)
+
+    # Record keeping
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.title or self.original_filename
+
+    class Meta:
+        verbose_name = "Denomination Census Report"
+        verbose_name_plural = "Denomination Census Reports"
+
+
 class CensusSchedule(models.Model):
     """
     This model serves as the primary record that ties together all related data

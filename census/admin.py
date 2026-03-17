@@ -19,7 +19,14 @@ from urllib3.util.retry import Retry
 
 from location.models import PopulatedPlace
 
-from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+from .models import (
+    CensusSchedule,
+    Clergy,
+    Denomination,
+    DenominationCensusReport,
+    Membership,
+    ReligiousBody,
+)
 from .resources import CensusScheduleResource
 
 
@@ -321,6 +328,19 @@ def sync_denominations(modeladmin, request, queryset):
         error_log.close()
 
 
+class DenominationCensusReportInline(StackedInline):
+    model = DenominationCensusReport
+    extra = 0
+    readonly_fields = ["omeka_item_id", "omeka_media_id", "original_filename"]
+    fields = [
+        "title",
+        "pdf_file",
+        "original_filename",
+        "omeka_item_id",
+        "omeka_media_id",
+    ]
+
+
 @admin.register(Denomination)
 class DenominationAdmin(ModelAdmin):
     list_display = ["name", "denomination_id", "family_census", "family_relec"]
@@ -328,6 +348,7 @@ class DenominationAdmin(ModelAdmin):
     ordering = ["name"]
     list_filter = ["family_census", "family_relec"]
     actions = [sync_denominations]
+    inlines = [DenominationCensusReportInline]
 
     # Add history view
     history_list_display = ["changed_fields"]
@@ -557,6 +578,10 @@ class CensusScheduleAdmin(ModelAdmin):
         unassign_reviewer,
         bulk_assign_users,
     ]
+    ordering = ["schedule_title"]
+
+    class Media:
+        js = ["js/admin_cascade_populated_place.js"]
 
     def get_urls(self):
         """Add custom URLs for data analysis"""
@@ -871,6 +896,23 @@ class CensusScheduleAdmin(ModelAdmin):
     autocomplete_fields = ["county", "populated_place", "schedule_denomination"]
     inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
 
+    def get_fieldsets(self, request, obj=None):
+        """Restrict Project Management fields for transcribers."""
+        fieldsets = super().get_fieldsets(request, obj)
+        if (
+            request.user.groups.filter(name="Transcribers").exists()
+            and not request.user.is_superuser
+        ):
+            return [
+                (name, opts) if name != "Project Management"
+                else (
+                    name,
+                    {**opts, "fields": ["transcription_status", "transcription_notes"]},
+                )
+                for name, opts in fieldsets
+            ]
+        return fieldsets
+
     def location_export_view(self, request):
         """View to filter and export census schedules by location"""
         # Get all unique populated places with census schedules
@@ -981,7 +1023,7 @@ class CensusScheduleAdmin(ModelAdmin):
 
     transcription_status_display.short_description = "Status"
 
-    @admin.display(description="Location")
+    @admin.display(description="County")
     def get_location_display(self, obj):
         """Display location from county/state hierarchy"""
         if obj.populated_place:
@@ -1028,7 +1070,9 @@ class CensusScheduleAdmin(ModelAdmin):
         return qs
 
     def has_delete_permission(self, request, obj=None):
-        """Students cannot delete records"""
+        """Hide delete button on change form; only superusers can delete."""
+        if obj is not None and not request.user.is_superuser:
+            return False
         if request.user.groups.filter(name="Transcribers").exists():
             return False
         return super().has_delete_permission(request, obj)
