@@ -9,6 +9,18 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .api-docs-sidebar {
+            flex: 0 0 250px;
+            position: relative;
+        }
+
+        .api-docs-content {
+            flex: 1;
+            min-width: 0;
         }
 
         .api-section {
@@ -123,14 +135,24 @@
             padding: 0;
         }
 
+        .example-links {
+            margin-top: 1rem;
+        }
+
+        .example-links h5 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
         .example-link {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             color: #0060b1;
             text-decoration: none;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
         }
 
         .example-link:hover {
@@ -142,7 +164,8 @@
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             padding: 1.5rem;
-            margin-bottom: 2rem;
+            position: sticky;
+            top: 2rem;
         }
 
         .toc h3 {
@@ -212,27 +235,38 @@
             color: #64748b;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
+        .back-to-top {
+            display: block;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+            color: #0060b1;
+            text-decoration: none;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
 
-        .badge-info {
-            background: #dbeafe;
-            color: #1e40af;
+        .back-to-top.visible {
+            opacity: 1;
         }
 
-        .badge-warning {
-            background: #fef3c7;
-            color: #92400e;
+        .back-to-top:hover {
+            text-decoration: underline;
         }
 
         @media (max-width: 768px) {
             .api-docs {
                 padding: 1rem;
+                flex-direction: column;
+            }
+
+            .api-docs-sidebar {
+                flex: none;
+            }
+
+            .toc {
+                position: static;
             }
 
             .endpoint-header {
@@ -250,47 +284,29 @@
 
 {% block content %}
     <div class="api-docs">
+    <!-- Sidebar TOC -->
+        <aside class="api-docs-sidebar">
+            <nav class="toc">
+                <h3>Contents</h3>
+                <ul>
+                    <li><a href="#getting-started">Getting Started</a></li>
+                    <li><a href="#denominations">Denominations</a></li>
+                    <li><a href="#religious-bodies">Religious Bodies (Congregations)</a></li>
+                    <li><a href="#geojson">GeoJSON Endpoints</a></li>
+                    <li><a href="#aggregations">Aggregation Endpoints</a></li>
+                    <li><a href="#usage-tips">Usage Tips</a></li>
+                </ul>
+                <a href="#top" class="back-to-top" id="back-to-top">&uarr; Back to top</a>
+            </nav>
+        </aside>
+
+    <!-- Main Content -->
+        <div class="api-docs-content">
     <!-- Header -->
-        <header class="mb-8">
+        <header id="top" class="mb-8">
             <h1 class="text-4xl font-heading font-bold text-content-primary mb-4">API Documentation</h1>
-            <p class="text-lg text-content-secondary">
-                Access the 1926 U.S. Census of Religious Bodies data through our REST API.
-                All endpoints return JSON and support various filtering options.
-            </p>
         </header>
 
-    <!-- Live Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{{ total_denominations }}</div>
-                <div class="stat-label">Denominations</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ total_congregations|default:"0" }}</div>
-                <div class="stat-label">Congregations</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ total_states }}</div>
-                <div class="stat-label">States</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ total_counties }}</div>
-                <div class="stat-label">Counties</div>
-            </div>
-        </div>
-
-    <!-- Table of Contents -->
-        <nav class="toc">
-            <h3>Contents</h3>
-            <ul>
-                <li><a href="#getting-started">Getting Started</a></li>
-                <li><a href="#denominations">Denominations</a></li>
-                <li><a href="#religious-bodies">Religious Bodies (Congregations)</a></li>
-                <li><a href="#geojson">GeoJSON Endpoints</a></li>
-                <li><a href="#aggregations">Aggregation Endpoints</a></li>
-                <li><a href="#usage-tips">Usage Tips</a></li>
-            </ul>
-        </nav>
 
     <!-- Getting Started -->
         <section id="getting-started" class="api-section">
@@ -369,12 +385,12 @@
                         </tbody>
                     </table>
 
-                    <a href="{{ api_base_url }}denominations/" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}denominations/
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/" target="_blank" class="example-link">All denominations</a><br>
+                        <a href="{{ api_base_url }}denominations/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
+                        <a href="{{ api_base_url }}denominations/?search=Methodist" target="_blank" class="example-link">Search for "Methodist"</a>
+                    </div>
                 </div>
             </div>
 
@@ -402,12 +418,10 @@
                         </div>
                     </div>
 
-                    <a href="{{ api_base_url }}denominations/families/" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}denominations/families/
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/families/" target="_blank" class="example-link">All families</a>
+                    </div>
                 </div>
             </div>
 
@@ -440,12 +454,11 @@
                         </tbody>
                     </table>
 
-                    <a href="{{ api_base_url }}denominations/by_family/?family_census=Baptist+bodies" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}denominations/by_family/?family_census=Baptist+bodies
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Methodist+bodies" target="_blank" class="example-link">Methodist bodies</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -455,7 +468,6 @@
             <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Religious Bodies (Congregations)</h2>
             <p class="text-content-secondary mb-4">
                 Access individual congregation records from the 1926 Census.
-                <span class="badge badge-warning">Note: Use filtered endpoints to avoid large responses</span>
             </p>
 
         <!-- List Religious Bodies -->
@@ -463,7 +475,6 @@
                 <div class="endpoint-header">
                     <span class="http-method http-get">GET</span>
                     <span class="endpoint-path">/census/api/religious-bodies/</span>
-                    <span class="badge badge-warning">Use filters!</span>
                 </div>
                 <div class="endpoint-body">
                     <p class="endpoint-description">
@@ -499,12 +510,11 @@
                         </tbody>
                     </table>
 
-                    <a href="{{ api_base_url }}religious-bodies/?limit=10" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/?limit=10
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?search=First+Baptist&limit=10" target="_blank" class="example-link">Search "First Baptist"</a>
+                    </div>
                 </div>
             </div>
 
@@ -513,12 +523,11 @@
                 <div class="endpoint-header">
                     <span class="http-method http-get">GET</span>
                     <span class="endpoint-path">/census/api/religious-bodies/map_data/</span>
-                    <span class="badge badge-info">Recommended for maps</span>
                 </div>
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Lightweight endpoint optimized for map marker display. Returns only essential fields
-                        (id, name, lat, lon, denomination, total_members). Limited to 2,000 records.
+                        (id, name, lat, lon, denomination, total_members).
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -546,15 +555,20 @@
                                 <td><span class="param-type">string</span></td>
                                 <td>Bounding box as "south,west,north,east"</td>
                             </tr>
+                            <tr>
+                                <td><span class="param-name">limit</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Max records (default: 5000, max: 5000)</td>
+                            </tr>
                         </tbody>
                     </table>
 
-                    <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Baptist+bodies" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/map_data/?family_census=Baptist+bodies
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Methodist+bodies&limit=100" target="_blank" class="example-link">Methodist bodies (limit 100)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/map_data/?bounds=38,-78,40,-75&limit=500" target="_blank" class="example-link">Mid-Atlantic bounding box</a>
+                    </div>
                 </div>
             </div>
 
@@ -567,8 +581,51 @@
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Extended endpoint that includes detailed membership demographics: male/female members,
-                        age breakdowns, and educational program enrollment. Limited to 2,000 records.
+                        age breakdowns, and educational program enrollment.
                     </p>
+
+                    <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
+                    <table class="params-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by census family</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">family_relec</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by RelEc family</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">denomination</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Filter by denomination ID</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">bounds</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Bounding box as "south,west,north,east"</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">transcription_status</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by status (default: "approved")</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">limit</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Max records (default: 5000, max: 5000)</td>
+                            </tr>
+                        </tbody>
+                    </table>
 
                     <h4 class="font-semibold mt-4 mb-2">Response Fields</h4>
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
@@ -578,12 +635,12 @@
                         <li><code>parochial_elementary_scholars</code>, <code>parochial_secondary_scholars</code> - Parochial school enrollment</li>
                     </ul>
 
-                    <a href="{{ api_base_url }}religious-bodies/demographics_data/" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/demographics_data/
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_census=Baptist+bodies&limit=50" target="_blank" class="example-link">Baptist bodies (limit 50)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_relec=Catholic&limit=50" target="_blank" class="example-link">Catholic (RelEc family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?bounds=40,-75,42,-73&limit=100" target="_blank" class="example-link">New York area bounding box</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -684,12 +741,12 @@
                         </div>
                     </div>
 
-                    <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Methodist+bodies&limit=100" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/geojson/?family_census=Methodist+bodies&limit=100
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Methodist+bodies&limit=100" target="_blank" class="example-link">Methodist bodies (limit 100)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Baptist+bodies&bounds=36.5,-83.6,39.5,-75.2" target="_blank" class="example-link">Baptists in Virginia</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/geojson/?exclude_families=Baptist+bodies,Methodist+bodies&limit=200" target="_blank" class="example-link">Exclude Baptist and Methodist</a>
+                    </div>
                 </div>
             </div>
 
@@ -715,12 +772,12 @@
                         <li><code>congregations</code> - Array of congregation details</li>
                     </ul>
 
-                    <a href="{{ api_base_url }}religious-bodies/places_geojson/?limit=50" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/places_geojson/?limit=50
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/places_geojson/?limit=50" target="_blank" class="example-link">First 50 places</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/places_geojson/?family_census=Baptist+bodies&limit=100" target="_blank" class="example-link">Baptist places</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/places_geojson/?bounds=38,-90,42,-80&limit=200" target="_blank" class="example-link">Midwest bounding box</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -740,8 +797,9 @@
                 </div>
                 <div class="endpoint-body">
                     <p class="endpoint-description">
-                        Returns city-level membership aggregations. Each city includes total members,
-                        congregation counts, and list of denominations present.
+                        Returns per-congregation records with the complete membership breakdown
+                        as recorded in the census, including sex and age demographics, and
+                        educational program enrollment. Limited to 2,000 records by default.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -755,11 +813,6 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><span class="param-name">year</span></td>
-                                <td><span class="param-type">integer</span></td>
-                                <td>Census year (only 1926 supported)</td>
-                            </tr>
-                            <tr>
                                 <td><span class="param-name">denomination</span></td>
                                 <td><span class="param-type">string</span></td>
                                 <td>Filter by exact denomination name</td>
@@ -769,34 +822,42 @@
                                 <td><span class="param-type">string</span></td>
                                 <td>Filter by family_relec value</td>
                             </tr>
+                            <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by census denomination family</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">bounds</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Bounding box as "south,west,north,east"</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">limit</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Max records (default: 2000, max: 5000)</td>
+                            </tr>
                         </tbody>
                     </table>
 
-                    <div class="response-example">
-                        <h5>Example Response</h5>
-                        <div class="code-block">
-                            <code>[
-                                {
-                                "city": "New York",
-                                "state": "NY",
-                                "county": "New York",
-                                "lat": 40.7128,
-                                "lon": -74.0060,
-                                "total_members": 125000,
-                                "congregations": 450,
-                                "denominations_count": 35,
-                                "denominations": ["Baptist", "Catholic", "Methodist", ...]
-                                }
-                                ]</code>
-                        </div>
-                    </div>
+                    <h4 class="font-semibold mt-4 mb-2">Membership Fields</h4>
+                    <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
+                        <li><code>male_members</code>, <code>female_members</code>, <code>total_members_by_sex</code></li>
+                        <li><code>members_under_13</code>, <code>members_13_and_older</code>, <code>total_members_by_age</code></li>
+                        <li><code>sunday_school_num_officers_teachers</code>, <code>sunday_school_num_scholars</code></li>
+                        <li><code>vbs_num_officers_teachers</code>, <code>vbs_num_scholars</code></li>
+                        <li><code>weekday_num_officers_teachers</code>, <code>weekday_num_scholars</code></li>
+                        <li><code>parochial_num_administrators</code>, <code>parochial_num_elementary_teachers</code>, <code>parochial_num_secondary_teachers</code></li>
+                        <li><code>parochial_num_elementary_scholars</code>, <code>parochial_num_secondary_scholars</code></li>
+                    </ul>
 
-                    <a href="{{ api_base_url }}religious-bodies/city_membership/" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/city_membership/
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denominationFamily=Baptist&limit=50" target="_blank" class="example-link">Baptist family</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denomination=Southern+Baptist+Convention&limit=50" target="_blank" class="example-link">Southern Baptist Convention</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?family_census=Methodist+bodies&bounds=36,-84,40,-75&limit=100" target="_blank" class="example-link">Methodists in the Southeast</a>
+                    </div>
                 </div>
             </div>
 
@@ -837,12 +898,10 @@
                         </div>
                     </div>
 
-                    <a href="{{ api_base_url }}religious-bodies/denomination_families/" target="_blank" class="example-link">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                        Try it: {{ api_base_url }}religious-bodies/denomination_families/
-                    </a>
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/denomination_families/" target="_blank" class="example-link">All families with counts</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -862,14 +921,6 @@
                         <li>City membership endpoint aggregates data by location for analysis</li>
                     </ul>
 
-                    <h4 class="font-semibold mt-6 mb-3">Example: Mapping Baptist Churches in Virginia</h4>
-                    <div class="code-block">
-                        <code># Get GeoJSON for Baptist congregations
-                            GET {{ api_base_url }}religious-bodies/geojson/?family_census=Baptist+bodies&bounds=36.5,-83.6,39.5,-75.2
-
-                            # Get city-level aggregations for Baptists
-                            GET {{ api_base_url }}religious-bodies/city_membership/?denominationFamily=Baptist</code>
-                    </div>
 
                     <h4 class="font-semibold mt-6 mb-3">CORS</h4>
                     <p class="text-content-secondary">
@@ -877,10 +928,15 @@
                         You can make requests directly from browser-based applications.
                     </p>
 
+                    <h4 class="font-semibold mt-6 mb-3">Caching</h4>
+                    <p class="text-content-secondary">
+                        API responses are cached for one hour. Since the underlying census data changes
+                        infrequently, most requests will be served from cache for faster response times.
+                    </p>
+
                     <h4 class="font-semibold mt-6 mb-3">Rate Limiting</h4>
                     <p class="text-content-secondary">
                         There are currently no rate limits on the API, but please be considerate with your requests.
-                        Cache responses where appropriate and avoid making unnecessary repeated requests.
                     </p>
                 </div>
             </div>
@@ -893,5 +949,20 @@
                 <a href="/about/" class="text-religious-primary hover:underline">Religious Ecologies project team</a>.
             </p>
         </footer>
-    </div>
+        </div><!-- /.api-docs-content -->
+    </div><!-- /.api-docs -->
+
+    <script>
+        (function() {
+            var backToTop = document.getElementById('back-to-top');
+            var header = document.getElementById('top');
+            if (!backToTop || !header) return;
+
+            var observer = new IntersectionObserver(function(entries) {
+                backToTop.classList.toggle('visible', !entries[0].isIntersecting);
+            }, { threshold: 0 });
+
+            observer.observe(header);
+        })();
+    </script>
 {% endblock %}

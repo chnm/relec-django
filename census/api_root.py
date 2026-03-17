@@ -3,10 +3,12 @@ Custom API views for the census app.
 Includes custom API root with detailed endpoint documentation.
 """
 
+from django.views.decorators.cache import cache_page
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 
+@cache_page(60 * 60)
 @api_view(["GET"])
 def api_root(request, format=None):
     """
@@ -51,25 +53,32 @@ def api_root(request, format=None):
                         "family_census",
                         "denomination",
                         "bounds (south,west,north,east)",
+                        "limit (default: 5000, max: 5000)",
                     ],
-                    "limit": "2000 records",
                 },
                 "demographics_data": {
                     "url": f"{base_url}religious-bodies/demographics_data/",
                     "description": "Extended membership and demographics data for maps",
-                    "filters": ["family_census", "denomination", "bounds"],
-                    "limit": "2000 records",
+                    "filters": [
+                        "family_census",
+                        "denomination",
+                        "bounds",
+                        "transcription_status (default: approved)",
+                        "limit (default: 5000, max: 5000)",
+                    ],
                 },
                 "city_membership": {
                     "url": f"{base_url}religious-bodies/city_membership/",
-                    "description": "City-level membership aggregation",
-                    "example": f"{base_url}religious-bodies/city_membership/?year=1926&denomination=Baptist",
+                    "description": "Per-congregation membership with full demographic breakdown",
+                    "example": f"{base_url}religious-bodies/city_membership/?denominationFamily=Baptist&limit=10",
                     "filters": [
-                        "year (1926 only)",
                         "denomination (exact name)",
                         "denominationFamily",
+                        "family_census",
+                        "bounds (south,west,north,east)",
+                        "limit (default: 2000, max: 5000)",
                     ],
-                    "returns": "Array of cities with total members and congregation counts",
+                    "returns": "Array of congregations with complete membership records",
                 },
                 "denomination_families": {
                     "url": f"{base_url}religious-bodies/denomination_families/",
