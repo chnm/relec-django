@@ -125,16 +125,22 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
 @method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
 class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ReligiousBody.objects.all().select_related(
-        "denomination",
-        "census_record",
-        "census_record__county__state",
-        "census_record__populated_place",
+    queryset = (
+        ReligiousBody.objects.all()
+        .select_related(
+            "denomination",
+            "census_record",
+            "census_record__county__state",
+            "census_record__populated_place",
+        )
+        .order_by("census_record__schedule_id")
     )
     serializer_class = ReligiousBodySerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReligiousBodyFilter
     search_fields = ["name", "address", "census_code"]
+    ordering_fields = ["census_record__schedule_id", "name"]
+    ordering = ["census_record__schedule_id"]
 
     @action(detail=False, methods=["get"])
     def map_data(self, request):

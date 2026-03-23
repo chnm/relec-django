@@ -34,23 +34,35 @@ def api_root(request, format=None):
                     "list": f"{base_url}denominations/",
                     "detail": f"{base_url}denominations/{{id}}/",
                     "families": f"{base_url}denominations/families/",
-                    "by_family": f"{base_url}denominations/by_family/?family_census=Baptist+bodies",
+                    "by_family": f"{base_url}denominations/by_family/?family_census=Adventist+bodies",
                     "description": "Denomination taxonomy and family classifications",
                     "filters": ["family_census", "family_relec", "search"],
                 },
                 "religious_bodies": {
-                    "note": "⚠️  Use specialized endpoints below instead of /religious-bodies/ list to avoid large responses",
+                    "note": "Use specialized endpoints below instead of /religious-bodies/ list to avoid large responses",
                     "list": f"{base_url}religious-bodies/?limit=10",
                     "detail": f"{base_url}religious-bodies/{{id}}/",
-                    "description": "Individual congregation records (use filtered endpoints below)",
+                    "description": "Individual congregation records with nested finances, membership, and URLs",
+                    "filters": [
+                        "denomination (integer, denomination ID)",
+                        "family_census (string, census family name)",
+                        "family_relec (string, RelEc family name)",
+                        "search (string, name/address/census code)",
+                    ],
+                    "example": f"{base_url}religious-bodies/?family_relec=Adventist&limit=5",
+                    "response_notes": {
+                        "finances": "Financial data nested under 'finances' object (expenditures, benevolences, total_expenditures, edifice_value, edifice_debt, residence_value, residence_debt) as decimal numbers",
+                        "urls": "Links nested under 'urls' object (self, family_census, family_relec) pointing to schedule detail and filtered data table views",
+                    },
                     "recommended_endpoints": "See map_data, city_membership, geojson below",
                 },
                 "map_data": {
                     "url": f"{base_url}religious-bodies/map_data/",
                     "description": "Lightweight endpoint optimized for map markers",
-                    "example": f"{base_url}religious-bodies/map_data/?family_census=Baptist+bodies",
+                    "example": f"{base_url}religious-bodies/map_data/?family_census=Adventist+bodies",
                     "filters": [
                         "family_census",
+                        "family_relec",
                         "denomination",
                         "bounds (south,west,north,east)",
                         "limit (default: 5000, max: 5000)",
@@ -61,6 +73,7 @@ def api_root(request, format=None):
                     "description": "Extended membership and demographics data for maps",
                     "filters": [
                         "family_census",
+                        "family_relec",
                         "denomination",
                         "bounds",
                         "transcription_status (default: approved)",
@@ -70,10 +83,10 @@ def api_root(request, format=None):
                 "city_membership": {
                     "url": f"{base_url}religious-bodies/city_membership/",
                     "description": "Per-congregation membership with full demographic breakdown",
-                    "example": f"{base_url}religious-bodies/city_membership/?denominationFamily=Baptist&limit=10",
+                    "example": f"{base_url}religious-bodies/city_membership/?denominationFamily=Adventist&limit=10",
                     "filters": [
                         "denomination (exact name)",
-                        "denominationFamily",
+                        "denominationFamily (family_relec value)",
                         "family_census",
                         "bounds (south,west,north,east)",
                         "limit (default: 2000, max: 5000)",
@@ -88,7 +101,7 @@ def api_root(request, format=None):
                 "geojson": {
                     "url": f"{base_url}religious-bodies/geojson/",
                     "description": "GeoJSON FeatureCollection of congregations",
-                    "example": f"{base_url}religious-bodies/geojson/?family_census=Methodist+bodies&limit=500",
+                    "example": f"{base_url}religious-bodies/geojson/?family_census=Adventist+bodies&limit=500",
                     "filters": [
                         "denomination",
                         "family_census",
@@ -103,10 +116,11 @@ def api_root(request, format=None):
                 "places_geojson": {
                     "url": f"{base_url}religious-bodies/places_geojson/",
                     "description": "GeoJSON FeatureCollection aggregated by populated place",
-                    "example": f"{base_url}religious-bodies/places_geojson/?limit=100",
+                    "example": f"{base_url}religious-bodies/places_geojson/?family_relec=Adventist&limit=100",
                     "filters": [
                         "denomination",
                         "family_census",
+                        "family_relec",
                         "transcription_status",
                         "bounds",
                         "limit (default: 500)",

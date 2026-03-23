@@ -498,6 +498,16 @@
                                 <td>Filter by denomination ID</td>
                             </tr>
                             <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by census family (e.g., "Adventist bodies")</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">family_relec</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by Religious Ecologies family</td>
+                            </tr>
+                            <tr>
                                 <td><span class="param-name">search</span></td>
                                 <td><span class="param-type">string</span></td>
                                 <td>Search name, address, or census code</td>
@@ -510,10 +520,64 @@
                         </tbody>
                     </table>
 
+                    <h4 class="font-semibold mt-4 mb-2">Response Structure</h4>
+                    <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
+                        <li><code>finances</code> - Nested object with financial data as decimal numbers: <code>expenditures</code>, <code>benevolences</code>, <code>total_expenditures</code>, <code>edifice_value</code>, <code>edifice_debt</code>, <code>residence_value</code>, <code>residence_debt</code></li>
+                        <li><code>urls</code> - Nested object with links: <code>self</code> (schedule detail page), <code>family_census</code> (data table filtered by family), <code>family_relec</code> (data table filtered by family and denomination)</li>
+                        <li><code>location_details</code> - Nested object with coordinates, city/county/state, <code>address</code>, and <code>urban_rural_code</code></li>
+                        <li><code>membership_details</code> - Nested object with sex/age membership breakdowns</li>
+                        <li><code>denomination_details</code> - Nested object with denomination info and family classifications</li>
+                    </ul>
+
+                    <div class="response-example">
+                        <h5>Example Response (single record)</h5>
+                        <div class="code-block">
+                            <code>{
+  "id": 42,
+  "name": "Seventh-day Adventist Church",
+  "census_code": "003",
+  "division": null,
+  "location_details": {
+    "lat": 38.9072, "lon": -77.0369,
+    "city_name": "Washington", "county_name": "District of Columbia",
+    "state_name": "DC",
+    "address": "123 Main St",
+    "urban_rural_code": "U"
+  },
+  "denomination_details": {
+    "id": 5, "name": "Seventh-day Adventists",
+    "family_census": "Adventist bodies", "family_relec": "Adventist"
+  },
+  "finances": {
+    "expenditures": 1200.00, "benevolences": 350.00,
+    "total_expenditures": 1550.00, "edifice_value": 25000.00,
+    "edifice_debt": null, "residence_value": 5000.00,
+    "residence_debt": null
+  },
+  "membership_details": {
+    "male_members": 45, "female_members": 62, "total_members": 107,
+    "members_under_13": 18, "members_13_and_older": 89, "total_by_age": 107
+  },
+  "urls": {
+    "self": "https://religiousecologies.org/census/record/1234/",
+    "family_census": "https://religiousecologies.org/census/browser/?family=Adventist+bodies",
+    "family_relec": "https://religiousecologies.org/census/browser/?family=Adventist&denomination=2"
+  },
+  "pastors": {
+    "name": "Elder James White", "is_assistant": false,
+    "college": "Battle Creek College", "theological_seminary": null
+  }
+}</code>
+                        </div>
+                    </div>
+
                     <div class="example-links">
                         <h5>Examples</h5>
                         <a href="{{ api_base_url }}religious-bodies/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?search=First+Baptist&limit=10" target="_blank" class="example-link">Search "First Baptist"</a>
+                        <a href="{{ api_base_url }}religious-bodies/?family_relec=Adventist&limit=10" target="_blank" class="example-link">Adventist congregations (RelEc family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?family_census=Adventist+bodies&limit=10" target="_blank" class="example-link">Adventist bodies (census family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?denomination=2&limit=10" target="_blank" class="example-link">Seventh-day Adventist (denomination ID)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?search=Seventh-day&limit=10" target="_blank" class="example-link">Search "Seventh-day"</a>
                     </div>
                 </div>
             </div>
@@ -546,6 +610,11 @@
                                 <td>Filter by census family</td>
                             </tr>
                             <tr>
+                                <td><span class="param-name">family_relec</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by RelEc family</td>
+                            </tr>
+                            <tr>
                                 <td><span class="param-name">denomination</span></td>
                                 <td><span class="param-type">integer</span></td>
                                 <td>Filter by denomination ID</td>
@@ -565,8 +634,8 @@
 
                     <div class="example-links">
                         <h5>Examples</h5>
-                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Methodist+bodies&limit=100" target="_blank" class="example-link">Methodist bodies (limit 100)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_census=Adventist+bodies" target="_blank" class="example-link">Adventist bodies</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/map_data/?family_relec=Adventist&limit=100" target="_blank" class="example-link">Adventist (RelEc family, limit 100)</a><br>
                         <a href="{{ api_base_url }}religious-bodies/map_data/?bounds=38,-78,40,-75&limit=500" target="_blank" class="example-link">Mid-Atlantic bounding box</a>
                     </div>
                 </div>
@@ -637,8 +706,8 @@
 
                     <div class="example-links">
                         <h5>Examples</h5>
-                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_census=Baptist+bodies&limit=50" target="_blank" class="example-link">Baptist bodies (limit 50)</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_relec=Catholic&limit=50" target="_blank" class="example-link">Catholic (RelEc family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_census=Adventist+bodies&limit=50" target="_blank" class="example-link">Adventist bodies (limit 50)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/demographics_data/?family_relec=Adventist&limit=50" target="_blank" class="example-link">Adventist (RelEc family)</a><br>
                         <a href="{{ api_base_url }}religious-bodies/demographics_data/?bounds=40,-75,42,-73&limit=100" target="_blank" class="example-link">New York area bounding box</a>
                     </div>
                 </div>
@@ -743,8 +812,8 @@
 
                     <div class="example-links">
                         <h5>Examples</h5>
-                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Methodist+bodies&limit=100" target="_blank" class="example-link">Methodist bodies (limit 100)</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Baptist+bodies&bounds=36.5,-83.6,39.5,-75.2" target="_blank" class="example-link">Baptists in Virginia</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_relec=Adventist&limit=100" target="_blank" class="example-link">Adventist (RelEc family, limit 100)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/geojson/?family_census=Adventist+bodies&bounds=36.5,-83.6,39.5,-75.2" target="_blank" class="example-link">Adventists in Virginia</a><br>
                         <a href="{{ api_base_url }}religious-bodies/geojson/?exclude_families=Baptist+bodies,Methodist+bodies&limit=200" target="_blank" class="example-link">Exclude Baptist and Methodist</a>
                     </div>
                 </div>
@@ -775,7 +844,7 @@
                     <div class="example-links">
                         <h5>Examples</h5>
                         <a href="{{ api_base_url }}religious-bodies/places_geojson/?limit=50" target="_blank" class="example-link">First 50 places</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/places_geojson/?family_census=Baptist+bodies&limit=100" target="_blank" class="example-link">Baptist places</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/places_geojson/?family_relec=Adventist&limit=100" target="_blank" class="example-link">Adventist places (RelEc family)</a><br>
                         <a href="{{ api_base_url }}religious-bodies/places_geojson/?bounds=38,-90,42,-80&limit=200" target="_blank" class="example-link">Midwest bounding box</a>
                     </div>
                 </div>
@@ -854,9 +923,9 @@
                     <div class="example-links">
                         <h5>Examples</h5>
                         <a href="{{ api_base_url }}religious-bodies/city_membership/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denominationFamily=Baptist&limit=50" target="_blank" class="example-link">Baptist family</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denomination=Southern+Baptist+Convention&limit=50" target="_blank" class="example-link">Southern Baptist Convention</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/city_membership/?family_census=Methodist+bodies&bounds=36,-84,40,-75&limit=100" target="_blank" class="example-link">Methodists in the Southeast</a>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denominationFamily=Adventist&limit=50" target="_blank" class="example-link">Adventist family</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?denomination=Seventh-day+Adventists&limit=50" target="_blank" class="example-link">Seventh-day Adventists</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/city_membership/?family_census=Adventist+bodies&bounds=36,-84,40,-75&limit=100" target="_blank" class="example-link">Adventists in the Southeast</a>
                     </div>
                 </div>
             </div>

@@ -72,6 +72,7 @@ def census_browser_view(request, state_code=None, county_name=None):
     search = request.GET.get("search", "")
     denomination_filter = request.GET.get("denomination", "")
     family_filter = request.GET.get("family", "")
+    family_census_filter = request.GET.get("family_census", "")
     # Support both path parameters and legacy query parameters
     state_filter = state_code or request.GET.get("location", "")
     county_filter = (
@@ -120,6 +121,12 @@ def census_browser_view(request, state_code=None, county_name=None):
         queryset = queryset.filter(
             Q(schedule_denomination__family_relec=family_filter)
             | Q(church_details__denomination__family_relec=family_filter)
+        )
+
+    if family_census_filter:
+        queryset = queryset.filter(
+            Q(schedule_denomination__family_census=family_census_filter)
+            | Q(church_details__denomination__family_census=family_census_filter)
         )
 
     if state_filter:

@@ -198,7 +198,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
     pastors = serializers.SerializerMethodField()
-    total_members = serializers.SerializerMethodField()
+    finances = serializers.SerializerMethodField()
+    urls = serializers.SerializerMethodField()
 
     class Meta:
         model = ReligiousBody
@@ -209,21 +210,19 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "division",
             "location_details",
             "denomination_details",
-            "address",
-            "urban_rural_code",
             "membership_details",
-            "total_members",
             "num_edifices",
-            "edifice_value",
-            "edifice_debt",
             "has_pastors_residence",
-            "residence_value",
-            "residence_debt",
-            "expenses",
-            "benevolences",
-            "total_expenditures",
+            "finances",
             "pastors",
+            "urls",
         ]
+
+    def _decimal_to_float(self, value):
+        """Convert a Decimal field value to a float, or None if null."""
+        if value is not None:
+            return float(value)
+        return None
 
     def get_location_details(self, obj):
         if obj.census_record:
@@ -237,6 +236,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
                 "place_id": pp.place_id if pp else None,
                 "county_name": county.name if county else None,
                 "state_name": county.state.code if county and county.state else None,
+                "address": obj.address,
+                "urban_rural_code": obj.urban_rural_code,
             }
         return None
 
@@ -257,7 +258,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
                 return {
                     "male_members": male,
                     "female_members": female,
-                    "total": total,
+                    "total_members": total,
                     "members_under_13": membership.members_under_13 or 0,
                     "members_13_and_older": membership.members_13_and_older or 0,
                     "total_by_age": membership.total_members_by_age
@@ -274,25 +275,49 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             return None
         return None
 
-    def get_total_members(self, obj):
-        try:
-            membership = Membership.objects.filter(religious_body=obj).first()
-            if membership:
-                # Use recorded total if available
-                if membership.total_members_by_sex is not None:
-                    return membership.total_members_by_sex
+    def get_finances(self, obj):
+        return {
+            "expenditures": self._decimal_to_float(obj.expenses),
+            "benevolences": self._decimal_to_float(obj.benevolences),
+            "total_expenditures": self._decimal_to_float(obj.total_expenditures),
+            "edifice_value": self._decimal_to_float(obj.edifice_value),
+            "edifice_debt": self._decimal_to_float(obj.edifice_debt),
+            "residence_value": self._decimal_to_float(obj.residence_value),
+            "residence_debt": self._decimal_to_float(obj.residence_debt),
+        }
 
-                # Otherwise calculate from male/female counts
-                male = membership.male_members or 0
-                female = membership.female_members or 0
-                return male + female
-        except Exception as e:
-            import logging
+    def get_urls(self, obj):
+        request = self.context.get("request")
+        base_url = request.build_absolute_uri("/") if request else ""
+        base_url = base_url.rstrip("/")
 
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error getting total members for {obj}: {e}")
-            return None
-        return 0
+        # URL to the individual schedule detail page
+        schedule_url = None
+        if obj.census_record:
+            schedule_url = f"{base_url}/census/record/{obj.census_record.resource_id}/"
+
+        # URL to the data table filtered by census family
+        family_census_url = None
+        if obj.denomination and obj.denomination.family_census:
+            family_census_url = (
+                f"{base_url}/census/browser/"
+                f"?family={obj.denomination.family_census}"
+            )
+
+        # URL to the data table filtered by relec family and denomination
+        family_relec_url = None
+        if obj.denomination and obj.denomination.family_relec:
+            family_relec_url = (
+                f"{base_url}/census/browser/"
+                f"?family={obj.denomination.family_relec}"
+                f"&denomination={obj.denomination.id}"
+            )
+
+        return {
+            "self": schedule_url,
+            "family_census": family_census_url,
+            "family_relec": family_relec_url,
+        }
 
     def get_pastors(self, obj):
         try:
