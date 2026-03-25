@@ -51,6 +51,7 @@ def api_root(request, format=None):
                     ],
                     "example": f"{base_url}religious-bodies/?family_relec=Adventist&limit=5",
                     "response_notes": {
+                        "denominations": "Array of denomination names matched by the current query filters, included alongside pagination metadata",
                         "finances": "Financial data nested under 'finances' object (expenditures, benevolences, total_expenditures, edifice_value, edifice_debt, residence_value, residence_debt) as decimal numbers",
                         "urls": "Links nested under 'urls' object (self, family_census, family_relec) pointing to schedule detail and filtered data table views",
                     },

@@ -7,6 +7,7 @@ from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 # Cache TTL: 1 hour (data changes infrequently)
@@ -123,6 +124,36 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+class ReligiousBodyPagination(PageNumberPagination):
+    """Custom pagination that includes matched denominations in the response."""
+
+    def paginate_queryset(self, queryset, request, view=None):
+        # Extract distinct denomination names from the full filtered queryset
+        # before pagination slices it
+        self.matched_denominations = list(
+            queryset.filter(denomination__isnull=False)
+            .values_list("denomination__name", flat=True)
+            .distinct()
+            .order_by("denomination__name")
+        )
+        return super().paginate_queryset(queryset, request, view)
+
+    def get_paginated_response(self, data):
+        from collections import OrderedDict
+
+        return Response(
+            OrderedDict(
+                [
+                    ("count", self.page.paginator.count),
+                    ("denominations", self.matched_denominations),
+                    ("next", self.get_next_link()),
+                    ("previous", self.get_previous_link()),
+                    ("results", data),
+                ]
+            )
+        )
+
+
 @method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
 class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = (
@@ -136,6 +167,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         .order_by("census_record__schedule_id")
     )
     serializer_class = ReligiousBodySerializer
+    pagination_class = ReligiousBodyPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReligiousBodyFilter
     search_fields = ["name", "address", "census_code"]

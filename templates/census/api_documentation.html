@@ -521,7 +521,9 @@
                     </table>
 
                     <h4 class="font-semibold mt-4 mb-2">Response Structure</h4>
+                    <p class="text-content-secondary text-sm mb-2">The response envelope includes <code>count</code>, <code>next</code>, <code>previous</code> (pagination), <code>denominations</code> (array of denomination names matched by your query), and <code>results</code> (array of records).</p>
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
+                        <li><code>denominations</code> - Array of distinct denomination names represented in the filtered results</li>
                         <li><code>finances</code> - Nested object with financial data as decimal numbers: <code>expenditures</code>, <code>benevolences</code>, <code>total_expenditures</code>, <code>edifice_value</code>, <code>edifice_debt</code>, <code>residence_value</code>, <code>residence_debt</code></li>
                         <li><code>urls</code> - Nested object with links: <code>self</code> (schedule detail page), <code>family_census</code> (data table filtered by family), <code>family_relec</code> (data table filtered by family and denomination)</li>
                         <li><code>location_details</code> - Nested object with coordinates, city/county/state, <code>address</code>, and <code>urban_rural_code</code></li>
