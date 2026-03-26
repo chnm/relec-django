@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | American Religious Ecologies{% endblock %}
+
+{% block content %}
+    <style>
+        .tooltip-header {
+            cursor: help;
+            border-bottom: 1px dashed currentColor;
+        }
+        .tooltip-header:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            z-index: 10;
+            background: #1f2937;
+            color: #fff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: normal;
+            text-transform: none;
+            letter-spacing: normal;
+            white-space: nowrap;
+            right: 0;
+            top: 100%;
+            margin-top: 0.25rem;
+            transition: opacity 0.15s;
+        }
+    </style>
+
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-6">
+            <a href="{% url 'analytics:home' %}" class="text-religious-primary hover:text-primary-700">&larr; Back to Analytics Home</a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
+            <p class="text-content-secondary mb-6">
+                Transcription progress grouped by Religious Ecologies family and denomination. Shows total schedules
+                in the published census, records in the database, in-progress and approved transcriptions with completion percentages.
+            </p>
+
+            {% if families %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Family / Denomination</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider relative">
+                                    <span class="tooltip-header">Published Census
+                                        <span class="tooltip-text">Total census schedule records (all statuses)</span>
+                                    </span>
+                                </th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider relative">
+                                    <span class="tooltip-header">In Database
+                                        <span class="tooltip-text">Total religious body records created from transcription</span>
+                                    </span>
+                                </th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider relative">
+                                    <span class="tooltip-header">In Progress
+                                        <span class="tooltip-text">Census schedules currently being transcribed (status: in_progress)</span>
+                                    </span>
+                                </th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider relative">
+                                    <span class="tooltip-header">Approved
+                                        <span class="tooltip-text">Census schedules with transcription status set to "approved"</span>
+                                    </span>
+                                </th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">% Complete</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for family_name, family in families.items %}
+                                {# Family heading row with subtotals #}
+                                <tr class="bg-gray-50 border-t-2 border-gray-300">
+                                    <td class="px-4 py-3 text-sm font-bold text-content-primary">
+                                        {{ family_name }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-bold text-content-primary font-mono">
+                                        {{ family.total_census }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-bold text-content-primary font-mono">
+                                        {{ family.total_in_database }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-bold text-content-primary font-mono">
+                                        {{ family.total_in_progress }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right font-bold text-content-primary font-mono">
+                                        {{ family.total_transcribed }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-right">
+                                        {% if family.total_census > 0 %}
+                                            <div class="flex items-center justify-end gap-2">
+                                                <div class="w-20 bg-gray-200 rounded-full h-2">
+                                                    <div class="bg-religious-primary h-2 rounded-full" style="width: {% widthratio family.total_transcribed family.total_census 100 %}%"></div>
+                                                </div>
+                                                <span class="text-content-primary text-xs font-bold font-mono w-10 text-right">{% widthratio family.total_transcribed family.total_census 100 %}%</span>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-gray-400">—</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {# Denomination rows under this family #}
+                                {% for denom in family.denominations %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 text-sm text-content-primary pl-8">
+                                            {{ denom.name }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono">
+                                            {{ denom.total_census|default:"0" }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono">
+                                            {{ denom.total_in_database|default:"0" }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono">
+                                            {{ denom.total_in_progress|default:"0" }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono">
+                                            {{ denom.total_transcribed|default:"0" }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-right">
+                                            {% if denom.total_census > 0 %}
+                                                <div class="flex items-center justify-end gap-2">
+                                                    <div class="w-20 bg-gray-200 rounded-full h-2">
+                                                        <div class="bg-religious-primary h-2 rounded-full" style="width: {% widthratio denom.total_transcribed denom.total_census 100 %}%"></div>
+                                                    </div>
+                                                    <span class="text-content-secondary text-xs font-mono w-10 text-right">{% widthratio denom.total_transcribed denom.total_census 100 %}%</span>
+                                                </div>
+                                            {% else %}
+                                                <span class="text-gray-400">—</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                        {% if totals %}
+                            <tfoot class="bg-gray-100 font-semibold border-t-2 border-gray-400">
+                                <tr>
+                                    <td class="px-4 py-3 text-sm text-content-primary">Grand Total</td>
+                                    <td class="px-4 py-3 text-sm text-right text-content-primary font-mono">{{ totals.grand_census|default:"0" }}</td>
+                                    <td class="px-4 py-3 text-sm text-right text-content-primary font-mono">{{ totals.grand_database|default:"0" }}</td>
+                                    <td class="px-4 py-3 text-sm text-right text-content-primary font-mono">{{ totals.grand_in_progress|default:"0" }}</td>
+                                    <td class="px-4 py-3 text-sm text-right text-content-primary font-mono">{{ totals.grand_transcribed|default:"0" }}</td>
+                                    <td class="px-4 py-3 text-sm text-right">
+                                        {% if totals.grand_census > 0 %}
+                                            <span class="text-content-primary text-xs font-bold font-mono">{% widthratio totals.grand_transcribed totals.grand_census 100 %}%</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <p class="text-gray-500">No denomination data available.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

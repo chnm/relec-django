@@ -1,7 +1,8 @@
 import csv
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
@@ -255,6 +256,104 @@ def denomination_analysis(request):
     }
 
     return render(request, "analytics/denomination_analysis.html", context)
+
+
+@login_required
+@user_passes_test(is_staff_or_reviewer)
+def transcription_progress(request):
+    """Breakdown of transcription progress by denomination."""
+    from django.db.models import IntegerField, OuterRef
+
+    # Use subqueries to avoid cross-join explosion from multiple annotations
+    census_count = (
+        CensusSchedule.objects.filter(schedule_denomination=OuterRef("pk"))
+        .order_by()
+        .values("schedule_denomination")
+        .annotate(c=Count("*"))
+        .values("c")
+    )
+    body_count = (
+        ReligiousBody.objects.filter(denomination=OuterRef("pk"))
+        .order_by()
+        .values("denomination")
+        .annotate(c=Count("*"))
+        .values("c")
+    )
+    in_progress_count = (
+        CensusSchedule.objects.filter(
+            schedule_denomination=OuterRef("pk"),
+            transcription_status="in_progress",
+        )
+        .order_by()
+        .values("schedule_denomination")
+        .annotate(c=Count("*"))
+        .values("c")
+    )
+    approved_count = (
+        CensusSchedule.objects.filter(
+            schedule_denomination=OuterRef("pk"),
+            transcription_status="approved",
+        )
+        .order_by()
+        .values("schedule_denomination")
+        .annotate(c=Count("*"))
+        .values("c")
+    )
+
+    denominations = (
+        Denomination.objects.annotate(
+            total_census=Coalesce(
+                Subquery(census_count, output_field=IntegerField()), 0
+            ),
+            total_in_database=Coalesce(
+                Subquery(body_count, output_field=IntegerField()), 0
+            ),
+            total_in_progress=Coalesce(
+                Subquery(in_progress_count, output_field=IntegerField()), 0
+            ),
+            total_transcribed=Coalesce(
+                Subquery(approved_count, output_field=IntegerField()), 0
+            ),
+        )
+        .filter(total_census__gt=0)
+        .order_by("family_relec", "name")
+    )
+
+    # Compute totals for the summary row
+    totals = denominations.aggregate(
+        grand_census=Sum("total_census"),
+        grand_database=Sum("total_in_database"),
+        grand_in_progress=Sum("total_in_progress"),
+        grand_transcribed=Sum("total_transcribed"),
+    )
+
+    # Group denominations by family_relec for the template
+    from collections import OrderedDict
+
+    families = OrderedDict()
+    for denom in denominations:
+        family = denom.family_relec or "Uncategorized"
+        if family not in families:
+            families[family] = {
+                "denominations": [],
+                "total_census": 0,
+                "total_in_database": 0,
+                "total_in_progress": 0,
+                "total_transcribed": 0,
+            }
+        families[family]["denominations"].append(denom)
+        families[family]["total_census"] += denom.total_census
+        families[family]["total_in_database"] += denom.total_in_database
+        families[family]["total_in_progress"] += denom.total_in_progress
+        families[family]["total_transcribed"] += denom.total_transcribed
+
+    context = {
+        "title": "Transcription Progress by Denomination",
+        "families": families,
+        "totals": totals,
+    }
+
+    return render(request, "analytics/transcription_progress.html", context)
 
 
 @login_required
