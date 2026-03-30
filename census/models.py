@@ -213,6 +213,14 @@ class CensusSchedule(models.Model):
         help_text="The denomination associated with this census schedule",
     )
 
+    # Agentic transcription
+    ai_transcription = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="AI Transcription",
+        help_text="Raw JSON response from agentic transcription of the census schedule image",
+    )
+
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
