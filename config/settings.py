@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "unfold.contrib.forms",
     "unfold.contrib.inlines",
     "unfold.contrib.simple_history",
+    "unfold.contrib.import_export",
     # simple history
     "simple_history",
     # django defaults

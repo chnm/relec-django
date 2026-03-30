@@ -14,7 +14,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
+from import_export.admin import ImportExportModelAdmin
 from unfold.admin import ModelAdmin, StackedInline
+from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from urllib3.util.retry import Retry
 
 from location.models import PopulatedPlace
@@ -27,7 +29,7 @@ from .models import (
     Membership,
     ReligiousBody,
 )
-from .resources import CensusScheduleResource
+from .resources import CensusScheduleResource, DenominationResource
 
 
 class HasLocationFilter(admin.SimpleListFilter):
@@ -342,8 +344,17 @@ class DenominationCensusReportInline(StackedInline):
 
 
 @admin.register(Denomination)
-class DenominationAdmin(ModelAdmin):
-    list_display = ["name", "denomination_id", "family_census", "family_relec"]
+class DenominationAdmin(ImportExportModelAdmin, ModelAdmin):
+    import_form_class = ImportForm
+    export_form_class = ExportForm
+    resource_classes = [DenominationResource]
+    list_display = [
+        "name",
+        "denomination_id",
+        "family_census",
+        "family_relec",
+        "published_churches_count",
+    ]
     search_fields = ["name", "denomination_id", "family_census", "family_relec"]
     ordering = ["name"]
     list_filter = ["family_census", "family_relec"]

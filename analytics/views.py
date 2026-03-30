@@ -262,30 +262,15 @@ def denomination_analysis(request):
 @user_passes_test(is_staff_or_reviewer)
 def transcription_progress(request):
     """Breakdown of transcription progress by denomination."""
+    from collections import OrderedDict
+
     from django.db.models import IntegerField, OuterRef
 
-    # Use subqueries to avoid cross-join explosion from multiple annotations
-    census_count = (
-        CensusSchedule.objects.filter(schedule_denomination=OuterRef("pk"))
-        .order_by()
-        .values("schedule_denomination")
-        .annotate(c=Count("*"))
-        .values("c")
-    )
+    # Subqueries for catalogued (in database) and transcribed (approved) counts
     body_count = (
         ReligiousBody.objects.filter(denomination=OuterRef("pk"))
         .order_by()
         .values("denomination")
-        .annotate(c=Count("*"))
-        .values("c")
-    )
-    in_progress_count = (
-        CensusSchedule.objects.filter(
-            schedule_denomination=OuterRef("pk"),
-            transcription_status="in_progress",
-        )
-        .order_by()
-        .values("schedule_denomination")
         .annotate(c=Count("*"))
         .values("c")
     )
@@ -302,50 +287,58 @@ def transcription_progress(request):
 
     denominations = (
         Denomination.objects.annotate(
-            total_census=Coalesce(
-                Subquery(census_count, output_field=IntegerField()), 0
-            ),
-            total_in_database=Coalesce(
+            total_catalogued=Coalesce(
                 Subquery(body_count, output_field=IntegerField()), 0
-            ),
-            total_in_progress=Coalesce(
-                Subquery(in_progress_count, output_field=IntegerField()), 0
             ),
             total_transcribed=Coalesce(
                 Subquery(approved_count, output_field=IntegerField()), 0
             ),
         )
-        .filter(total_census__gt=0)
+        .filter(published_churches_count__isnull=False, published_churches_count__gt=0)
         .order_by("family_relec", "name")
     )
 
-    # Compute totals for the summary row
-    totals = denominations.aggregate(
-        grand_census=Sum("total_census"),
-        grand_database=Sum("total_in_database"),
-        grand_in_progress=Sum("total_in_progress"),
-        grand_transcribed=Sum("total_transcribed"),
-    )
+    # Attach percentage calculations to each denomination
+    denom_list = []
+    for denom in denominations:
+        pub = denom.published_churches_count or 0
+        denom.pct_catalogued = round(denom.total_catalogued / pub * 100, 1) if pub else 0
+        denom.pct_transcribed = round(denom.total_transcribed / pub * 100, 1) if pub else 0
+        denom_list.append(denom)
 
     # Group denominations by family_relec for the template
-    from collections import OrderedDict
-
     families = OrderedDict()
-    for denom in denominations:
+    for denom in denom_list:
         family = denom.family_relec or "Uncategorized"
         if family not in families:
             families[family] = {
                 "denominations": [],
-                "total_census": 0,
-                "total_in_database": 0,
-                "total_in_progress": 0,
+                "total_published": 0,
+                "total_catalogued": 0,
                 "total_transcribed": 0,
             }
         families[family]["denominations"].append(denom)
-        families[family]["total_census"] += denom.total_census
-        families[family]["total_in_database"] += denom.total_in_database
-        families[family]["total_in_progress"] += denom.total_in_progress
+        families[family]["total_published"] += denom.published_churches_count or 0
+        families[family]["total_catalogued"] += denom.total_catalogued
         families[family]["total_transcribed"] += denom.total_transcribed
+
+    # Compute family-level percentages
+    for family in families.values():
+        pub = family["total_published"]
+        family["pct_catalogued"] = round(family["total_catalogued"] / pub * 100, 1) if pub else 0
+        family["pct_transcribed"] = round(family["total_transcribed"] / pub * 100, 1) if pub else 0
+
+    # Compute grand totals
+    grand_published = sum(f["total_published"] for f in families.values())
+    grand_catalogued = sum(f["total_catalogued"] for f in families.values())
+    grand_transcribed = sum(f["total_transcribed"] for f in families.values())
+    totals = {
+        "grand_published": grand_published,
+        "grand_catalogued": grand_catalogued,
+        "grand_transcribed": grand_transcribed,
+        "pct_catalogued": round(grand_catalogued / grand_published * 100, 1) if grand_published else 0,
+        "pct_transcribed": round(grand_transcribed / grand_published * 100, 1) if grand_published else 0,
+    }
 
     context = {
         "title": "Transcription Progress by Denomination",

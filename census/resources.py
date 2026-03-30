@@ -3,8 +3,9 @@ Import/Export resources for census data.
 """
 
 from import_export import fields, resources
+from import_export.widgets import CharWidget
 
-from .models import CensusSchedule
+from .models import CensusSchedule, Denomination
 
 
 class CensusScheduleResource(resources.ModelResource):
@@ -127,3 +128,28 @@ class CensusScheduleResource(resources.ModelResource):
         if schedule.assigned_reviewer:
             return schedule.assigned_reviewer.username
         return ""
+
+
+class DenominationResource(resources.ModelResource):
+    """Resource for importing/exporting Denomination data including published counts."""
+
+    denomination_name = fields.Field(
+        column_name="denomination_name",
+        attribute="name",
+        readonly=True,
+    )
+
+    class Meta:
+        model = Denomination
+        import_id_fields = ["denomination_id"]
+        fields = (
+            "denomination_id",
+            "denomination_name",
+            "name",
+            "family_census",
+            "family_relec",
+            "published_churches_count",
+        )
+        export_order = fields
+        skip_unchanged = True
+        report_skipped = True
