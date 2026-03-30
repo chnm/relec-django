@@ -15,6 +15,13 @@ class ReligiousBodyFilter(django_filters.FilterSet):
     exclude_families = django_filters.CharFilter(method="filter_exclude_families")
     urban_rural = django_filters.CharFilter(method="filter_urban_rural")
     bounds = django_filters.CharFilter(method="filter_bounds")
+    has_location = django_filters.BooleanFilter(method="filter_has_location")
+
+    def filter_has_location(self, queryset, name, value):
+        """Filter by whether the congregation has location data."""
+        if value:
+            return queryset.filter(census_record__populated_place__isnull=False)
+        return queryset.filter(census_record__populated_place__isnull=True)
 
     def filter_family_census(self, queryset, name, value):
         """Try both possible relationship paths to filter by family_census."""
@@ -70,4 +77,5 @@ class ReligiousBodyFilter(django_filters.FilterSet):
             "exclude_families",
             "urban_rural",
             "bounds",
+            "has_location",
         ]

@@ -42,6 +42,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     urls = serializers.SerializerMethodField()
     transcription_status = serializers.SerializerMethodField()
     schedule_id = serializers.SerializerMethodField()
+    has_location = serializers.SerializerMethodField()
 
     class Meta:
         model = ReligiousBody
@@ -52,6 +53,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "division",
             "transcription_status",
             "schedule_id",
+            "has_location",
             "location_details",
             "denomination_details",
             "membership_details",
@@ -67,6 +69,12 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         if value is not None:
             return float(value)
         return None
+
+    def get_has_location(self, obj):
+        return (
+            obj.census_record is not None
+            and obj.census_record.populated_place is not None
+        )
 
     def get_transcription_status(self, obj):
         if obj.census_record:
