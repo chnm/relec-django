@@ -521,26 +521,34 @@
             document.getElementById('map').classList.add('loading');
 
             try {
-        // Use Django proxy endpoint to avoid CORS issues with external Hugo API
-                let apiUrl = `/census/api/religious-bodies/hugo_city_membership/?year=${year}`;
+        // Fetch from consolidated religious-bodies endpoint
+                let apiUrl = `/census/api/religious-bodies/?page_size=5000`;
 
                 if (selectedDenom !== 'All denominations') {
-                    apiUrl += `&denomination=${encodeURIComponent(selectedDenom)}`;
+                    apiUrl += `&search=${encodeURIComponent(selectedDenom)}`;
                 } else if (selectedFamily) {
-                    apiUrl += `&denominationFamily=${encodeURIComponent(selectedFamily)}`;
+                    apiUrl += `&family_relec=${encodeURIComponent(selectedFamily)}`;
                 }
 
         // Fetch filtered data from API
                 const response = await fetch(apiUrl);
                 let rawData = await response.json();
+                const results = rawData.results || rawData;
 
-        // Transform Hugo API response to match our expected format
-        // Hugo API uses: churches, members vs our: congregations, total_members
-                allCityData = rawData.map(city => ({
-                    ...city,
-                    congregations: city.churches || city.congregations || 0,
-                    total_members: city.members || city.total_members || 0
-                }));
+        // Transform nested response to flat congregation records
+                allCityData = results.map(b => {
+                    const loc = b.location_details || {};
+                    const denom = b.denomination_details || {};
+                    const mem = b.membership_details || {};
+                    return {
+                        id: b.id, name: b.name,
+                        lat: loc.lat, lon: loc.lon,
+                        city: loc.city_name, county: loc.county_name, state: loc.state_name,
+                        denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+                        congregations: 1,
+                        total_members: mem.total_members || 0,
+                    };
+                });
 
                 document.getElementById('map').classList.remove('loading');
 

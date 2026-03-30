@@ -3,166 +3,6 @@ from rest_framework import serializers
 from .models import Denomination, Membership, ReligiousBody
 
 
-class MapMarkerSerializer(serializers.ModelSerializer):
-    """
-    Lightweight serializer specifically for map marker data.
-    Only includes fields needed for map display to reduce overhead.
-    """
-
-    # Location data
-    lat = serializers.SerializerMethodField()
-    lon = serializers.SerializerMethodField()
-
-    # Denomination data
-    family = serializers.SerializerMethodField()
-    denomination_name = serializers.SerializerMethodField()
-
-    # Total members field
-    total_members = serializers.IntegerField(default=0)
-
-    class Meta:
-        model = ReligiousBody
-        fields = [
-            "id",
-            "name",
-            "lat",
-            "lon",
-            "family",
-            "denomination_name",
-            "total_members",
-        ]
-
-    def get_lat(self, obj):
-        if obj.census_record and obj.census_record.populated_place:
-            return obj.census_record.populated_place.lat
-        return None
-
-    def get_lon(self, obj):
-        if obj.census_record and obj.census_record.populated_place:
-            return obj.census_record.populated_place.lon
-        return None
-
-    def get_family(self, obj):
-        if obj.denomination:
-            return obj.denomination.family_census
-        return "Unknown"
-
-    def get_denomination_name(self, obj):
-        if obj.denomination:
-            return obj.denomination.name
-        return "Unknown"
-
-
-class DemographicsMapSerializer(serializers.ModelSerializer):
-    """
-    Extended serializer for demographics map that includes detailed membership data.
-    """
-
-    # Location data
-    lat = serializers.SerializerMethodField()
-    lon = serializers.SerializerMethodField()
-
-    # Denomination data
-    family = serializers.SerializerMethodField()
-    denomination_name = serializers.SerializerMethodField()
-
-    # Demographics data
-    total_members = serializers.IntegerField(default=0)
-    male_members = serializers.SerializerMethodField()
-    female_members = serializers.SerializerMethodField()
-    members_under_13 = serializers.SerializerMethodField()
-    members_13_and_older = serializers.SerializerMethodField()
-
-    # Educational program data
-    sunday_school_scholars = serializers.SerializerMethodField()
-    parochial_elementary_scholars = serializers.SerializerMethodField()
-    parochial_secondary_scholars = serializers.SerializerMethodField()
-    weekday_scholars = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ReligiousBody
-        fields = [
-            "id",
-            "name",
-            "lat",
-            "lon",
-            "family",
-            "denomination_name",
-            "total_members",
-            "male_members",
-            "female_members",
-            "members_under_13",
-            "members_13_and_older",
-            "sunday_school_scholars",
-            "parochial_elementary_scholars",
-            "parochial_secondary_scholars",
-            "weekday_scholars",
-        ]
-
-    def get_lat(self, obj):
-        if obj.census_record and obj.census_record.populated_place:
-            return obj.census_record.populated_place.lat
-        return None
-
-    def get_lon(self, obj):
-        if obj.census_record and obj.census_record.populated_place:
-            return obj.census_record.populated_place.lon
-        return None
-
-    def get_family(self, obj):
-        if obj.denomination:
-            return obj.denomination.family_census
-        return "Unknown"
-
-    def get_denomination_name(self, obj):
-        if obj.denomination:
-            return obj.denomination.name
-        return "Unknown"
-
-    def _get_membership(self, obj):
-        """Helper method to get membership data, cached for efficiency"""
-        if not hasattr(obj, "_cached_membership"):
-            try:
-                obj._cached_membership = Membership.objects.filter(
-                    religious_body=obj
-                ).first()
-            except Exception:
-                obj._cached_membership = None
-        return obj._cached_membership
-
-    def get_male_members(self, obj):
-        membership = self._get_membership(obj)
-        return membership.male_members if membership else 0
-
-    def get_female_members(self, obj):
-        membership = self._get_membership(obj)
-        return membership.female_members if membership else 0
-
-    def get_members_under_13(self, obj):
-        membership = self._get_membership(obj)
-        return membership.members_under_13 if membership else 0
-
-    def get_members_13_and_older(self, obj):
-        membership = self._get_membership(obj)
-        return membership.members_13_and_older if membership else 0
-
-    def get_sunday_school_scholars(self, obj):
-        membership = self._get_membership(obj)
-        return membership.sunday_school_num_scholars if membership else 0
-
-    def get_parochial_elementary_scholars(self, obj):
-        membership = self._get_membership(obj)
-        return membership.parochial_num_elementary_scholars if membership else 0
-
-    def get_parochial_secondary_scholars(self, obj):
-        membership = self._get_membership(obj)
-        return membership.parochial_num_secondary_scholars if membership else 0
-
-    def get_weekday_scholars(self, obj):
-        membership = self._get_membership(obj)
-        return membership.weekday_num_scholars if membership else 0
-
-
 class DenominationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Denomination
@@ -200,6 +40,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     pastors = serializers.SerializerMethodField()
     finances = serializers.SerializerMethodField()
     urls = serializers.SerializerMethodField()
+    transcription_status = serializers.SerializerMethodField()
+    schedule_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ReligiousBody
@@ -208,6 +50,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "name",
             "census_code",
             "division",
+            "transcription_status",
+            "schedule_id",
             "location_details",
             "denomination_details",
             "membership_details",
@@ -222,6 +66,16 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         """Convert a Decimal field value to a float, or None if null."""
         if value is not None:
             return float(value)
+        return None
+
+    def get_transcription_status(self, obj):
+        if obj.census_record:
+            return obj.census_record.transcription_status
+        return None
+
+    def get_schedule_id(self, obj):
+        if obj.census_record:
+            return obj.census_record.schedule_id
         return None
 
     def get_location_details(self, obj):
@@ -266,6 +120,17 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
                         (membership.members_under_13 or 0)
                         + (membership.members_13_and_older or 0)
                     ),
+                    "sunday_school_num_officers_teachers": membership.sunday_school_num_officers_teachers,
+                    "sunday_school_num_scholars": membership.sunday_school_num_scholars,
+                    "vbs_num_officers_teachers": membership.vbs_num_officers_teachers,
+                    "vbs_num_scholars": membership.vbs_num_scholars,
+                    "weekday_num_officers_teachers": membership.weekday_num_officers_teachers,
+                    "weekday_num_scholars": membership.weekday_num_scholars,
+                    "parochial_num_administrators": membership.parochial_num_administrators,
+                    "parochial_num_elementary_teachers": membership.parochial_num_elementary_teachers,
+                    "parochial_num_secondary_teachers": membership.parochial_num_secondary_teachers,
+                    "parochial_num_elementary_scholars": membership.parochial_num_elementary_scholars,
+                    "parochial_num_secondary_scholars": membership.parochial_num_secondary_scholars,
                 }
         except Exception as e:
             import logging

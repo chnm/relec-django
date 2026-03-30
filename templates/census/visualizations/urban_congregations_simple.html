@@ -158,10 +158,25 @@
                     denominations = denomsData;
                 }
 
-        // Load city data
-                const citiesResponse = await fetch('/census/api/religious-bodies/city_membership/?year=1926');
-                const citiesData = await citiesResponse.json();
-                allData = citiesData;
+        // Load congregation data and transform to flat format
+                const citiesResponse = await fetch('/census/api/religious-bodies/?page_size=5000');
+                const citiesJson = await citiesResponse.json();
+                const citiesResults = citiesJson.results || citiesJson;
+                allData = citiesResults.map(b => {
+                    const loc = b.location_details || {};
+                    const denom = b.denomination_details || {};
+                    const mem = b.membership_details || {};
+                    return {
+                        id: b.id, name: b.name,
+                        lat: loc.lat, lon: loc.lon,
+                        city: loc.city_name, county: loc.county_name, state: loc.state_name,
+                        denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+                        total_members: mem.total_members || 0,
+                        congregations: 1,
+                        denominations: [denom.name].filter(Boolean),
+                        denominations_count: denom.name ? 1 : 0,
+                    };
+                });
 
         // Populate dropdowns
                 populateFamilyDropdown();

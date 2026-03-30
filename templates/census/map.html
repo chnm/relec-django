@@ -432,7 +432,7 @@
                     }
                 }, 3000);
 
-                fetch(`/census/api/religious-bodies/map_data/?${queryParams.toString()}`)
+                fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
                         clearTimeout(timeoutId);
                         if (!response.ok) {
@@ -443,17 +443,21 @@
                     .then(data => {
             // Create a legend for denomination families
                         const families = new Set();
+                        const results = data.results || data;
 
             // Process each religious body and add to map
-                        data.forEach(church => {
-                            if (church.lat && church.lon) {
+                        results.forEach(church => {
+                            const loc = church.location_details || {};
+                            const lat = loc.lat;
+                            const lon = loc.lon;
+                            if (lat && lon) {
                     // Get family info, handling potential missing data
-                                const family = church.family || 'Unknown';
+                                const family = (church.denomination_details && church.denomination_details.family_census) || 'Unknown';
                                 families.add(family);
 
                     // Create marker
                                 const marker = L.circleMarker(
-                                    [church.lat, church.lon],
+                                    [lat, lon],
                                     {
                                         radius: 3,
                                         fillColor: getFamilyColor(family),
@@ -465,12 +469,14 @@
                                 );
 
                     // Get total members
-                                const totalMembers = church.total_members || 0;
+                                const mem = church.membership_details || {};
+                                const totalMembers = mem.total_members || 0;
+                                const denomName = (church.denomination_details && church.denomination_details.name) || 'Unknown';
 
                     // Add popup content
                                 marker.bindPopup(`
                         <h5 class="font-bold text-lg">${church.name || 'Unnamed Religious Body'}</h5>
-                        <p><strong>Denomination:</strong> ${church.denomination_name || 'Unknown'}</p>
+                        <p><strong>Denomination:</strong> ${denomName}</p>
                         <p><strong>Family:</strong> ${family}</p>
                         <p><strong>Members:</strong> ${totalMembers}</p>
                     `);

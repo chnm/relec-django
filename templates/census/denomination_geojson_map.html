@@ -336,7 +336,7 @@
                 detailsContent.innerHTML = html;
             }
 
-            // Function to load GeoJSON data
+            // Function to load map data and group by populated place
             async function loadGeoJSON() {
                 const form = document.getElementById('filterForm');
                 const formData = new FormData(form);
@@ -349,32 +349,93 @@
                     }
                 }
 
-                const url = `/census/api/religious-bodies/places_geojson/?${params.toString()}`;
+                // Use high page size to get all results
+                params.set('page_size', '5000');
+
+                const url = `/census/api/religious-bodies/?${params.toString()}`;
 
                 try {
                     const response = await fetch(url);
-                    const data = await response.json();
+                    const json = await response.json();
+                    const results = json.results || json;
 
                     // Remove existing layer if any
                     if (geoJsonLayer) {
                         map.removeLayer(geoJsonLayer);
                     }
 
-                    // Calculate total congregations
-                    totalCongregations = 0;
-                    data.features.forEach(feature => {
-                        totalCongregations += feature.properties.congregation_count;
+                    // Group congregations by populated place
+                    const places = {};
+                    results.forEach(body => {
+                        const loc = body.location_details || {};
+                        const denom = body.denomination_details || {};
+                        if (!loc.lat || !loc.lon || !loc.place_id) return;
+
+                        const key = loc.place_id;
+                        if (!places[key]) {
+                            places[key] = {
+                                place_id: loc.place_id,
+                                populated_place: loc.city_name,
+                                city: loc.city_name,
+                                county: loc.county_name,
+                                state: loc.state_name,
+                                lat: loc.lat,
+                                lon: loc.lon,
+                                congregations: [],
+                                denominations: new Set(),
+                            };
+                        }
+                        places[key].congregations.push({
+                            id: body.id,
+                            name: body.name || 'Unnamed',
+                            denomination: denom.name || 'Unknown',
+                            denomination_id: denom.id,
+                            family_census: denom.family_census,
+                            family_relec: denom.family_relec,
+                            address: loc.address,
+                            num_edifices: body.num_edifices,
+                            edifice_value: body.finances ? body.finances.edifice_value : null,
+                            schedule_id: body.schedule_id,
+                            census_record_id: body.schedule_id,
+                            transcription_status: body.transcription_status,
+                        });
+                        if (denom.name) places[key].denominations.add(denom.name);
                     });
 
+                    // Build GeoJSON from grouped data
+                    const features = Object.values(places).map(place => ({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [parseFloat(place.lon), parseFloat(place.lat)],
+                        },
+                        properties: {
+                            place_id: place.place_id,
+                            populated_place: place.populated_place,
+                            city: place.city,
+                            county: place.county,
+                            state: place.state,
+                            congregation_count: place.congregations.length,
+                            denominations: Array.from(place.denominations).sort(),
+                            denominations_count: place.denominations.size,
+                            congregations: place.congregations,
+                        },
+                    }));
+
+                    totalCongregations = results.filter(b => {
+                        const loc = b.location_details || {};
+                        return loc.lat && loc.lon;
+                    }).length;
+
                     // Sort features by congregation count (descending)
-                    // This ensures larger markers render first (bottom layer)
-                    // and smaller markers render last (top layer)
-                    data.features.sort((a, b) =>
+                    features.sort((a, b) =>
                         b.properties.congregation_count - a.properties.congregation_count
                     );
 
+                    const geojsonData = { type: 'FeatureCollection', features };
+
                     // Add new GeoJSON layer with custom markers
-                    geoJsonLayer = L.geoJSON(data, {
+                    geoJsonLayer = L.geoJSON(geojsonData, {
                         pointToLayer: function(feature, latlng) {
                             const count = feature.properties.congregation_count;
                             const radius = getMarkerRadius(count);
@@ -405,13 +466,13 @@
                     }).addTo(map);
 
                     // Update info boxes
-                    document.getElementById('placeCount').textContent = data.features.length;
+                    document.getElementById('placeCount').textContent = features.length;
                     document.getElementById('congregationCount').textContent = totalCongregations;
 
                     // Keep centered on Hartford, CT - don't auto-zoom to fit all markers
 
                 } catch (error) {
-                    console.error('Error loading GeoJSON:', error);
+                    console.error('Error loading map data:', error);
                     alert('Error loading map data. Check console for details.');
                 }
             }
