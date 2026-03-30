@@ -47,6 +47,14 @@ class Denomination(models.Model):
     family_census = models.CharField(null=True, max_length=255)
     family_relec = models.CharField(null=True, max_length=255)
 
+    # Published census counts (from 1926 Census of Religious Bodies, Vol. 1)
+    published_churches_count = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Published Churches Count",
+        help_text="Number of churches reported in the published 1926 census volume",
+    )
+
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
