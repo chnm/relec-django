@@ -323,11 +323,7 @@
                         html += `
                             <div class="congregation-card">
                                 <h4>${cong.name}</h4>
-                                ${cong.address ? `<p><strong>Address:</strong> ${cong.address}</p>` : ''}
-                                ${cong.schedule_id ? `<p><strong>Schedule ID:</strong> ${cong.schedule_id}</p>` : ''}
-                                ${cong.num_edifices ? `<p><strong>Edifices:</strong> ${cong.num_edifices}</p>` : ''}
-                                ${cong.edifice_value ? `<p><strong>Value:</strong> $${cong.edifice_value.toLocaleString()}</p>` : ''}
-                                ${cong.census_record_id ? `<p><a href="/census/record/${cong.census_record_id}/" class="text-religious-primary hover:text-primary-700 font-medium">View Full Schedule →</a></p>` : ''}
+                                ${cong.schedule_url ? `<p><a href="${cong.schedule_url}" class="text-religious-primary hover:text-primary-700 font-medium">View Full Schedule →</a></p>` : ''}
                             </div>
                         `;
                     });
@@ -422,8 +418,7 @@
                             address: loc.address,
                             num_edifices: body.num_edifices,
                             edifice_value: body.finances ? body.finances.edifice_value : null,
-                            schedule_id: body.schedule_id,
-                            census_record_id: body.schedule_id,
+                            schedule_url: body.urls ? body.urls.self : null,
                             transcription_status: body.transcription_status,
                         });
                         if (denom.name) places[key].denominations.add(denom.name);
