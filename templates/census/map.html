@@ -379,22 +379,34 @@
                 statsContainer.innerHTML = statsHTML;
             }
 
+            function showLoading() {
+                const mapEl = document.getElementById('map');
+                let overlay = document.getElementById('map-loading-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'map-loading-overlay';
+                    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;border-radius:0.5rem;';
+                    overlay.innerHTML = '<div style="text-align:center"><div style="border:3px solid #e5e7eb;border-top-color:#0060b1;border-radius:50%;width:2.5rem;height:2.5rem;animation:spin 0.8s linear infinite;margin:0 auto 0.75rem;"></div><p style="color:#4b5563;font-size:0.875rem;">Loading congregation data&hellip;</p></div>';
+                    mapEl.style.position = 'relative';
+                    mapEl.appendChild(overlay);
+                    if (!document.getElementById('spin-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'spin-style';
+                        style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+                        document.head.appendChild(style);
+                    }
+                }
+                overlay.style.display = 'flex';
+            }
+
+            function hideLoading() {
+                const overlay = document.getElementById('map-loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+
     // Function to load marker data
             function loadMarkers(filters = {}) {
-    // Show loading indicator
-                const loadingDiv = document.createElement('div');
-                loadingDiv.id = 'map-loading';
-                loadingDiv.style.position = 'absolute';
-                loadingDiv.style.top = '50%';
-                loadingDiv.style.left = '50%';
-                loadingDiv.style.transform = 'translate(-50%, -50%)';
-                loadingDiv.style.background = 'white';
-                loadingDiv.style.padding = '10px';
-                loadingDiv.style.borderRadius = '5px';
-                loadingDiv.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-                loadingDiv.style.zIndex = '1000';
-                loadingDiv.innerHTML = 'Loading data...';
-                document.getElementById('map').appendChild(loadingDiv);
+                showLoading();
 
     // Clear existing markers
                 markers.clearLayers();
@@ -424,17 +436,10 @@
     // Add timestamp to prevent caching
                 queryParams.append('_', Date.now());
 
-    // Fetch data from API with timeout
-                const timeoutId = setTimeout(() => {
-                    const loadingElem = document.getElementById('map-loading');
-                    if (loadingElem) {
-                        loadingElem.innerHTML = 'Loading is taking longer than expected. Please wait...';
-                    }
-                }, 3000);
-
-                fetch(`/census/api/religious-bodies/map_data/?${queryParams.toString()}`)
+                queryParams.set('page_size', '5000');
+                fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
-                        clearTimeout(timeoutId);
+
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
                         }
@@ -443,17 +448,21 @@
                     .then(data => {
             // Create a legend for denomination families
                         const families = new Set();
+                        const results = data.results || data;
 
             // Process each religious body and add to map
-                        data.forEach(church => {
-                            if (church.lat && church.lon) {
+                        results.forEach(church => {
+                            const loc = church.location_details || {};
+                            const lat = loc.lat;
+                            const lon = loc.lon;
+                            if (lat && lon) {
                     // Get family info, handling potential missing data
-                                const family = church.family || 'Unknown';
+                                const family = (church.denomination_details && church.denomination_details.family_census) || 'Unknown';
                                 families.add(family);
 
                     // Create marker
                                 const marker = L.circleMarker(
-                                    [church.lat, church.lon],
+                                    [lat, lon],
                                     {
                                         radius: 3,
                                         fillColor: getFamilyColor(family),
@@ -465,12 +474,14 @@
                                 );
 
                     // Get total members
-                                const totalMembers = church.total_members || 0;
+                                const mem = church.membership_details || {};
+                                const totalMembers = mem.total_members || 0;
+                                const denomName = (church.denomination_details && church.denomination_details.name) || 'Unknown';
 
                     // Add popup content
                                 marker.bindPopup(`
                         <h5 class="font-bold text-lg">${church.name || 'Unnamed Religious Body'}</h5>
-                        <p><strong>Denomination:</strong> ${church.denomination_name || 'Unknown'}</p>
+                        <p><strong>Denomination:</strong> ${denomName}</p>
                         <p><strong>Family:</strong> ${family}</p>
                         <p><strong>Members:</strong> ${totalMembers}</p>
                     `);
@@ -495,24 +506,12 @@
                         updateMapStatus();
                         updateFamilyStats();
 
-            // Remove loading indicator
-                        const loadingElem = document.getElementById('map-loading');
-                        if (loadingElem) {
-                            loadingElem.remove();
-                        }
+                        hideLoading();
                     })
                     .catch(error => {
-                        clearTimeout(timeoutId);
-                        console.error('Error loading religious body data:', error);
 
-            // Remove loading indicator and show error
-                        const loadingElem = document.getElementById('map-loading');
-                        if (loadingElem) {
-                            loadingElem.innerHTML = 'Error loading data. Please try again.';
-                            setTimeout(() => {
-                                loadingElem.remove();
-                            }, 3000);
-                        }
+                        console.error('Error loading religious body data:', error);
+                        hideLoading();
                     });
             }
 

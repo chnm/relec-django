@@ -31,7 +31,7 @@ urlpatterns = [
     path("map/", views.map_view, name="denomination_map"),
     path("demographics-map/", views.demographics_map_view, name="demographics_map"),
     path(
-        "geojson-map/",
+        "populated-places/",
         views.denomination_geojson_map_view,
         name="denomination_geojson_map",
     ),

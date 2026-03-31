@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "unfold.contrib.forms",
     "unfold.contrib.inlines",
     "unfold.contrib.simple_history",
+    "unfold.contrib.import_export",
     # simple history
     "simple_history",
     # django defaults
@@ -469,6 +470,12 @@ UNFOLD = {
 # Geocoding settings
 # ------------------------------------------------------------------------------
 GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
+
+# CORS Configuration
+# ------------------------------------------------------------------------------
+# The API is read-only and public, so allow all origins.
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_URLS_REGEX = r"^/census/api/.*$"
 
 # Django REST Framework Configuration
 # ------------------------------------------------------------------------------

@@ -9,8 +9,8 @@ const API_BASE = window.RELEC_API_BASE || "/census/api/";
 // Load the data from local Django endpoints
 const urls = [
   `${API_BASE}denominations/`,
-  `${API_BASE}religious-bodies/city_membership/?year=1926&denomination=Protestant+Episcopal+Church`,
-  `${API_BASE}religious-bodies/city_membership/?year=1926`,
+  `${API_BASE}religious-bodies/?search=Protestant+Episcopal+Church&page_size=5000`,
+  `${API_BASE}religious-bodies/?page_size=5000`,
   `${API_BASE}religious-bodies/denomination_families/`,
   "https://data.chnm.org/ne/globe?location=North+America",  // Keep external (Natural Earth data)
   "https://data.chnm.org/ahcb/states/1926-07-04/",  // Keep external (AHCB state boundaries)
@@ -21,13 +21,31 @@ urls.forEach((url) => promises.push(d3.json(url)));
 // Once all the data is loaded, initialize and render the visualizations
 Promise.all(promises)
   .then((data) => {
+    // Normalize paginated religious bodies responses to flat congregation records
+    function flattenResults(response) {
+      const results = response.results || response;
+      if (!Array.isArray(results)) return [];
+      return results.map(b => {
+        const loc = b.location_details || {};
+        const denom = b.denomination_details || {};
+        const mem = b.membership_details || {};
+        return {
+          id: b.id, name: b.name,
+          lat: loc.lat, lon: loc.lon,
+          city: loc.city_name, county: loc.county_name, state: loc.state_name,
+          denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+          membership: mem,
+        };
+      });
+    }
+
     // Transform denomination_families response to match expected format
     // Django returns: { census_families: [...], relec_families: [...] }
     // Code expects: { family_relec: [{name: ...}] }
     const transformedData = [
       data[0],  // denominations (already correct format)
-      data[1],  // cityMembership for specific denomination
-      data[2],  // cityMembership aggregate
+      flattenResults(data[1]),  // cityMembership for specific denomination
+      flattenResults(data[2]),  // cityMembership aggregate
       {
         family_census: data[3].census_families,
         family_relec: data[3].relec_families.map(f => ({ name: f.name }))

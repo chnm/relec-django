@@ -370,10 +370,24 @@ export default class DenominationsMap extends Visualization {
       this.denomination === this.allDenominations &&
       this.family !== this.allFamilies
     ) {
-      const url = `/census/api/religious-bodies/city_membership/?year=${year}&denominationFamily=${family}`;
+      const url = `/census/api/religious-bodies/?family_relec=${encodeURIComponent(family)}&page_size=5000`;
       const denomfamily = fetch(url)
         .then((response) => response.json())
-        .then((data) => data)
+        .then((data) => {
+          const results = data.results || data;
+          return results.map(b => {
+            const loc = b.location_details || {};
+            const denom = b.denomination_details || {};
+            const mem = b.membership_details || {};
+            return {
+              id: b.id, name: b.name,
+              lat: loc.lat, lon: loc.lon,
+              city: loc.city_name, county: loc.county_name, state: loc.state_name,
+              denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+              membership: mem,
+            };
+          });
+        })
         .catch((error) => {
           console.error(
             "There has been a problem with fetching denominations: ",
@@ -385,10 +399,24 @@ export default class DenominationsMap extends Visualization {
       return denomfamily;
     }
 
-    const url = `/census/api/religious-bodies/city_membership/?year=${year}&denomination=${denomination}`;
+    const url = `/census/api/religious-bodies/?search=${encodeURIComponent(denomination)}&page_size=5000`;
     const dataResponse = fetch(url)
       .then((response) => response.json())
-      .then((data) => data)
+      .then((data) => {
+        const results = data.results || data;
+        return results.map(b => {
+          const loc = b.location_details || {};
+          const denom = b.denomination_details || {};
+          const mem = b.membership_details || {};
+          return {
+            id: b.id, name: b.name,
+            lat: loc.lat, lon: loc.lon,
+            city: loc.city_name, county: loc.county_name, state: loc.state_name,
+            denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+            membership: mem,
+          };
+        });
+      })
       .catch((error) => {
         console.error(
           "There has been a problem with fetching denominations: ",
