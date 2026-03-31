@@ -24,20 +24,22 @@ class ReligiousBodyFilter(django_filters.FilterSet):
         return queryset.filter(census_record__populated_place__isnull=True)
 
     def filter_family_census(self, queryset, name, value):
-        """Try both possible relationship paths to filter by family_census."""
-        # First try direct denomination
+        """Filter by family_census via direct denomination or schedule denomination."""
         direct_filter = queryset.filter(denomination__family_census=value)
         if direct_filter.exists():
             return direct_filter
-        # Then try through census_record
-        return queryset.filter(census_record__denomination__family_census=value)
+        return queryset.filter(
+            census_record__schedule_denomination__family_census=value
+        )
 
     def filter_family_relec(self, queryset, name, value):
-        """Try both possible relationship paths to filter by family_relec."""
+        """Filter by family_relec via direct denomination or schedule denomination."""
         direct_filter = queryset.filter(denomination__family_relec=value)
         if direct_filter.exists():
             return direct_filter
-        return queryset.filter(census_record__denomination__family_relec=value)
+        return queryset.filter(
+            census_record__schedule_denomination__family_relec=value
+        )
 
     def filter_exclude_families(self, queryset, name, value):
         """Exclude specific denomination families (comma-separated)."""
