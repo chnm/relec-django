@@ -432,6 +432,7 @@
                     }
                 }, 3000);
 
+                queryParams.set('page_size', '5000');
                 fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
                         clearTimeout(timeoutId);

@@ -105,7 +105,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
 
     def get_membership_details(self, obj):
         try:
-            membership = Membership.objects.filter(religious_body=obj).first()
+            # Use prefetched membership to avoid N+1 queries
+            membership = obj.membership.first() if hasattr(obj, 'membership') else None
             if membership:
                 # Handle NULL values properly
                 male = membership.male_members or 0

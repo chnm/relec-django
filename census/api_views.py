@@ -123,6 +123,9 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 class ReligiousBodyPagination(PageNumberPagination):
     """Custom pagination that includes matched denominations in the response."""
 
+    page_size_query_param = "page_size"
+    max_page_size = 5000
+
     def paginate_queryset(self, queryset, request, view=None):
         # Extract distinct denomination names from the full filtered queryset
         # before pagination slices it
@@ -178,6 +181,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             "census_record__county__state",
             "census_record__populated_place",
         )
+        .prefetch_related("membership", "census_record__clergy")
         .order_by("census_record__schedule_id")
     )
     serializer_class = ReligiousBodySerializer

@@ -336,8 +336,35 @@
                 detailsContent.innerHTML = html;
             }
 
+            function showLoading() {
+                const mapEl = document.getElementById('map');
+                let overlay = document.getElementById('map-loading-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'map-loading-overlay';
+                    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;border-radius:0.5rem;';
+                    overlay.innerHTML = '<div style="text-align:center"><div style="border:3px solid #e5e7eb;border-top-color:#0060b1;border-radius:50%;width:2.5rem;height:2.5rem;animation:spin 0.8s linear infinite;margin:0 auto 0.75rem;"></div><p style="color:#4b5563;font-size:0.875rem;">Loading congregation data&hellip;</p></div>';
+                    mapEl.style.position = 'relative';
+                    mapEl.appendChild(overlay);
+                    if (!document.getElementById('spin-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'spin-style';
+                        style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+                        document.head.appendChild(style);
+                    }
+                }
+                overlay.style.display = 'flex';
+            }
+
+            function hideLoading() {
+                const overlay = document.getElementById('map-loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+
             // Function to load map data and group by populated place
             async function loadGeoJSON() {
+                showLoading();
+
                 const form = document.getElementById('filterForm');
                 const formData = new FormData(form);
                 const params = new URLSearchParams();
@@ -471,7 +498,9 @@
 
                     // Keep centered on Hartford, CT - don't auto-zoom to fit all markers
 
+                    hideLoading();
                 } catch (error) {
+                    hideLoading();
                     console.error('Error loading map data:', error);
                     alert('Error loading map data. Check console for details.');
                 }

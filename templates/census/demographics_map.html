@@ -671,6 +671,7 @@
                 queryParams.append('_', Date.now());
 
                 // Fetch data from our new demographics API endpoint
+                queryParams.set('page_size', '5000');
                 fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
                         if (!response.ok) {
