@@ -139,6 +139,14 @@ class DenominationResource(resources.ModelResource):
         readonly=True,
     )
 
+    def before_import_row(self, row, **kwargs):
+        """Convert NA or empty published_churches_count to None."""
+        val = row.get("published_churches_count", "")
+        if isinstance(val, str):
+            val = val.strip()
+        if not val or val == "NA":
+            row["published_churches_count"] = None
+
     class Meta:
         model = Denomination
         import_id_fields = ["denomination_id"]
