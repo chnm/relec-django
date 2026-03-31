@@ -43,7 +43,7 @@
             <h1 class="text-3xl font-heading font-bold text-content-primary mb-4">{{ title }}</h1>
             <p class="text-content-secondary mb-6">
                 Transcription progress grouped by Religious Ecologies family and denomination. Shows published
-                census counts, catalogued records, and completed transcriptions with percentages.
+                census counts, catalogued records, completed transcriptions, and location coverage with percentages.
             </p>
 
             {% if families %}
@@ -67,7 +67,11 @@
                                         <span class="tooltip-text">Fully transcribed and approved records (% of published)</span>
                                     </span>
                                 </th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider relative">
+                                    <span class="tooltip-header">Located
+                                        <span class="tooltip-text">Records with a USGS populated place / geographic ID (% of published)</span>
+                                    </span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -88,17 +92,9 @@
                                         {{ family.total_transcribed|intcomma }}
                                         <span class="text-xs text-gray-500">({{ family.pct_transcribed }}%)</span>
                                     </td>
-                                    <td class="px-4 py-3 text-sm text-right">
-                                        {% if family.total_published > 0 %}
-                                            <div class="flex items-center justify-end gap-2">
-                                                <div class="w-20 bg-gray-200 rounded-full h-2">
-                                                    <div class="bg-religious-primary h-2 rounded-full" style="width: {{ family.pct_transcribed }}%"></div>
-                                                </div>
-                                                <span class="text-content-primary text-xs font-bold font-mono w-12 text-right">{{ family.pct_transcribed }}%</span>
-                                            </div>
-                                        {% else %}
-                                            <span class="text-gray-400">—</span>
-                                        {% endif %}
+                                    <td class="px-4 py-3 text-sm text-right font-bold text-content-primary font-mono whitespace-nowrap">
+                                        {{ family.total_located|intcomma }}
+                                        <span class="text-xs text-gray-500">({{ family.pct_located }}%)</span>
                                     </td>
                                 </tr>
                                 {# Denomination rows under this family #}
@@ -118,17 +114,9 @@
                                             {{ denom.total_transcribed|default:"0"|intcomma }}
                                             <span class="text-xs text-gray-400">({{ denom.pct_transcribed }}%)</span>
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-right">
-                                            {% if denom.published_churches_count > 0 %}
-                                                <div class="flex items-center justify-end gap-2">
-                                                    <div class="w-20 bg-gray-200 rounded-full h-2">
-                                                        <div class="bg-religious-primary h-2 rounded-full" style="width: {{ denom.pct_transcribed }}%"></div>
-                                                    </div>
-                                                    <span class="text-content-secondary text-xs font-mono w-12 text-right">{{ denom.pct_transcribed }}%</span>
-                                                </div>
-                                            {% else %}
-                                                <span class="text-gray-400">—</span>
-                                            {% endif %}
+                                        <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono whitespace-nowrap">
+                                            {{ denom.total_located|default:"0"|intcomma }}
+                                            <span class="text-xs text-gray-400">({{ denom.pct_located }}%)</span>
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -147,10 +135,9 @@
                                         {{ totals.grand_transcribed|default:"0"|intcomma }}
                                         <span class="text-xs text-gray-500">({{ totals.pct_transcribed }}%)</span>
                                     </td>
-                                    <td class="px-4 py-3 text-sm text-right">
-                                        {% if totals.grand_published > 0 %}
-                                            <span class="text-content-primary text-xs font-bold font-mono">{{ totals.pct_transcribed }}%</span>
-                                        {% endif %}
+                                    <td class="px-4 py-3 text-sm text-right text-content-primary font-mono whitespace-nowrap">
+                                        {{ totals.grand_located|default:"0"|intcomma }}
+                                        <span class="text-xs text-gray-500">({{ totals.pct_located }}%)</span>
                                     </td>
                                 </tr>
                             </tfoot>
