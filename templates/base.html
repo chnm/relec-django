@@ -61,7 +61,7 @@
                     </div>
                     <!-- Mobile menu button -->
                     <div class="md:hidden">
-                        <button id="mobile-menu-button" class="text-white">
+                        <button id="mobile-menu-button" class="text-white" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                             </svg>
@@ -110,49 +110,63 @@
 
         <!-- Footer -->
         <footer class="bg-surface-tertiary border-t border-gray-200">
-            <div class="container mx-auto px-4 py-8">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2 text-content-primary font-heading">American Religious Ecologies</h3>
-                        <p class="text-content-secondary mb-4">Exploring the religious landscape of America</p>
-                        <p class="text-content-tertiary text-sm">Roy Rosenzweig Center for History and New Media</p>
-                        <p class="text-content-tertiary text-sm">George Mason University</p>
+            <div class="container mx-auto px-4 py-10">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+                    <div class="sm:col-span-2 flex flex-col">
+                        <p class="text-sm text-content-tertiary leading-relaxed mb-6">American Religious Ecologies digitizes and publishes the 1926 Federal Census of Religious Bodies to make historical American religious data searchable and accessible. Generously funded in part by the <a href="https://www.neh.gov/" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">National Endowment for the Humanities</a> and developed by the <a href="https://rrchnm.org/" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">Roy Rosenzweig Center for History and New Media</a> at <a href="https://gmu.edu" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">George Mason University</a>. All of the census schedules on this website are in the public domain.</p>
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mt-auto">
+                            <a href="https://rrchnm.org/">
+                                <img src="{% static 'images/rrchnm-logo-3.png' %}"
+                                     alt="Roy Rosenzweig Center for History and New Media"
+                                     class="h-10 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                            <a href="https://gmu.edu">
+                                <img src="{% static 'images/gmu-logo-2.png' %}"
+                                     alt="George Mason University"
+                                     class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                            <a href="https://www.neh.gov/">
+                                <img src="{% static 'images/NEH-Preferred-Seal.png' %}"
+                                     alt="National Endowment for the Humanities"
+                                     class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                        </div>
                     </div>
 
                     <div>
-                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Quick Links</h4>
-                        <div><a href="/census/api/" class="text-religious-primary hover:text-primary-700 transition-colors">API</a></div>
-                        <div><a href="{% url 'locations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Locations</a></div>
-                        <div><a href="{% url 'denominations_browse' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Denominations</a></div>
-                        <div><a href="{% url 'census_browser' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Records</a></div>
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Explore</h4>
+                        <ul class="space-y-2 text-sm">
+                            {% for page in nav_pages %}
+                                <li><a href="{% url 'page_detail' page.slug %}" class="text-content-secondary hover:text-religious-primary transition-colors">{{ page.get_nav_title }}</a></li>
+                            {% endfor %}
+                            <li><a href="{% url 'visualization-list' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Visualizations</a></li>
+                        </ul>
+
+                        <h4 class="font-semibold mb-3 mt-6 text-content-primary font-heading">Resources</h4>
+                        <ul class="space-y-2 text-sm">
+                            <li><a href="{% url 'blog-list' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Blog</a></li>
+                            <li><a href="{% url 'api_documentation' %}" class="text-content-secondary hover:text-religious-primary transition-colors">API Documentation</a></li>
+                        </ul>
                     </div>
 
-                    <div>
-                        {% load socialaccount %}
-                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Account</h4>
-                        {% if user.is_authenticated %}
-                            <div class="text-sm space-y-2">
-                                <p class="text-content-secondary">Welcome, {{ user.username }}!</p>
-                                <div><a href="{% url 'account_logout' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Logout</a></div>
-                            </div>
-                        {% else %}
-                            <div class="space-y-2 text-sm">
-                                <div><a href="{% url 'account_login' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Login</a></div>
-                                <div><a href="{% url 'account_signup' %}" class="text-religious-primary hover:text-primary-700 transition-colors">Sign Up</a></div>
-                                {% comment %}
-                                <div class="pt-2 border-t border-gray-300">
-                                    <div><a href="{% provider_login_url 'github' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Sign in with GitHub</a></div>
-                                    <div><a href="{% provider_login_url 'google' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Sign in with Google</a></div>
-                                </div>
-                                {% endcomment %}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
+                    <div class="flex flex-col">
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Browse Data</h4>
+                        <ul class="space-y-2 text-sm">
+                            <li><a href="{% url 'census_browser' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse Schedules</a></li>
+                            <li><a href="{% url 'locations_browse' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Counties</a></li>
+                            <li><a href="{% url 'browse_popplaces' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Populated Places</a></li>
+                            <li><a href="{% url 'denominations_browse' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Denominations</a></li>
+                        </ul>
 
-                <div class="border-t border-gray-300 pt-6 mt-8">
-                    <div class="flex flex-col md:flex-row justify-between items-center text-sm text-content-tertiary">
-                        <p class="mt-2 md:mt-0"><a href="https://religiousecologies.org/">American Religious Ecologies</a> is generously funded in part by the <a href="https://www.neh.gov/">National Endowment for the Humanities</a> and developed by the <a href="https://rrchnm.org/">Roy Rosenzweig Center for History and New Media</a> at <a href="https://gmu.edu">George Mason University</a>. All of the census schedules on this website are in the public domain.</p>
+                        <div class="mt-auto text-sm">
+                            {% if user.is_authenticated %}
+                                <a href="/admin/" class="text-content-tertiary hover:text-religious-primary transition-colors">Admin</a>
+                                <span class="text-content-tertiary mx-1">&middot;</span>
+                                <a href="{% url 'account_logout' %}" class="text-content-tertiary hover:text-religious-primary transition-colors">Logout</a>
+                            {% else %}
+                                <a href="{% url 'account_login' %}" class="text-content-tertiary hover:text-religious-primary transition-colors">Login</a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -161,7 +175,9 @@
         <!-- JavaScript for mobile menu toggle -->
         <script>
             document.getElementById('mobile-menu-button').addEventListener('click', function() {
-                document.getElementById('mobile-menu').classList.toggle('hidden');
+                var menu = document.getElementById('mobile-menu');
+                menu.classList.toggle('hidden');
+                this.setAttribute('aria-expanded', !menu.classList.contains('hidden'));
             });
 
             // Toggle mobile records submenu
