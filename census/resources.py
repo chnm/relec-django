@@ -147,6 +147,30 @@ class DenominationResource(resources.ModelResource):
         if not val or val == "NA":
             row["published_churches_count"] = None
 
+    def get_instance(self, instance_loader, row):
+        """Match by denomination_id when available, fall back to name."""
+        denom_id = row.get("denomination_id", "")
+        if isinstance(denom_id, str):
+            denom_id = denom_id.strip()
+
+        if denom_id:
+            try:
+                return Denomination.objects.get(denomination_id=denom_id)
+            except Denomination.DoesNotExist:
+                return None
+
+        # Fall back to matching by name for denominations without an ID
+        name = row.get("denomination_name", "") or row.get("name", "")
+        if isinstance(name, str):
+            name = name.strip()
+        if name:
+            try:
+                return Denomination.objects.get(name=name)
+            except Denomination.DoesNotExist:
+                return None
+
+        return None
+
     class Meta:
         model = Denomination
         import_id_fields = ["denomination_id"]
