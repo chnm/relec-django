@@ -103,12 +103,12 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return (
-            ("unassigned", "📝 Unassigned Records"),
-            ("assigned_to_me", "👤 Assigned to Me"),
-            ("needs_review", "👀 Needs Review"),
-            ("in_progress", "🔄 In Progress"),
-            ("completed", "✅ Completed"),
-            ("approved", "🎯 Approved"),
+            ("unassigned", "Unassigned Records"),
+            ("assigned_to_me", "Assigned to Me"),
+            ("needs_review", "Needs Review"),
+            ("in_progress", "In Progress"),
+            ("completed", "Completed"),
+            ("approved", "Approved"),
         )
 
     def queryset(self, request, queryset):
@@ -351,13 +351,13 @@ class DenominationAdmin(ImportExportModelAdmin, ModelAdmin):
     list_display = [
         "name",
         "denomination_id",
-        "family_census",
         "family_relec",
+        "family_census",
         "published_churches_count",
     ]
-    search_fields = ["name", "denomination_id", "family_census", "family_relec"]
+    search_fields = ["name", "short_name", "denomination_id", "family_relec", "family_census"]
     ordering = ["name"]
-    list_filter = ["family_census", "family_relec"]
+    list_filter = ["family_relec", "family_census"]
     actions = [sync_denominations]
     inlines = [DenominationCensusReportInline]
 
@@ -562,8 +562,17 @@ class CensusScheduleAdmin(ModelAdmin):
         "resource_id",
         "county__name",
         "county__state__name",
+        "county__state__code",
         "populated_place__name",
         "schedule_denomination__name",
+        "schedule_denomination__short_name",
+        "assigned_transcriber__username",
+        "assigned_transcriber__first_name",
+        "assigned_transcriber__last_name",
+        "assigned_reviewer__username",
+        "assigned_reviewer__first_name",
+        "assigned_reviewer__last_name",
+        "transcription_notes",
     ]
     list_filter = [
         TranscriptionWorkflowFilter,
@@ -1187,7 +1196,18 @@ class ReligiousBodyAdmin(ModelAdmin):
         "denomination",
         "census_record__county__state",
     ]
-    search_fields = ["name", "denomination__name", "census_record__schedule_title"]
+    search_fields = [
+        "name",
+        "address",
+        "denomination__name",
+        "denomination__short_name",
+        "census_record__schedule_title",
+        "census_record__schedule_id",
+        "census_record__county__name",
+        "census_record__county__state__name",
+        "census_record__county__state__code",
+        "census_record__populated_place__name",
+    ]
     autocomplete_fields = ["denomination", "census_record"]
 
     readonly_fields = [
@@ -1387,7 +1407,7 @@ class MembershipAdmin(ModelAdmin):
         elif obj.geocode_status == "failed":
             return "✗ Failed"
         elif obj.geocode_status == "pending":
-            return "⏳ Pending"
+            return "Pending"
         elif obj.geocode_status == "skipped":
             return "− Skipped"
         return "− Not Attempted"
