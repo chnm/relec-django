@@ -25,11 +25,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Clear all existing denominations before import",
         )
+        parser.add_argument(
+            "--year",
+            type=int,
+            default=None,
+            help="Only import denominations for this census year (e.g. 1926)",
+        )
 
     def handle(self, *args, **options):
         csv_file = options["csv_file"]
         batch_size = options["batch_size"]
         clear_existing = options["clear_existing"]
+        year_filter = options["year"]
 
         if not os.path.exists(csv_file):
             raise CommandError(f'File "{csv_file}" does not exist.')
@@ -62,21 +69,32 @@ class Command(BaseCommand):
                 reader, start=2
             ):  # Start at 2 because row 1 is headers
                 try:
-                    # Skip rows with empty denomination_id or name
-                    if not row["denomination_id"] or not row["name"]:
+                    # Skip rows that don't match the year filter
+                    if year_filter and row.get("year"):
+                        try:
+                            if int(row["year"]) != year_filter:
+                                continue
+                        except ValueError:
+                            pass
+
+                    # Skip rows with empty name
+                    if not row["name"]:
                         self.stdout.write(
                             self.style.WARNING(
-                                f"Row {row_num}: Skipping - missing denomination_id or name"
+                                f"Row {row_num}: Skipping - missing name"
                             )
                         )
                         skipped_count += 1
                         continue
 
+                    raw_denom_id = row.get("denomination_id", "").strip()
+                    denomination_id = raw_denom_id if raw_denom_id else None
+
                     # Check field lengths
-                    if len(row["denomination_id"]) > 50:
+                    if denomination_id and len(denomination_id) > 50:
                         self.stdout.write(
                             self.style.WARNING(
-                                f"Row {row_num}: Skipping - denomination_id too long ({len(row['denomination_id'])} chars)"
+                                f"Row {row_num}: Skipping - denomination_id too long ({len(denomination_id)} chars)"
                             )
                         )
                         skipped_count += 1
@@ -96,22 +114,33 @@ class Command(BaseCommand):
                     family_census = row.get("family_census", "").strip() or None
                     family_relec = row.get("family_relec", "").strip() or None
 
-                    # Check if denomination exists
+                    # Check if denomination exists — match by denomination_id if
+                    # available, otherwise fall back to matching by name
+                    denomination = None
                     try:
-                        denomination = Denomination.objects.get(
-                            denomination_id=row["denomination_id"]
-                        )
+                        if denomination_id:
+                            denomination = Denomination.objects.get(
+                                denomination_id=denomination_id
+                            )
+                        else:
+                            denomination = Denomination.objects.get(
+                                name=row["name"]
+                            )
+                    except Denomination.DoesNotExist:
+                        pass
+
+                    if denomination:
                         # Update existing
                         denomination.name = row["name"]
+                        denomination.denomination_id = denomination_id
                         denomination.short_name = short_name
                         denomination.family_census = family_census
                         denomination.family_relec = family_relec
                         denominations_to_update.append(denomination)
-
-                    except Denomination.DoesNotExist:
+                    else:
                         # Create new
                         denomination = Denomination(
-                            denomination_id=row["denomination_id"],
+                            denomination_id=denomination_id,
                             name=row["name"],
                             short_name=short_name,
                             family_census=family_census,
@@ -136,6 +165,7 @@ class Command(BaseCommand):
                                 Denomination.objects.bulk_update(
                                     denominations_to_update,
                                     [
+                                        "denomination_id",
                                         "name",
                                         "short_name",
                                         "family_census",
@@ -164,7 +194,7 @@ class Command(BaseCommand):
                 if denominations_to_update:
                     Denomination.objects.bulk_update(
                         denominations_to_update,
-                        ["name", "short_name", "family_census", "family_relec"],
+                        ["denomination_id", "name", "short_name", "family_census", "family_relec"],
                     )
                     updated_count += len(denominations_to_update)
 
