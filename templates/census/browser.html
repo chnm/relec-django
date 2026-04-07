@@ -138,7 +138,7 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            color: #9ca3af;
+            color: #6b7280;
             margin-bottom: 0.75rem;
         }
 
@@ -204,8 +204,8 @@
             <form method="get" class="space-y-5" id="filter-form">
                 <!-- Search -->
                 <div>
-                    <label class="block text-sm font-medium text-content-secondary mb-2">Search</label>
-                    <input type="text" name="search" value="{{ search }}"
+                    <label for="search-input" class="block text-sm font-medium text-content-secondary mb-2">Search</label>
+                    <input type="text" name="search" id="search-input" value="{{ search }}"
                            placeholder="Search records, churches, denominations..."
                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                 </div>
@@ -215,7 +215,7 @@
                     <div class="filter-group-label">Denomination</div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">Denomination Family</label>
+                            <label for="family-select" class="block text-sm font-medium text-content-secondary mb-2">Denomination Family</label>
                             <select name="family" id="family-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                                 <option value="">All Families</option>
                                 {% for family in census_families %}
@@ -226,7 +226,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
+                            <label for="denomination-select" class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
                             <select name="denomination" id="denomination-select"
                                     {% if not family_filter %}disabled{% endif %}
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
@@ -248,7 +248,7 @@
                     <div class="filter-group-label">Location</div>
                     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">State</label>
+                            <label for="state-select" class="block text-sm font-medium text-content-secondary mb-2">State</label>
                             <select id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                                 <option value="">All States</option>
                                 {% for state in states %}
@@ -259,7 +259,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">County</label>
+                            <label for="county-select" class="block text-sm font-medium text-content-secondary mb-2">County</label>
                             <select id="county-select"
                                     {% if not location_filter %}disabled{% endif %}
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
@@ -267,7 +267,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">Populated Place</label>
+                            <label for="place-select" class="block text-sm font-medium text-content-secondary mb-2">Populated Place</label>
                             <select id="place-select"
                                     {% if not county_filter %}disabled{% endif %}
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
@@ -275,8 +275,8 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-content-secondary mb-2">Urban or Rural</label>
-                            <select name="urban_rural"
+                            <label for="urban-rural-select" class="block text-sm font-medium text-content-secondary mb-2">Urban or Rural</label>
+                            <select name="urban_rural" id="urban-rural-select"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
                                 <option value="">Any</option>
                                 <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
@@ -496,7 +496,7 @@
                                     {% if record.original_image %}
                                         <div class="aspect-[4/3] rounded-lg overflow-hidden">
                                             <img src="{% thumbnail record.original_image 'medium' %}"
-                                                 alt="Census Schedule {{ record.resource_id }}"
+                                                 alt="Archival image of census schedule {{ record.resource_id }}. See the transcription for the contents of this document."
                                                  class="w-full h-full object-cover">
                                         </div>
                                     {% else %}

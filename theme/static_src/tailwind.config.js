@@ -71,7 +71,7 @@ module.exports = {
         'content': {
           'primary': '#111827',    // Very dark gray for main text
           'secondary': '#374151',  // Medium gray for secondary text
-          'tertiary': '#6b7280',   // Light gray for labels
+          'tertiary': '#626971',   // Light gray for labels (4.5:1 on gray-100)
           'quaternary': '#9ca3af', // Very light gray for placeholders
         },
 
