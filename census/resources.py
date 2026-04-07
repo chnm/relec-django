@@ -140,7 +140,16 @@ class DenominationResource(resources.ModelResource):
     )
 
     def before_import_row(self, row, **kwargs):
-        """Convert NA or empty published_churches_count to None."""
+        """Normalize empty values before import."""
+        # Convert empty denomination_id to None to avoid unique constraint
+        # violations (PostgreSQL allows multiple NULLs but not multiple
+        # empty strings in a unique column)
+        denom_id = row.get("denomination_id", "")
+        if isinstance(denom_id, str):
+            denom_id = denom_id.strip()
+        if not denom_id:
+            row["denomination_id"] = None
+
         val = row.get("published_churches_count", "")
         if isinstance(val, str):
             val = val.strip()
