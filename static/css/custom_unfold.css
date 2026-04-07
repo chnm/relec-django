@@ -272,7 +272,6 @@ a.deletelink:hover,
 .search-icon,
 button[type="submit"] .material-symbols-outlined,
 .input-group button[type="submit"],
-form button[type="submit"]:has(.material-symbols-outlined),
 [class*="search"] button {
   background: transparent;
   border: none;

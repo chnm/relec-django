@@ -307,7 +307,7 @@ def transcription_progress(request):
                 Subquery(located_count, output_field=IntegerField()), 0
             ),
         )
-        .filter(published_churches_count__isnull=False, published_churches_count__gt=0)
+        .filter(family_relec__isnull=False)
         .order_by("family_relec", "name")
     )
 

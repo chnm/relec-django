@@ -24,7 +24,7 @@ class CountyAdmin(ModelAdmin):
 class PopulatedPlaceAdmin(ModelAdmin):
     list_display = ["name", "county", "get_state", "lat", "lon"]
     list_filter = ["county__state"]
-    search_fields = ["name", "county__name", "county__state__name"]
+    search_fields = ["name", "place_id", "county__name", "county__state__name", "county__state__code"]
     ordering = ["county__state", "county", "name"]
     autocomplete_fields = ["county"]
     list_per_page = 50
