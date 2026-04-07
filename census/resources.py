@@ -133,6 +133,12 @@ class CensusScheduleResource(resources.ModelResource):
 class DenominationResource(resources.ModelResource):
     """Resource for importing/exporting Denomination data including published counts."""
 
+    denomination_id = fields.Field(
+        column_name="denomination_id",
+        attribute="denomination_id",
+        widget=CharWidget(allow_blank=False),
+    )
+
     denomination_name = fields.Field(
         column_name="denomination_name",
         attribute="name",
@@ -140,12 +146,45 @@ class DenominationResource(resources.ModelResource):
     )
 
     def before_import_row(self, row, **kwargs):
-        """Convert NA or empty published_churches_count to None."""
+        """Normalize empty values before import."""
+        # Convert empty denomination_id to None to avoid unique constraint
+        # violations (PostgreSQL allows multiple NULLs but not multiple
+        # empty strings in a unique column)
+        denom_id = row.get("denomination_id", "")
+        if isinstance(denom_id, str):
+            denom_id = denom_id.strip()
+        if not denom_id:
+            row["denomination_id"] = None
+
         val = row.get("published_churches_count", "")
         if isinstance(val, str):
             val = val.strip()
         if not val or val == "NA":
             row["published_churches_count"] = None
+
+    def get_instance(self, instance_loader, row):
+        """Match by denomination_id when available, fall back to name."""
+        denom_id = row.get("denomination_id", "")
+        if isinstance(denom_id, str):
+            denom_id = denom_id.strip()
+
+        if denom_id:
+            try:
+                return Denomination.objects.get(denomination_id=denom_id)
+            except Denomination.DoesNotExist:
+                return None
+
+        # Fall back to matching by name for denominations without an ID
+        name = row.get("denomination_name", "") or row.get("name", "")
+        if isinstance(name, str):
+            name = name.strip()
+        if name:
+            try:
+                return Denomination.objects.get(name=name)
+            except Denomination.DoesNotExist:
+                return None
+
+        return None
 
     class Meta:
         model = Denomination
