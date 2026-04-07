@@ -101,7 +101,10 @@
                                 {% for denom in family.denominations %}
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-4 py-3 text-sm text-content-primary pl-8">
-                                            {{ denom.name }}
+                                            <a href="{% url 'admin:census_censusschedule_changelist' %}?schedule_denomination__id__exact={{ denom.pk }}"
+                                               class="text-religious-primary hover:text-primary-700 hover:underline">
+                                                {{ denom.name }}
+                                            </a>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-right text-content-secondary font-mono">
                                             {{ denom.published_churches_count|default:"0"|intcomma }}
