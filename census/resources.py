@@ -133,6 +133,12 @@ class CensusScheduleResource(resources.ModelResource):
 class DenominationResource(resources.ModelResource):
     """Resource for importing/exporting Denomination data including published counts."""
 
+    denomination_id = fields.Field(
+        column_name="denomination_id",
+        attribute="denomination_id",
+        widget=CharWidget(allow_blank=False),
+    )
+
     denomination_name = fields.Field(
         column_name="denomination_name",
         attribute="name",
