@@ -233,7 +233,7 @@
                     <div class="image-viewer">
                         {% if census_record.original_image %}
                             <img src="{% thumbnail census_record.original_image 'large' %}"
-                                 alt="Census Schedule {{ census_record.resource_id }}"
+                                 alt="Archival image of census schedule {{ census_record.resource_id }}. See the transcription below for the contents of this document."
                                  class="w-full h-auto">
                             <div class="p-4 bg-gray-50 text-sm text-content-tertiary">
                                 <a href="{{ census_record.original_image.url }}"

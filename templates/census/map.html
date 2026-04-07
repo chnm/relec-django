@@ -140,7 +140,7 @@
 
                         <div id="familyList" class="max-h-56 overflow-y-auto mb-3">
                         <!-- Family items will be populated here via JS -->
-                            <div class="text-gray-500 text-sm text-center py-4">Loading...</div>
+                            <div class="text-gray-600 text-sm text-center py-4">Loading...</div>
                         </div>
                     </div>
 
@@ -151,12 +151,13 @@
                             <button id="clearDenominationFilter" class="text-sm text-indigo-600 hover:text-indigo-800">Clear</button>
                         </div>
 
+                        <label for="denominationSearch" class="sr-only">Search denominations</label>
                         <input type="text" id="denominationSearch" placeholder="Search denominations..."
                                class="w-full border border-gray-300 rounded p-2 mb-2">
 
                         <div id="denominationList" class="max-h-64 overflow-y-auto">
                         <!-- Denomination items will be populated here via JS -->
-                            <div class="text-gray-500 text-sm text-center py-4">Select a family first</div>
+                            <div class="text-gray-600 text-sm text-center py-4">Select a family first</div>
                         </div>
                     </div>
                 </div>
@@ -187,7 +188,7 @@
                         </label>
                         <span class="text-sm font-medium text-gray-700">Clustering</span>
                     </div>
-                    <div id="mapStatus" class="text-sm text-gray-500"></div>
+                    <div id="mapStatus" class="text-sm text-gray-600"></div>
                 </div>
 
             <!-- The map container -->
@@ -518,7 +519,7 @@
     // Function to load families data
             function loadFamilies() {
                 const familyList = document.getElementById('familyList');
-                familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+                familyList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Loading...</div>';
 
                 fetch('/census/api/denominations/families/')
                     .then(response => {
@@ -541,7 +542,7 @@
                                 familyHTML += `
                             <div class="family-card" data-family="${family.name}">
                                 <div class="font-medium">${family.name}</div>
-                                <div class="text-sm text-gray-500">
+                                <div class="text-sm text-gray-600">
                                     ${family.count} denomination${family.count !== 1 ? 's' : ''}
                                 </div>
                             </div>
@@ -583,7 +584,7 @@
                                 }
                             }
                         } else {
-                            familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No families found</div>';
+                            familyList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">No families found</div>';
                         }
                     })
                     .catch(error => {
@@ -595,7 +596,7 @@
     // Function to load denominations for a specific family
             function loadDenominations(familyName) {
                 const denominationList = document.getElementById('denominationList');
-                denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+                denominationList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Loading...</div>';
 
               fetch(`/census/api/denominations/by_family/?family_relec=${encodeURIComponent(familyName)}`)
                     .then(response => {
@@ -646,7 +647,7 @@
                                 });
                             });
                         } else {
-                            denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No denominations found</div>';
+                            denominationList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">No denominations found</div>';
                         }
                     })
                     .catch(error => {
@@ -682,7 +683,7 @@
                 });
 
         // Clear denomination selection and list
-                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
+                document.getElementById('denominationList').innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Select a family first</div>';
 
         // Clear filters on map
                 currentFamily = null;

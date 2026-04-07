@@ -1,9 +1,28 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 
 from religious_ecologies.views import index
+
+from .sitemaps import (
+    BlogPostSitemap,
+    CensusBrowserStateSitemap,
+    CensusDetailSitemap,
+    PageSitemap,
+    StaticViewSitemap,
+    VisualizationSitemap,
+)
+
+sitemaps = {
+    "static": StaticViewSitemap,
+    "pages": PageSitemap,
+    "blog": BlogPostSitemap,
+    "visualizations": VisualizationSitemap,
+    "census-states": CensusBrowserStateSitemap,
+    "census-records": CensusDetailSitemap,
+}
 
 admin.site.site_header = "Religious Ecologies"
 admin.site.site_title = "Religious Ecologies Data Admin"
@@ -12,6 +31,12 @@ admin.site.index_title = "Religious Ecologies Data Admin"
 urlpatterns = [
     path("", index, name="index"),
     path("admin/", admin.site.urls),
+    path(
+        "sitemap.xml",
+        sitemap,
+        {"sitemaps": sitemaps},
+        name="django.contrib.sitemaps.views.sitemap",
+    ),
     path("census/", include("census.urls")),
     path("analytics/", include("analytics.urls")),
     path("", include("pages.urls")),
