@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static humanize %}
 
 {% block title %}Religious Ecologies - Mapping American Religious History{% endblock %}
 
@@ -30,7 +30,7 @@
         .cta-button {
             display: inline-flex;
             align-items: center;
-            padding: 0.75rem 2rem;
+            padding: 0.75rem 1.25rem;
             background-color: #0060b1;
             color: white;
             border-radius: 8px;
@@ -88,28 +88,6 @@
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-        }
-
-        .partner-logos {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 2rem;
-            align-items: center;
-            margin-top: 3rem;
-        }
-
-        .partner-logo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
-            min-height: 80px;
-            color: #9ca3af;
-            font-size: 0.875rem;
-            text-align: center;
         }
 
         .newsletter-signup {
@@ -244,15 +222,15 @@
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
                     <div class="stat-card">
-                        <span class="stat-number">{{ total_schedules|floatformat:0 }}</span>
+                        <span class="stat-number">{{ total_schedules|intcomma }}</span>
                         <div class="stat-label">Schedules Digitized</div>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-number">{{ total_denominations }}</span>
+                        <span class="stat-number">{{ total_denominations|intcomma }}</span>
                         <div class="stat-label">Denominations</div>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-number">{{ total_counties|floatformat:0 }}</span>
+                        <span class="stat-number">{{ total_counties|intcomma }}</span>
                         <div class="stat-label">Counties</div>
                     </div>
                 </div>
@@ -282,7 +260,7 @@
                                                 {{ denomination.name }}
                                             </a>
                                         </td>
-                                        <td class="px-4 py-3 text-right font-medium">{{ denomination.schedule_count }}</td>
+                                        <td class="px-4 py-3 text-right font-medium">{{ denomination.schedule_count|intcomma }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -312,7 +290,7 @@
                                                 {{ county.county__name }}, {{ county.county__state__code }}
                                             </a>
                                         </td>
-                                        <td class="px-4 py-3 text-right font-medium">{{ county.schedule_count }}</td>
+                                        <td class="px-4 py-3 text-right font-medium">{{ county.schedule_count|intcomma }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -360,6 +338,30 @@
         </div>
     </section>
 
+    <!-- Video + About -->
+    <section class="content-section bg-white">
+        <div class="section-container">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                <div>
+                    <h2 class="text-3xl font-bold text-content-primary mb-6 font-heading">
+                        Learn about the U.S. Census of Religious Bodies
+                    </h2>
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/HNgJFwtanyo?si=alL2HbITlIF7HZU7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-content-secondary leading-relaxed mb-6">
+                        While some Americans have lived in rich religious ecologies, surrounded by a plethora of denominational choices, others have lived in places with only one or a few religious options. Using new and existing datasets, American Religious Ecologies documents and maps these environments. How did certain groups come to thrive in particular places, and how were they divided by race and social class? Did cities, towns, and rural areas feature meaningful religious pluralism and diversity, or were they dominated by some particular religious group? How did the balance of diversity and dominance vary across space and time?
+                    </p>
+                    <p class="text-content-secondary leading-relaxed">
+                        While scholars have often studied the religious ecology of a particular city or place, studying how those ecologies varied across the nation has been difficult because of the lack of data that is available. The American Religious Ecologies project is creating new datasets from historical sources and new ways of visualizing them so that we can better understand the history of American religion.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Newsletter Signup -->
     <section class="newsletter-signup">
         <div class="section-container text-center">
@@ -368,7 +370,8 @@
                 Get the latest updates on new datasets, features, and research findings.
             </p>
             <form action="https://rrchnm.us14.list-manage.com/subscribe/post?u=61d42b8d0bd0af50c96813715&amp;id=6d054e762f&amp;f_id=00efe1e6f0" method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="newsletter-form" target="_blank">
-                <input type="email" name="EMAIL" placeholder="Enter your email address" class="newsletter-input" required>
+                <label for="mce-EMAIL" class="sr-only">Email address</label>
+                <input type="email" name="EMAIL" id="mce-EMAIL" placeholder="Enter your email address" class="newsletter-input" aria-label="Email address" required>
                 <div style="position: absolute; left: -5000px;" aria-hidden="true">
                     <input type="text" name="b_61d42b8d0bd0af50c96813715_6d054e762f" tabindex="-1" value="">
                 </div>
@@ -377,37 +380,4 @@
         </div>
     </section>
 
-    <section class="content-section bg-white">
-        <div class="section-container">
-            <h2 class="text-3xl font-bold text-content-primary mb-6 font-heading">
-                Learn about the U.S. Census of Religious Bodies
-            </h2>
-            <div class="video-container">
-                <iframe src="https://www.youtube.com/embed/HNgJFwtanyo?si=alL2HbITlIF7HZU7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-            </div>
-        </div>
-    </section>
-
-    <!-- Partners -->
-    <section class="content-section bg-surface-secondary">
-        <div class="section-container text-center">
-            <div class="partner-logos">
-                <div class="partner-logo">
-                    <img src="{% static 'images/rrchnm-logo-3.png' %}"
-                         alt="Roy Rosenzweig Center for History and New Media"
-                         class="max-h-16 w-auto">
-                </div>
-                <div class="partner-logo">
-                    <img src="{% static 'images/gmu-logo-2.png' %}"
-                         alt="George Mason University"
-                         class="max-h-16 w-auto">
-                </div>
-                <div class="partner-logo">
-                    <img src="{% static 'images/NEH-Preferred-Seal.png' %}"
-                         alt="National Endowment for the Humanities"
-                         class="max-h-16 w-auto">
-                </div>
-            </div>
-        </div>
-    </section>
 {% endblock %}
