@@ -5,19 +5,14 @@ name: {{ compose_stack_name }}
 
 services:
 
+  {{ caddy_svc | indent(width=2, first=True ) }}
+
   {% set service = (stack.services | selectattr('name', 'eq', 'app') | first) %}
 
   app:
     image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
     restart: unless-stopped
     {{ service | get_deploy_resources_by_service | indent(width=2) }}
-    {% if service.ports is defined %}
-
-    ports:
-{% for port in service.ports %}
-      - {{ port }}
-{% endfor %}
-    {% endif %}
     {% if service.environment is defined %}
 
     environment:
@@ -69,4 +64,5 @@ services:
     {% endif %}
 
 volumes:
+  {{ caddy_vols | indent(width=2, first=True ) }}
   {{ stack | get_all_named_volumes(compose_stack_name) | indent(width=2) }}
