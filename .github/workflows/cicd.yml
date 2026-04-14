@@ -20,7 +20,7 @@ jobs:
 
       django-context-root: "."
 
-      website-devl-fqdn: "dev.database.religiousecologies.org"
+      website-devl-fqdn: "dev.religiousecologies.org"
       website-prod-fqdn: "religiousecologies.org"
 
   deploy:
@@ -28,5 +28,5 @@ jobs:
     needs: [build-publish]
     secrets: inherit
     with:
-      website-devl-fqdn: "dev.database.religiousecologies.org"
+      website-devl-fqdn: "dev.religiousecologies.org"
       website-prod-fqdn: "religiousecologies.org"
