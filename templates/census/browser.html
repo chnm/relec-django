@@ -319,26 +319,25 @@
             // Update denomination dropdown based on family selection
             function updateDenominationOptions() {
                 const selectedFamily = familySelect.value;
-                const allOptions = Array.from(denominationSelect.querySelectorAll('option'));
-                const denominationOptions = allOptions.filter(opt => opt.value !== '');
+
+                // Clear existing options and rebuild
+                denominationSelect.innerHTML = '<option value="">All Denominations</option>';
 
                 if (!selectedFamily) {
                     // No family selected - disable denomination dropdown
                     denominationSelect.disabled = true;
-                    denominationSelect.value = '';
                 } else {
-                    // Family selected - filter denominations
+                    // Family selected - populate with matching denominations
                     denominationSelect.disabled = false;
-                    denominationOptions.forEach(option => {
-                        const optionFamily = option.getAttribute('data-family');
-                        if (optionFamily === selectedFamily) {
-                            option.style.display = '';
-                        } else {
-                            option.style.display = 'none';
-                            if (option.selected) {
-                                denominationSelect.value = '';
-                            }
+                    const denominations = denominationsByFamily[selectedFamily] || [];
+                    denominations.forEach(denom => {
+                        const option = document.createElement('option');
+                        option.value = denom.id;
+                        option.textContent = denom.name;
+                        if (String(denom.id) === selectedDenomination) {
+                            option.selected = true;
                         }
+                        denominationSelect.appendChild(option);
                     });
                 }
             }
