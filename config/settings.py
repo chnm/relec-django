@@ -152,6 +152,8 @@ DATABASES = {
         "NAME": env("DB_NAME", default="religious_ecologies"),
         "USER": env("DB_USER", default="religious_ecologies"),
         "PASSWORD": env("DB_PASS", default="password"),
+        "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECK": True,
     }
 }
 
