@@ -480,16 +480,13 @@ CORS_URLS_REGEX = r"^/census/api/.*$"
 
 # Cache Configuration
 # ------------------------------------------------------------------------------
-# Uses PostgreSQL as the cache backend — no extra infrastructure needed.
-# Run `manage.py createcachetable` after migrations to create the cache table.
+MEMCACHED_URL = env("MEMCACHED_URL", default="127.0.0.1:11211")
+
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "django_cache",
+        "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+        "LOCATION": MEMCACHED_URL,
         "TIMEOUT": 900,  # Default 15-minute cache timeout
-        "OPTIONS": {
-            "MAX_ENTRIES": 1000,
-        },
     }
 }
 
