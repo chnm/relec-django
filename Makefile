@@ -143,6 +143,10 @@ watch-css:
 superuser:
 	uv run python manage.py createsuperuser
 
+# Clear the Memcached cache
+clear-cache:
+	uv run python manage.py clear_cache
+
 # Collect static files (for production)
 collectstatic:
 	uv run python manage.py collectstatic --noinput
@@ -186,6 +190,7 @@ help:
 	@echo "Utilities:"
 	@echo "  superuser       - Create superuser account"
 	@echo "  collectstatic   - Collect static files"
+	@echo "  clear-cache     - Clear the Memcached cache"
 	@echo "  help            - Show this help message"
 
-.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic help
+.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic clear-cache help
