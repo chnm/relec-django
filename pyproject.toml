@@ -42,7 +42,13 @@ dev = [
     "pre-commit>=4.0.1",
     "pytest-django>=4.9.0",
     "pylint-django>=2.6.1",
+    "factory-boy>=3.3.0",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling"]

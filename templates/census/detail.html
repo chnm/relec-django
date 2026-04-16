@@ -290,7 +290,7 @@
                                                     <tr>
                                                         <th>Census Family</th>
                                                         <td>
-                                                            <a href="{% url 'census_browser' %}?family={{ census_record.schedule_denomination.family_census|urlencode }}"
+                                                            <a href="{% url 'census_browser' %}?family_census={{ census_record.schedule_denomination.family_census|urlencode }}"
                                                                class="text-religious-primary hover:underline">
                                                                 {{ census_record.schedule_denomination.family_census }}
                                                             </a>
