@@ -86,6 +86,7 @@ def _get_census_browser_filter_data():
     return data
 
 
+@cache_page(60 * 15)  # 15 minutes
 def map_view(request):
     """Render the map view with denomination filters"""
     # Get all denominations for the filter dropdown
@@ -112,6 +113,7 @@ def map_view(request):
     return render(request, "census/map.html", context)
 
 
+@cache_page(60 * 15)  # 15 minutes
 def demographics_map_view(request):
     """Render the demographics map view with demographic filters"""
     # Get all denominations for the filter dropdown
@@ -486,6 +488,7 @@ def urban_congregations_simple_view(request):
     return render(request, "census/visualizations/urban_congregations_simple.html")
 
 
+@cache_page(60 * 15)  # 15 minutes
 def api_documentation_view(request):
     """
     API Documentation page for the Religious Ecologies Census Data API.

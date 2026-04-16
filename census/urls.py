@@ -16,25 +16,6 @@ urlpatterns = [
     path("api/", api_root, name="census-api-root"),
     # API endpoints
     path("api/", include(router.urls)),
-    # Visualization views
-    path(
-        "viz/urban-congregations/",
-        views.urban_congregations_map_view,
-        name="urban_congregations_map",
-    ),
-    path(
-        "viz/urban-congregations-simple/",
-        views.urban_congregations_simple_view,
-        name="urban_congregations_simple",
-    ),
-    # Map views
-    path("map/", views.map_view, name="denomination_map"),
-    path("demographics-map/", views.demographics_map_view, name="demographics_map"),
-    path(
-        "viz/populated-places/",
-        views.denomination_geojson_map_view,
-        name="denomination_geojson_map",
-    ),
     # Census browser views
     path("browser/", views.census_browser_view, name="census_browser"),
     path(
