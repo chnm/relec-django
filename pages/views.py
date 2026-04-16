@@ -4,6 +4,8 @@ import markdown
 from django.conf import settings
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from django.views.generic import DetailView, ListView
 
 from .models import BlogPost, Page, Visualization
@@ -57,6 +59,7 @@ def nav_pages_context(request):
 
 
 # Blog Posts
+@method_decorator(cache_page(60 * 15), name="dispatch")  # 15 minutes
 class BlogListView(ListView):
     model = BlogPost
     template_name = "pages/blog_list.html"
@@ -67,6 +70,7 @@ class BlogListView(ListView):
         return BlogPost.objects.filter(is_draft=False).order_by("-published_date")
 
 
+@method_decorator(cache_page(60 * 15), name="dispatch")  # 15 minutes
 class BlogDetailView(DetailView):
     model = BlogPost
     template_name = "pages/blog_detail.html"
@@ -91,6 +95,7 @@ class BlogDetailView(DetailView):
 
 
 # Visualizations
+@method_decorator(cache_page(60 * 15), name="dispatch")  # 15 minutes
 class VisualizationListView(ListView):
     model = Visualization
     template_name = "pages/visualization_list.html"
@@ -101,6 +106,7 @@ class VisualizationListView(ListView):
         return Visualization.objects.all().order_by("-published_date")
 
 
+@method_decorator(cache_page(60 * 15), name="dispatch")  # 15 minutes
 class VisualizationDetailView(DetailView):
     model = Visualization
     template_name = "pages/visualization_detail.html"

@@ -30,65 +30,38 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def families(self, request):
         """Return unique denomination families for filtering - only those with location data"""
-        # Get families that have at least one ReligiousBody with location data
-        # Filter through census_record -> populated_place for the new location hierarchy
-        census_families = (
-            Denomination.objects.filter(
-                religiousbody__census_record__populated_place__isnull=False,
-            )
-            .values_list("family_census", flat=True)
-            .distinct()
+        location_filter = {
+            "religiousbody__census_record__populated_place__isnull": False,
+        }
+
+        # Single query per family type using aggregation instead of N+1 loop
+        census_family_data = (
+            Denomination.objects.filter(**location_filter)
+            .exclude(family_census__isnull=True)
+            .exclude(family_census="")
+            .values("family_census")
+            .annotate(count=Count("id", distinct=True))
             .order_by("family_census")
         )
 
-        relec_families = (
-            Denomination.objects.filter(
-                religiousbody__census_record__populated_place__isnull=False,
-            )
-            .values_list("family_relec", flat=True)
-            .distinct()
+        relec_family_data = (
+            Denomination.objects.filter(**location_filter)
+            .exclude(family_relec__isnull=True)
+            .exclude(family_relec="")
+            .values("family_relec")
+            .annotate(count=Count("id", distinct=True))
             .order_by("family_relec")
         )
-
-        # Count denominations in each census family that have location data
-        census_family_counts = {}
-        for family in census_families:
-            if family:  # Skip empty family names
-                count = (
-                    Denomination.objects.filter(
-                        family_census=family,
-                        religiousbody__census_record__populated_place__isnull=False,
-                    )
-                    .distinct()
-                    .count()
-                )
-                census_family_counts[family] = count
-
-        # Count denominations in each RelEc family that have location data
-        relec_family_counts = {}
-        for family in relec_families:
-            if family:  # Skip empty family names
-                count = (
-                    Denomination.objects.filter(
-                        family_relec=family,
-                        religiousbody__census_record__populated_place__isnull=False,
-                    )
-                    .distinct()
-                    .count()
-                )
-                relec_family_counts[family] = count
 
         return Response(
             {
                 "census_families": [
-                    {"name": family, "count": census_family_counts.get(family, 0)}
-                    for family in census_families
-                    if family
+                    {"name": f["family_census"], "count": f["count"]}
+                    for f in census_family_data
                 ],
                 "relec_families": [
-                    {"name": family, "count": relec_family_counts.get(family, 0)}
-                    for family in relec_families
-                    if family
+                    {"name": f["family_relec"], "count": f["count"]}
+                    for f in relec_family_data
                 ],
             }
         )
@@ -198,89 +171,65 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         List unique denomination families with counts.
 
         Returns both census families and RelEc families, with counts of denominations
-        and congregations in each family.
+        and congregations in each family. Uses aggregation to avoid N+1 queries.
         """
-        try:
-            # Get all unique census families with counts
-            census_families_data = []
+        from django.db.models import Q
 
-            census_families = (
-                Denomination.objects.filter(family_census__isnull=False)
-                .values("family_census")
-                .annotate(
-                    denomination_count=Count("id", distinct=True),
-                    total_congregation_count=Count("religiousbody", distinct=True),
-                )
-                .order_by("family_census")
+        # Census families — single query with all counts
+        census_families_data = (
+            Denomination.objects.filter(family_census__isnull=False)
+            .exclude(family_census="")
+            .values("family_census")
+            .annotate(
+                denomination_count=Count("id", distinct=True),
+                total_congregation_count=Count("religiousbody", distinct=True),
+                congregation_count_with_location=Count(
+                    "religiousbody",
+                    distinct=True,
+                    filter=Q(religiousbody__census_record__populated_place__isnull=False),
+                ),
             )
+            .order_by("family_census")
+        )
 
-            for family in census_families:
-                if family["family_census"]:
-                    family_name = family["family_census"]
-                    congregation_count_with_location = (
-                        Denomination.objects.filter(
-                            family_census=family_name,
-                            religiousbody__census_record__populated_place__isnull=False,
-                        )
-                        .values("religiousbody")
-                        .distinct()
-                        .count()
-                    )
-                    census_families_data.append(
-                        {
-                            "name": family_name,
-                            "denominations": family["denomination_count"],
-                            "congregations": congregation_count_with_location,
-                            "total_congregations": family["total_congregation_count"],
-                            "has_location_data": congregation_count_with_location > 0,
-                        }
-                    )
-
-            # Get all unique RelEc families with counts
-            relec_families_data = []
-
-            relec_families = (
-                Denomination.objects.filter(family_relec__isnull=False)
-                .values("family_relec")
-                .annotate(
-                    denomination_count=Count("id", distinct=True),
-                    total_congregation_count=Count("religiousbody", distinct=True),
-                )
-                .order_by("family_relec")
+        # RelEc families — single query with all counts
+        relec_families_data = (
+            Denomination.objects.filter(family_relec__isnull=False)
+            .exclude(family_relec="")
+            .values("family_relec")
+            .annotate(
+                denomination_count=Count("id", distinct=True),
+                total_congregation_count=Count("religiousbody", distinct=True),
+                congregation_count_with_location=Count(
+                    "religiousbody",
+                    distinct=True,
+                    filter=Q(religiousbody__census_record__populated_place__isnull=False),
+                ),
             )
+            .order_by("family_relec")
+        )
 
-            for family in relec_families:
-                if family["family_relec"]:
-                    family_name = family["family_relec"]
-                    congregation_count_with_location = (
-                        Denomination.objects.filter(
-                            family_relec=family_name,
-                            religiousbody__census_record__populated_place__isnull=False,
-                        )
-                        .values("religiousbody")
-                        .distinct()
-                        .count()
-                    )
-                    relec_families_data.append(
-                        {
-                            "name": family_name,
-                            "denominations": family["denomination_count"],
-                            "congregations": congregation_count_with_location,
-                            "total_congregations": family["total_congregation_count"],
-                            "has_location_data": congregation_count_with_location > 0,
-                        }
-                    )
-
-            return Response(
-                {
-                    "census_families": census_families_data,
-                    "relec_families": relec_families_data,
-                }
-            )
-
-        except Exception as e:
-            import traceback
-
-            return Response(
-                {"error": str(e), "traceback": traceback.format_exc()}, status=500
-            )
+        return Response(
+            {
+                "census_families": [
+                    {
+                        "name": f["family_census"],
+                        "denominations": f["denomination_count"],
+                        "congregations": f["congregation_count_with_location"],
+                        "total_congregations": f["total_congregation_count"],
+                        "has_location_data": f["congregation_count_with_location"] > 0,
+                    }
+                    for f in census_families_data
+                ],
+                "relec_families": [
+                    {
+                        "name": f["family_relec"],
+                        "denominations": f["denomination_count"],
+                        "congregations": f["congregation_count_with_location"],
+                        "total_congregations": f["total_congregation_count"],
+                        "has_location_data": f["congregation_count_with_location"] > 0,
+                    }
+                    for f in relec_families_data
+                ],
+            }
+        )
