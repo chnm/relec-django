@@ -1,9 +1,89 @@
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.cache import cache_page
 
 from location.models import County, State
 from .models import CensusSchedule, Denomination
+
+
+def _get_census_browser_filter_data():
+    """Cache the expensive dropdown/filter data used by the census browser.
+
+    This data (all denominations, counties by state, places by county,
+    denomination families) is the same for every request and is the most
+    expensive part of the census browser view.
+    """
+    cache_key = "census_browser_filter_data"
+    data = cache.get(cache_key)
+    if data is not None:
+        return data
+
+    import json
+
+    denominations = list(Denomination.objects.all().order_by("name"))
+    census_families = list(
+        Denomination.objects.values_list("family_relec", flat=True)
+        .distinct()
+        .order_by("family_relec")
+    )
+
+    states = list(State.objects.all().order_by("name"))
+
+    # Counties grouped by state
+    counties_by_state = {}
+    county_data = (
+        County.objects.select_related("state")
+        .values("state__code", "name")
+        .order_by("state__code", "name")
+    )
+    for item in county_data:
+        state = item["state__code"]
+        county = item["name"]
+        if state not in counties_by_state:
+            counties_by_state[state] = []
+        counties_by_state[state].append(county)
+
+    # Populated places grouped by state+county
+    places_by_county = {}
+    place_data = (
+        CensusSchedule.objects.filter(
+            populated_place__isnull=False, county__isnull=False
+        )
+        .values("county__state__code", "county__name", "populated_place__name")
+        .distinct()
+        .order_by("county__state__code", "county__name", "populated_place__name")
+    )
+    for item in place_data:
+        state = item["county__state__code"]
+        county = item["county__name"]
+        place = item["populated_place__name"]
+        if state not in places_by_county:
+            places_by_county[state] = {}
+        if county not in places_by_county[state]:
+            places_by_county[state][county] = []
+        places_by_county[state][county].append(place)
+
+    # Denominations grouped by family
+    denominations_by_family = {}
+    for denom in denominations:
+        family = denom.family_relec if denom.family_relec else "Other"
+        if family not in denominations_by_family:
+            denominations_by_family[family] = []
+        denominations_by_family[family].append({"id": denom.id, "name": denom.name})
+
+    data = {
+        "denominations": denominations,
+        "census_families": census_families,
+        "states": states,
+        "counties_by_state_json": json.dumps(counties_by_state),
+        "places_by_county_json": json.dumps(places_by_county),
+        "denominations_by_family_json": json.dumps(denominations_by_family),
+    }
+
+    cache.set(cache_key, data, 60 * 30)  # Cache for 30 minutes
+    return data
 
 
 def map_view(request):
@@ -63,9 +143,9 @@ def denomination_geojson_map_view(request):
     return render(request, "census/denomination_geojson_map.html")
 
 
+@cache_page(60 * 10)  # 10 minutes
 def census_browser_view(request, state_code=None, county_name=None):
     """Render the census records browser with filtering and pagination"""
-    import json
     from urllib.parse import unquote
 
     # Get filter parameters - path params take precedence over query params
@@ -153,58 +233,8 @@ def census_browser_view(request, state_code=None, county_name=None):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    # Get filter options
-    denominations = Denomination.objects.all().order_by("name")
-    census_families = (
-        Denomination.objects.values_list("family_relec", flat=True)
-        .distinct()
-        .order_by("family_relec")
-    )
-
-    # Get states for location dropdown (from new State model)
-    states = State.objects.all().order_by("name")
-
-    # Get counties grouped by state for JavaScript (from new County model)
-    counties_by_state = {}
-    county_data = (
-        County.objects.select_related("state")
-        .values("state__code", "name")
-        .order_by("state__code", "name")
-    )
-    for item in county_data:
-        state = item["state__code"]
-        county = item["name"]
-        if state not in counties_by_state:
-            counties_by_state[state] = []
-        counties_by_state[state].append(county)
-
-    # Get populated places grouped by state+county for JavaScript
-    places_by_county = {}
-    place_data = (
-        CensusSchedule.objects.filter(
-            populated_place__isnull=False, county__isnull=False
-        )
-        .values("county__state__code", "county__name", "populated_place__name")
-        .distinct()
-        .order_by("county__state__code", "county__name", "populated_place__name")
-    )
-    for item in place_data:
-        state = item["county__state__code"]
-        county = item["county__name"]
-        place = item["populated_place__name"]
-        if state not in places_by_county:
-            places_by_county[state] = {}
-        if county not in places_by_county[state]:
-            places_by_county[state][county] = []
-        places_by_county[state][county].append(place)
-
-    # Get denominations grouped by family for JavaScript
-    denominations_by_family = {}
-    for denom in denominations:
-        family = denom.family_relec if denom.family_relec else "Other"
-        if family not in denominations_by_family:
-            denominations_by_family[family] = []
-        denominations_by_family[family].append({"id": denom.id, "name": denom.name})
+    # Get cached filter/dropdown data (most expensive part of this view)
+    filter_data = _get_census_browser_filter_data()
 
     # Get current state object for display
     current_state = None
@@ -213,12 +243,7 @@ def census_browser_view(request, state_code=None, county_name=None):
 
     context = {
         "page_obj": page_obj,
-        "denominations": denominations,
-        "census_families": census_families,
-        "states": states,
-        "counties_by_state_json": json.dumps(counties_by_state),
-        "places_by_county_json": json.dumps(places_by_county),
-        "denominations_by_family_json": json.dumps(denominations_by_family),
+        **filter_data,
         "search": search,
         "denomination_filter": denomination_filter,
         "family_filter": family_filter,
@@ -259,6 +284,7 @@ def census_detail_view(request, resource_id):
     return render(request, "census/detail.html", context)
 
 
+@cache_page(60 * 15)  # 15 minutes
 def denominations_browse_view(request):
     """Browse denominations with counts and links to filtered census records"""
 
@@ -291,6 +317,7 @@ def denominations_browse_view(request):
     return render(request, "census/denominations_browse.html", context)
 
 
+@cache_page(60 * 15)  # 15 minutes
 def locations_browse_view(request):
     """Browse locations (states and counties) with counts"""
 
@@ -350,6 +377,7 @@ def locations_browse_view(request):
     return render(request, "census/locations_browse.html", context)
 
 
+@cache_page(60 * 15)  # 15 minutes
 def populated_places_browse_view(request):
     """Browse populated places organized by state and county with counts"""
     from location.models import PopulatedPlace

@@ -23,6 +23,7 @@ services:
 
     command: >
         sh -c "uv run manage.py migrate &&
+               uv run manage.py createcachetable &&
                uv run manage.py runserver 0.0.0.0:8000"
     {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
 
