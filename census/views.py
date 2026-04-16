@@ -259,6 +259,7 @@ def census_browser_view(request, state_code=None, county_name=None):
     return render(request, "census/browser.html", context)
 
 
+@cache_page(60 * 15)  # 15 minutes
 def census_detail_view(request, resource_id):
     """Render detailed view of a single census record"""
 

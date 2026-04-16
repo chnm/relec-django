@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 
-from religious_ecologies.views import index
+from religious_ecologies.views import index, robots_txt
 
 from .sitemaps import (
     BlogPostSitemap,
@@ -30,6 +30,7 @@ admin.site.index_title = "Religious Ecologies Data Admin"
 
 urlpatterns = [
     path("", index, name="index"),
+    path("robots.txt", robots_txt, name="robots_txt"),
     path("admin/", admin.site.urls),
     path(
         "sitemap.xml",
