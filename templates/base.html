@@ -175,15 +175,18 @@
                         </ul>
 
                         <div class="mt-auto text-sm">
+                            <a href="mailto:chnm@gmu.edu" class="text-content-tertiary hover:text-religious-primary transition-colors">Contact Us</a>
                             {% if user.is_authenticated %}
+                                <span class="text-content-tertiary mx-1">&middot;</span>
                                 <a href="/admin/" class="text-content-tertiary hover:text-religious-primary transition-colors">Admin</a>
                                 <span class="text-content-tertiary mx-1">&middot;</span>
                                 <a href="{% url 'account_logout' %}" class="text-content-tertiary hover:text-religious-primary transition-colors">Logout</a>
-                            {% else %}
-                                <a href="{% url 'account_login' %}" class="text-content-tertiary hover:text-religious-primary transition-colors">Login</a>
                             {% endif %}
                         </div>
                     </div>
+                </div>
+                <div class="border-t border-gray-200 mt-8 pt-6 text-center text-sm text-content-tertiary">
+                    &copy; 2020–{% now "Y" %} Roy Rosenzweig Center for History and New Media, George Mason University
                 </div>
             </div>
         </footer>
