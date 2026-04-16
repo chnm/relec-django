@@ -490,6 +490,13 @@ if MEMCACHED_URL:
             "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
             "LOCATION": MEMCACHED_URL,
             "TIMEOUT": 900,  # Default 15-minute cache timeout
+            "OPTIONS": {
+                "no_delay": True,
+                "ignore_exc": True,  # Return cache miss on errors, don't crash
+                "connect_timeout": 3,
+                "timeout": 3,
+                "use_pooling": True,
+            },
         }
     }
 else:
