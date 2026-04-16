@@ -480,15 +480,25 @@ CORS_URLS_REGEX = r"^/census/api/.*$"
 
 # Cache Configuration
 # ------------------------------------------------------------------------------
-MEMCACHED_URL = env("MEMCACHED_URL", default="127.0.0.1:11211")
+# Uses Memcached in production (via MEMCACHED_URL env var).
+# Falls back to in-memory cache for local development.
+MEMCACHED_URL = env("MEMCACHED_URL", default="")
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-        "LOCATION": MEMCACHED_URL,
-        "TIMEOUT": 900,  # Default 15-minute cache timeout
+if MEMCACHED_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+            "LOCATION": MEMCACHED_URL,
+            "TIMEOUT": 900,  # Default 15-minute cache timeout
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "TIMEOUT": 900,
+        }
+    }
 
 # Django REST Framework Configuration
 # ------------------------------------------------------------------------------
