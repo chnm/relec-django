@@ -40,7 +40,7 @@
             display: inline-flex;
             align-items: center;
             padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
+            border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 500;
         }
@@ -228,7 +228,7 @@
                         <div>
                             <label for="denomination-select" class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
                             <select name="denomination" id="denomination-select"
-                                    {% if not family_filter %}disabled{% endif %}
+                                    {% if not family_filter and not denomination_filter %}disabled{% endif %}
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
                                 <option value="">All Denominations</option>
                                 {% for denomination in denominations %}
@@ -445,6 +445,18 @@
 
             // Initialize on page load
             document.addEventListener('DOMContentLoaded', function() {
+                // If a denomination is pre-selected but no family is set,
+                // auto-select the denomination's family so the dropdown reflects the filter
+                if (selectedDenomination && !familySelect.value) {
+                    // Find the denomination's family from the data
+                    for (const [family, denoms] of Object.entries(denominationsByFamily)) {
+                        if (denoms.some(d => String(d.id) === selectedDenomination)) {
+                            familySelect.value = family;
+                            break;
+                        }
+                    }
+                }
+
                 updateDenominationOptions();
                 updateCountyOptions();
                 updatePlaceOptions();
@@ -475,9 +487,55 @@
                         {% endif %}
                     </span>
                 </div>
-                <div class="flex gap-2">
-                    {% if search or denomination_filter or family_filter or location_filter or urban_rural or place_filter %}
-                        <span class="badge badge-amber">Filtered</span>
+                <div class="flex flex-wrap gap-2">
+                    {% if search %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Search: "{{ search }}"
+                            <a href="{% url 'census_browser' %}?{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if family_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Family: {{ family_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if denomination_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Denomination
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if location_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            State: {{ current_state.name|default:location_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if county_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            County: {{ county_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if place_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Place: {{ place_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if urban_rural %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            {{ urban_rural|title }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
                     {% endif %}
                 </div>
             </div>
