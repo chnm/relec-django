@@ -23,8 +23,6 @@ services:
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
       - DB_PASSWORD=password
-      - ALLAUTH_GITHUB_CLIENT_ID=PLACEHOLDER
-      - ALLAUTH_GITHUB_CLIENT_SECRET=PLACEHOLDER
       - OBJ_STORAGE=True
       - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
