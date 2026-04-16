@@ -478,6 +478,21 @@ GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_URLS_REGEX = r"^/census/api/.*$"
 
+# Cache Configuration
+# ------------------------------------------------------------------------------
+# Uses PostgreSQL as the cache backend — no extra infrastructure needed.
+# Run `manage.py createcachetable` after migrations to create the cache table.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+        "TIMEOUT": 900,  # Default 15-minute cache timeout
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,
+        },
+    }
+}
+
 # Django REST Framework Configuration
 # ------------------------------------------------------------------------------
 REST_FRAMEWORK = {

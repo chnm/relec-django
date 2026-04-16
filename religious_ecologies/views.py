@@ -1,9 +1,11 @@
 from django.db.models import Count
 from django.shortcuts import render
+from django.views.decorators.cache import cache_page
 
 from census.models import CensusSchedule, Denomination, ReligiousBody
 
 
+@cache_page(60 * 15)  # 15 minutes
 def index(request):
     # Get summary statistics
     total_schedules = CensusSchedule.objects.count()
