@@ -41,8 +41,6 @@ urlpatterns = [
     path("census/", include("census.urls")),
     path("analytics/", include("analytics.urls")),
     path("", include("pages.urls")),
-    # allauth
-    path("accounts/", include("allauth.urls")),
     # pages - keep this last so it doesn't interfere with other URL patterns
     path("", include("pages.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

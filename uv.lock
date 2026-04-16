@@ -427,19 +427,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-allauth"
-version = "65.14.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "asgiref" },
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/23/9b/061a6ac65c602eb721b13fbf9c665b20fb900f113a03ec8521b5fcf16b83/django_allauth-65.14.0.tar.gz", hash = "sha256:5529227aba2b1377d900e9274a3f24496c645e65400fbae3cad5789944bc4d0b", size = 1991909, upload-time = "2026-01-17T18:43:12.928Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ce/c8/2f959ff8466913d95ba72eb4a29bd7998d28a559786033a97b5bbdda2b81/django_allauth-65.14.0-py3-none-any.whl", hash = "sha256:448f5f7877f95fcbe1657256510fe7822d7871f202521a29e23ef937f3325a97", size = 1793052, upload-time = "2026-01-17T18:43:08.954Z" },
-]
-
-[[package]]
 name = "django-cors-headers"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1206,7 +1193,6 @@ dependencies = [
     { name = "boto3" },
     { name = "daphne" },
     { name = "django" },
-    { name = "django-allauth" },
     { name = "django-cors-headers" },
     { name = "django-dbml" },
     { name = "django-environ" },
@@ -1244,7 +1230,6 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35.94" },
     { name = "daphne", specifier = ">=4.1.2" },
     { name = "django", specifier = ">=5.1.4" },
-    { name = "django-allauth", extras = ["github"], specifier = ">=65.3.1" },
     { name = "django-cors-headers", specifier = ">=4.0.0" },
     { name = "django-dbml", specifier = ">=0.10.1" },
     { name = "django-environ", specifier = ">=0.11.2" },
