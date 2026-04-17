@@ -19,9 +19,9 @@ dependencies = [
     "boto3>=1.35.94",
     "django-unfold>=0.45.0",
     "django-simple-history>=3.7.0",
-    "requests>=2.32.3",
+    "requests>=2.33.0",
     "django-dbml>=0.10.1",
-    "pillow>=11.0.0",
+    "pillow>=12.2.0",
     "easy-thumbnails>=2.10.1",
     "djangorestframework>=3.16.1",
     "django-filter>=25.2",
@@ -36,7 +36,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black>=24.10.0",
+    "black>=26.3.1",
     "djhtml>=3.0.7",
     "pre-commit>=4.0.1",
     "pytest-django>=4.9.0",
