@@ -1,0 +1,277 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col flex-1 p-6">
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+            <p class="mt-2 text-gray-600">
+                This analysis identifies census schedules that are missing county information,
+                which is critical for geographic analysis and data completeness.
+            </p>
+        </div>
+
+    <!-- Overall Statistics -->
+        <div class="bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">📊 Overall Statistics</h2>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div class="text-center p-3 bg-blue-50 rounded-lg">
+                    <div class="text-2xl font-bold text-blue-600">{{ total_schedules }}</div>
+                    <div class="text-xs text-blue-700">Total Schedules</div>
+                </div>
+                <div class="text-center p-3 bg-green-50 rounded-lg">
+                    <div class="text-2xl font-bold text-green-600">{{ total_with_county }}</div>
+                    <div class="text-xs text-green-700">With County</div>
+                </div>
+                <div class="text-center p-3 bg-red-50 rounded-lg">
+                    <div class="text-2xl font-bold text-red-600">{{ total_missing_location }}</div>
+                    <div class="text-xs text-red-700">Missing Location</div>
+                </div>
+                <div class="text-center p-3 bg-orange-50 rounded-lg">
+                    <div class="text-2xl font-bold text-orange-600">{{ total_missing_county }}</div>
+                    <div class="text-xs text-orange-700">Missing County</div>
+                </div>
+                <div class="text-center p-3 bg-yellow-50 rounded-lg">
+                    <div class="text-2xl font-bold text-yellow-600">{{ total_blank_county }}</div>
+                    <div class="text-xs text-yellow-700">Blank County</div>
+                </div>
+                <div class="text-center p-3 bg-purple-50 rounded-lg">
+                    <div class="text-2xl font-bold text-purple-600">{{ completion_percentage }}%</div>
+                    <div class="text-xs text-purple-700">Complete</div>
+                </div>
+            </div>
+
+            {% if total_issues > 0 %}
+                <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div class="text-sm text-red-700">
+                        <strong>{{ total_issues }} schedules ({{ total_issues|floatformat:0 }}/{{ total_schedules }}) need attention</strong>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+    <!-- State-by-State Analysis -->
+        {% if state_summary %}
+            <div class="bg-white shadow-sm border border-gray-200 rounded-lg mb-6">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-800">📍 State-by-State Analysis</h2>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">With County</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Missing Location</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Missing County</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Counties Found</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Completion</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for state in state_summary %}
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {{ state.state_name }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                                        {{ state.total_schedules }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-green-600">
+                                        {{ state.with_county }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-red-600">
+                                        {{ state.missing_location }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-orange-600">
+                                        {{ state.missing_county }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-blue-600">
+                                        {{ state.county_count }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                        {% widthratio state.with_county state.total_schedules 100 as completion %}
+                                        <span class="{% if completion >= 90 %}text-green-600{% elif completion >= 70 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                            {{ completion }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+
+    <!-- Problem Records -->
+        <div class="space-y-6">
+        <!-- Missing Location -->
+            {% if schedules_missing_location %}
+                <div class="bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-red-700">🚨 Schedules Missing Location Assignment</h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            These schedules have no location assigned to their religious body records.
+                            {% if schedules_missing_location|length >= 50 %}
+                                Showing first 50 of {{ total_missing_location }} records.
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-red-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Schedule ID</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Schedule Title</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Issue</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for item in schedules_missing_location %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-3 py-2 whitespace-nowrap font-mono text-sm">
+                                            {{ item.schedule.schedule_id }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.schedule.schedule_title|truncatechars:60 }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm text-red-600">
+                                            {{ item.issue }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+
+        <!-- Missing County -->
+            {% if schedules_missing_county %}
+                <div class="bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-orange-700">⚠️ Schedules with Null County Field</h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            These schedules have location records, but the county field is null.
+                            {% if schedules_missing_county|length >= 50 %}
+                                Showing first 50 of {{ total_missing_county }} records.
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-orange-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Schedule ID</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Schedule Title</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Location</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">State</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Issue</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for item in schedules_missing_county %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-3 py-2 whitespace-nowrap font-mono text-sm">
+                                            {{ item.schedule.schedule_id }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.schedule.schedule_title|truncatechars:50 }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.location.map_name|truncatechars:30 }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.location.state }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm text-orange-600">
+                                            {{ item.issue }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+
+        <!-- Blank County -->
+            {% if schedules_with_blank_county %}
+                <div class="bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-yellow-700">📝 Schedules with Empty County Field</h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            These schedules have location records, but the county field is an empty string.
+                            {% if schedules_with_blank_county|length >= 50 %}
+                                Showing first 50 of {{ total_blank_county }} records.
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-yellow-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Schedule ID</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Schedule Title</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Location</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">State</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Issue</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for item in schedules_with_blank_county %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-3 py-2 whitespace-nowrap font-mono text-sm">
+                                            {{ item.schedule.schedule_id }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.schedule.schedule_title|truncatechars:50 }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.location.map_name|truncatechars:30 }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm">
+                                            {{ item.location.state }}
+                                        </td>
+                                        <td class="px-3 py-2 text-sm text-yellow-600">
+                                            {{ item.issue }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="mt-6 flex space-x-4">
+            <a href="{% url 'admin:census_censusschedule_changelist' %}"
+               class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                ← Back to Census Schedules
+            </a>
+
+            {% if total_missing_location > 0 %}
+                <a href="{% url 'admin:census_censusschedule_changelist' %}?schedule_location_status=missing_location"
+                   class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                    🚨 View Missing Location Records ({{ total_missing_location }})
+                </a>
+            {% endif %}
+
+            {% if total_missing_county > 0 or total_blank_county > 0 %}
+                <a href="{% url 'admin:census_censusschedule_changelist' %}?schedule_location_status=missing_county"
+                   class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                    ⚠️ View Missing County Records ({{ total_missing_county|add:total_blank_county }})
+                </a>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

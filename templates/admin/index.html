@@ -1,0 +1,229 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .dashboard-stat {
+            text-align: center;
+            padding: 15px;
+    /*background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);*/
+            background: #0060b1;
+            color: white;
+            border-radius: 6px;
+            margin: 10px 5px;
+        }
+
+        .dashboard-stat h3 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .dashboard-stat p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin: 2px;
+        }
+
+        .status-unassigned { background-color: #6c757d; color: white; }
+        .status-assigned { background-color: #007bff; color: white; }
+        .status-in-progress { background-color: #fd7e14; color: white; }
+        .status-needs-review { background-color: #ffc107; color: black; }
+        .status-completed { background-color: #28a745; color: white; }
+        .status-approved { background-color: #155724; color: white; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-container">
+    <!-- Project Overview -->
+        <div class="dashboard-card">
+            <h2>Transcription Project Overview</h2>
+
+            <div class="dashboard-grid">
+                <div class="dashboard-stat">
+                    <h3>{{ total_records }}</h3>
+                    <p>Total Census Records</p>
+                </div>
+                <div class="dashboard-stat">
+                    <h3>{{ transcribed_count }}</h3>
+                    <p>Transcribed Records</p>
+                </div>
+                <div class="dashboard-stat">
+                    <h3>{{ needs_review_count }}</h3>
+                    <p>Awaiting Review</p>
+                </div>
+                <div class="dashboard-stat">
+                    <h3>{{ completion_percentage }}%</h3>
+                    <p>Project Complete</p>
+                </div>
+            </div>
+        </div>
+
+    <!-- Charts Row -->
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3>Transcription Status</h3>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>Work Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="assignmentChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+    <!-- Recent Activity -->
+        <div class="dashboard-card">
+            <h3>Recent Activity</h3>
+            <div style="max-height: 300px; overflow-y: auto;">
+                {% for activity in recent_activity %}
+                    <div style="padding: 10px; border-left: 4px solid #667eea; margin: 10px 0; background-color: #f8f9fa;">
+                        <strong>{{ activity.schedule_title }}</strong>
+                        <span class="status-badge status-{{ activity.transcription_status }}">
+                            {{ activity.get_transcription_status_display }}
+                        </span>
+                        {% if activity.assigned_transcriber %}
+                            <br><small>Transcriber: {{ activity.assigned_transcriber.get_full_name|default:activity.assigned_transcriber.username }}</small>
+                        {% endif %}
+                        {% if activity.assigned_reviewer %}
+                            <br><small>Reviewer: {{ activity.assigned_reviewer.get_full_name|default:activity.assigned_reviewer.username }}</small>
+                        {% endif %}
+                        <br><small style="color: #6c757d;">Updated: {{ activity.updated_at|timesince }} ago</small>
+                    </div>
+                {% empty %}
+                    <p style="text-align: center; color: #6c757d; padding: 20px;">No recent activity</p>
+                {% endfor %}
+            </div>
+        </div>
+
+    <!-- Quick Actions -->
+<!--     <div class="dashboard-card"> -->
+<!--         <h3>Quick Actions</h3> -->
+<!--         <div style="display: flex; gap: 15px; flex-wrap: wrap;"> -->
+<!--             <a href="/admin/census/censusschedule/?transcription_status=unassigned" -->
+<!--                class="button default" style="padding: 10px 20px; text-decoration: none;"> -->
+<!--                 View Unassigned Records ({{ unassigned_count }}) -->
+<!--             </a> -->
+<!--             <a href="/admin/census/censusschedule/?transcription_status=needs_review" -->
+<!--                class="button default" style="padding: 10px 20px; text-decoration: none;"> -->
+<!--                 Review Queue ({{ needs_review_count }}) -->
+<!--             </a> -->
+<!--             <a href="/admin/census/censusschedule/?transcription_status=assigned" -->
+<!--                class="button default" style="padding: 10px 20px; text-decoration: none;"> -->
+<!--                 In Progress ({{ assigned_count }}) -->
+<!--             </a> -->
+<!--             <a href="{% url 'admin:census_schedule_gap_analysis' %}" -->
+<!--                class="button default" style="padding: 10px 20px; text-decoration: none;"> -->
+<!--                 Schedule ID Gap Analysis -->
+<!--             </a> -->
+<!--             <a href="{% url 'admin:census_schedule_missing_county_analysis' %}" -->
+<!--                class="button default" style="padding: 10px 20px; text-decoration: none;"> -->
+<!--                 Missing County Analysis -->
+<!--             </a> -->
+<!--         </div> -->
+<!--     </div> -->
+<!-- </div> -->
+
+        {{ block.super }}
+
+        <script>
+// Status Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: [
+                        'Unassigned', 'Assigned', 'In Progress',
+                        'Needs Review', 'Transcribed', 'Approved'
+                    ],
+                    datasets: [{
+                        data: [
+                            {{ status_counts.unassigned }}, {{ status_counts.assigned }},
+                            {{ status_counts.in_progress }}, {{ status_counts.needs_review }},
+                            {{ status_counts.completed }}, {{ status_counts.approved }}
+                        ],
+                        backgroundColor: [
+                            '#6c757d', '#007bff', '#fd7e14',
+                            '#ffc107', '#28a745', '#155724'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+// Assignment Chart
+            const assignmentCtx = document.getElementById('assignmentChart').getContext('2d');
+            new Chart(assignmentCtx, {
+                type: 'bar',
+                data: {
+                    labels: [
+                        {% for user in top_transcribers %}
+                            '{{ user.user__username }}',
+                        {% endfor %}
+                    ],
+                    datasets: [{
+                        label: 'Assigned Records',
+                        data: [
+                            {% for user in top_transcribers %}
+                                {{ user.count }},
+                            {% endfor %}
+                        ],
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        </script>
+{% endblock %}

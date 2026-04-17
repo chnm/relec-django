@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from pathlib import Path
 
@@ -5,6 +6,10 @@ import environ
 from dotenv import load_dotenv
 
 load_dotenv(verbose=True, override=True)
+
+# Ensure JavaScript files are served with correct MIME type
+mimetypes.add_type("application/javascript", ".js", strict=True)
+mimetypes.add_type("application/json", ".json", strict=True)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -44,6 +49,7 @@ INSTALLED_APPS = [
     "unfold.contrib.forms",
     "unfold.contrib.inlines",
     "unfold.contrib.simple_history",
+    "unfold.contrib.import_export",
     # simple history
     "simple_history",
     # django defaults
@@ -53,38 +59,44 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
+    "django.contrib.sitemaps",
     "django.forms",
     # model viz
     "django_dbml",
-    # allauth
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
-    "allauth.socialaccount.providers.github",
     # tailwind
     "tailwind",
     "theme",
     # rest framework
     "rest_framework",
     "django_filters",
+    # django-tables2
+    "django_tables2",
+    # cors headers
+    "corsheaders",
     # obj storage
     "storages",
+    # image processing
+    "easy_thumbnails",
+    # import/export
+    "import_export",
     # local apps
     "religious_ecologies",
     "census",
     "location",
+    "pages",
+    "analytics",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    # allauth
-    "allauth.account.middleware.AccountMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -94,10 +106,15 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 # ------------------------------------------------------------------------------
 # django-debug-toolbar
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#prerequisites
-INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
+# Temporarily disabled due to Django 6.0 async compatibility issues
+# INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#middleware
-MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]  # noqa: F405
+# MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]  # noqa: F405
 # https://django-debug-toolbar.readthedocs.io/en/latest/configuration.html#debug-toolbar-config
+DEBUG_TOOLBAR_CONFIG = {
+    "DISABLE_PANELS": ["debug_toolbar.panels.redirects.RedirectsPanel"],
+    "SHOW_TEMPLATE_CONTEXT": True,
+}
 
 ROOT_URLCONF = "config.urls"
 
@@ -112,6 +129,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # pages context processor for navigation
+                "pages.context_processors.navigation_pages",
             ],
         },
     },
@@ -154,23 +173,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = [
-    # Needed to login by username in Django admin, regardless of `allauth`
     "django.contrib.auth.backends.ModelBackend",
-    # allauth specific authentication methods, such as login by email
-    "allauth.account.auth_backends.AuthenticationBackend",
 ]
-
-
-# allauth: provider specific settings
-SOCIALACCOUNT_PROVIDERS = {
-    "github": {
-        "VERIFIED_EMAIL": True,
-        "APP": {
-            "client_id": env("ALLAUTH_GITHUB_CLIENT_ID", default="PLACEHOLDER"),
-            "secret": env("ALLAUTH_GITHUB_CLIENT_SECRET", default="PLACEHOLDER"),
-        },
-    }
-}
 
 
 # Internationalization
@@ -189,11 +193,13 @@ INTERNAL_IPS = [
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
-STATIC_URL = "static/"
-STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"),)
-STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Storage backend
+# Storage backend configuration for both default and staticfiles storage
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -224,3 +230,276 @@ else:
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Easy Thumbnails Configuration
+THUMBNAIL_ALIASES = {
+    "": {
+        "admin_thumbnail": {"size": (100, 75), "crop": True},
+        "small": {"size": (200, 150), "crop": True},
+        "medium": {"size": (400, 300), "crop": False},
+        "large": {"size": (800, 600), "crop": False},
+    },
+}
+
+# Django Unfold Configuration
+UNFOLD = {
+    "SITE_TITLE": "Religious Ecologies",
+    "SITE_HEADER": "Religious Ecologies",
+    "SITE_URL": "/",
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": "Dashboard",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Overview",
+                        "icon": "dashboard",
+                        "link": lambda request: "/admin/",
+                    },
+                ],
+            },
+            {
+                "title": "Analytics & Reporting",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Analytics Home",
+                        "icon": "analytics",
+                        "link": lambda request: "/analytics/",
+                    },
+                    {
+                        "title": "Query Builder",
+                        "icon": "search",
+                        "link": lambda request: "/analytics/query/",
+                    },
+                    {
+                        "title": "Denomination Analysis",
+                        "icon": "bar_chart",
+                        "link": lambda request: "/analytics/analysis/denominations/",
+                    },
+                    {
+                        "title": "Location Analysis",
+                        "icon": "map",
+                        "link": lambda request: "/analytics/analysis/locations/",
+                    },
+                    {
+                        "title": "Data Completeness",
+                        "icon": "checklist",
+                        "link": lambda request: "/analytics/analysis/completeness/",
+                    },
+                    {
+                        "title": "Export by Location",
+                        "icon": "download",
+                        "link": lambda request: "/admin/census/censusschedule/location-export/",
+                    },
+                ],
+            },
+            {
+                "title": "Transcriptions",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Census Schedules",
+                        "icon": "description",
+                        "link": lambda request: "/admin/census/censusschedule/",
+                    },
+                    {
+                        "title": "Religious Bodies",
+                        "icon": "account_balance",
+                        "link": lambda request: "/admin/census/religiousbody/",
+                    },
+                    {
+                        "title": "Denominations",
+                        "icon": "category",
+                        "link": lambda request: "/admin/census/denomination/",
+                    },
+                    {
+                        "title": "Membership Data",
+                        "icon": "people",
+                        "link": lambda request: "/admin/census/membership/",
+                    },
+                    {
+                        "title": "Clergy Information",
+                        "icon": "person",
+                        "link": lambda request: "/admin/census/clergy/",
+                    },
+                ],
+            },
+            {
+                "title": "Location Data",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "States",
+                        "icon": "flag",
+                        "link": lambda request: "/admin/location/state/",
+                    },
+                    {
+                        "title": "Counties",
+                        "icon": "map",
+                        "link": lambda request: "/admin/location/county/",
+                    },
+                    {
+                        "title": "Populated Places",
+                        "icon": "location_city",
+                        "link": lambda request: "/admin/location/populatedplace/",
+                    },
+                ],
+            },
+            {
+                "title": "Content Management",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Blog Posts",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/blogpost/",
+                    },
+                    {
+                        "title": "Pages",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/page/",
+                    },
+                    {
+                        "title": "Visualizations",
+                        "icon": "article",
+                        "link": lambda request: "/admin/pages/visualization/",
+                    },
+                ],
+            },
+            {
+                "title": "System Administration",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Users",
+                        "icon": "person",
+                        "link": lambda request: "/admin/auth/user/",
+                    },
+                    {
+                        "title": "Groups",
+                        "icon": "group",
+                        "link": lambda request: "/admin/auth/group/",
+                    },
+                    {
+                        "title": "User Sessions",
+                        "icon": "vpn_key",
+                        "link": lambda request: "/admin/sessions/session/",
+                    },
+                ],
+            },
+        ],
+    },
+    "TABS": [
+        {
+            "models": [
+                "census.censusschedule",
+                "census.religiousbody",
+                "census.membership",
+                "census.clergy",
+            ],
+            "items": [
+                {
+                    "title": "Census Schedules",
+                    "link": lambda request: "/admin/census/censusschedule/",
+                },
+                {
+                    "title": "Religious Bodies",
+                    "link": lambda request: "/admin/census/religiousbody/",
+                },
+                {
+                    "title": "Membership",
+                    "link": lambda request: "/admin/census/membership/",
+                },
+                {
+                    "title": "Clergy",
+                    "link": lambda request: "/admin/census/clergy/",
+                },
+            ],
+        }
+    ],
+    "COLORS": {
+        "primary": {
+            "50": "#eff6ff",
+            "100": "#dbeafe",
+            "200": "#bfdbfe",
+            "300": "#93c5fd",
+            "400": "#60a5fa",
+            "500": "#0060b1",  # RelEco blue
+            "600": "#0052a3",
+            "700": "#004494",
+            "800": "#003685",
+            "900": "#002876",
+            "950": "#001a5e",
+        }
+    },
+    "STYLES": [
+        lambda request: "/static/css/custom_unfold.css",
+    ],
+}
+
+# Geocoding settings
+# ------------------------------------------------------------------------------
+GEOCODING_USER_AGENT = "ReligiousEcologies/1.0 (Django Historical Census Project)"
+
+# CORS Configuration
+# ------------------------------------------------------------------------------
+# The API is read-only and public, so allow all origins.
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_URLS_REGEX = r"^/census/api/.*$"
+
+# Cache Configuration
+# ------------------------------------------------------------------------------
+# Uses Memcached in production (via MEMCACHED_URL env var).
+# Falls back to in-memory cache for local development.
+MEMCACHED_URL = env("MEMCACHED_URL", default="")
+
+if MEMCACHED_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+            "LOCATION": MEMCACHED_URL,
+            "TIMEOUT": 900,  # Default 15-minute cache timeout
+            "OPTIONS": {
+                "no_delay": True,
+                "ignore_exc": True,  # Return cache miss on errors, don't crash
+                "connect_timeout": 3,
+                "timeout": 3,
+                "use_pooling": True,
+            },
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "TIMEOUT": 900,
+        }
+    }
+
+# Django REST Framework Configuration
+# ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 100,  # Default page size
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",  # Make API publicly readable
+    ],
+}

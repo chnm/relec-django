@@ -13,7 +13,7 @@ from census.models import (
     Membership,
     ReligiousBody,
 )
-from location.models import Location
+from location.models import PopulatedPlace
 
 # Constants for special values in the data
 MISSING = "MISSING"
@@ -68,6 +68,33 @@ def clean_numeric_value(value):
         int, Decimal, or None: The converted value or None if it's a special value
     """
     return clean_value(value, convert_to_numeric=True)
+
+
+def map_workflow_status(reviewed, is_approved):
+    """
+    Map CSV workflow columns to Django transcription_status field
+
+    Args:
+        reviewed (str): "1", "0", or None
+        is_approved (str): "1", "0", or None
+
+    Returns:
+        str: Django status value
+    """
+    # Clean the values first
+    reviewed_clean = clean_value(reviewed)
+    approved_clean = clean_value(is_approved)
+
+    if approved_clean == "1":
+        return "approved"
+    elif reviewed_clean == "1" and approved_clean == "0":
+        return "completed"  # reviewed but not approved
+    elif reviewed_clean == "1" and approved_clean is None:
+        return "needs_review"  # reviewed, approval status unknown
+    elif reviewed_clean == "0":
+        return "in_progress"  # explicitly marked as not reviewed
+    else:  # reviewed is None or empty
+        return "unassigned"  # no workflow status set
 
 
 class Command(BaseCommand):
@@ -199,19 +226,33 @@ class Command(BaseCommand):
 
     def _create_census_schedule(self, row):
         # Get or create the schedule
-        resource_id = int(row["resource_id"])
+        resource_id = clean_numeric_value(row["resource_id"])
+        if resource_id is None:
+            raise ValueError(f"Invalid resource_id: {row['resource_id']}")
+
+        # Clean numeric values for other ID fields, skip if NULL
+        omeka_item_id = clean_numeric_value(row["datascribe_omeka_item_id"])
+        item_id = clean_numeric_value(row["datascribe_item_id"])
+        record_id = clean_numeric_value(row["datascribe_record_id"])
+
+        # Map workflow status from CSV columns
+        workflow_status = map_workflow_status(
+            row.get("reviewed"), row.get("is_approved")
+        )
+
         census_schedule, created = CensusSchedule.objects.update_or_create(
             resource_id=resource_id,
             defaults={
                 "schedule_title": row["schedule_title"],
                 "schedule_id": row["schedule_id"],
-                "datascribe_omeka_item_id": int(row["datascribe_omeka_item_id"]),
-                "datascribe_item_id": int(row["datascribe_item_id"]),
-                "datascribe_record_id": int(row["datascribe_record_id"]),
-                "datascribe_original_image_path": row.get(
-                    "datascribe_original_image_path", ""
+                "transcription_status": workflow_status,
+                "datascribe_omeka_item_id": omeka_item_id,
+                "datascribe_item_id": item_id,
+                "datascribe_record_id": record_id,
+                "datascribe_original_image_path": clean_value(
+                    row.get("datascribe_original_image_path", "")
                 ),
-                "omeka_storage_id": row.get("omeka_storage_id", ""),
+                "omeka_storage_id": clean_value(row.get("omeka_storage_id", "")),
             },
         )
 
@@ -249,7 +290,7 @@ class Command(BaseCommand):
                     )
                 )
 
-        # Find location by place_id if it exists
+        # Find populated place by place_id and link to census schedule
         if row.get("(d, e, f) Location") and row.get("(d, e, f) Location") not in [
             MISSING,
             ILLEGIBLE,
@@ -257,13 +298,17 @@ class Command(BaseCommand):
             NULL,
             None,
         ]:
-            try:
-                location = Location.objects.get(place_id=row["(d, e, f) Location"])
-                religious_body.location = location
-            except Location.DoesNotExist:
+            place = PopulatedPlace.objects.filter(
+                place_id=row["(d, e, f) Location"]
+            ).select_related("county").first()
+            if place:
+                census_schedule.populated_place = place
+                census_schedule.county = place.county
+                census_schedule.save(update_fields=["populated_place", "county"])
+            else:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"Location not found: {row.get('(d, e, f) Location')}"
+                        f"PopulatedPlace not found for place_id: {row.get('(d, e, f) Location')}"
                     )
                 )
 

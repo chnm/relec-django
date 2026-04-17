@@ -3,8 +3,11 @@ name: religious_ecologies
 
 services:
   app:
-    build: .
-    image: "rrchnm/religious_ecologies"
+    build:
+      context: .
+      dockerfile: Dockerfile
+      no_cache: true
+    image: "rrchnm/relec-django"
     ports:
       - 8000:8000
     volumes:
@@ -20,19 +23,23 @@ services:
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
       - DB_PASSWORD=password
-      - ALLAUTH_GITHUB_CLIENT_ID=PLACEHOLDER
-      - ALLAUTH_GITHUB_CLIENT_SECRET=PLACEHOLDER
       - OBJ_STORAGE=True
       - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+      - MEMCACHED_URL=memcached:11211
     command: >
-      sh -c "poetry run python3 manage.py migrate &&
-             poetry run python3 manage.py runserver 0.0.0.0:8000"
+      sh -c "uv run manage.py migrate &&
+             uv run manage.py runserver 0.0.0.0:8000"
     depends_on:
       db:
         condition: service_healthy
+      memcached:
+        condition: service_started
+  memcached:
+    image: memcached:1-alpine
+    restart: unless-stopped
   db:
     image: postgres:17
     volumes:

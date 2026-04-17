@@ -1,0 +1,736 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}API Documentation | American Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .api-docs {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .api-docs-sidebar {
+            flex: 0 0 250px;
+            position: relative;
+        }
+
+        .api-docs-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .api-section {
+            margin-bottom: 3rem;
+        }
+
+        .endpoint-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            background: #f9fafb;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .http-method {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .http-get {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .endpoint-path {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 0.9rem;
+            color: #1f2937;
+            word-break: break-all;
+        }
+
+        .endpoint-body {
+            padding: 1.5rem;
+        }
+
+        .endpoint-description {
+            color: #4b5563;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .params-table th,
+        .params-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .params-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .param-name {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            color: #7c3aed;
+            font-size: 0.85rem;
+        }
+
+        .param-type {
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+
+        .param-required {
+            color: #dc2626;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .param-optional {
+            color: #6b7280;
+            font-size: 0.75rem;
+        }
+
+        .code-block {
+            background: #1e293b;
+            color: #f1f5f9;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 0.85rem;
+            margin: 1rem 0;
+        }
+
+        .code-block code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+
+        .example-links {
+            margin-top: 1rem;
+        }
+
+        .example-links h5 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .example-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #0060b1;
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .example-link:hover {
+            text-decoration: underline;
+        }
+
+        .toc {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            position: sticky;
+            top: 2rem;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            color: #374151;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .toc li {
+            margin-bottom: 0.5rem;
+        }
+
+        .toc a {
+            color: #0060b1;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0060b1;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .response-example {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .response-example h5 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .back-to-top {
+            display: block;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+            color: #0060b1;
+            text-decoration: none;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+        }
+
+        .back-to-top:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .api-docs {
+                padding: 1rem;
+                flex-direction: column;
+            }
+
+            .api-docs-sidebar {
+                flex: none;
+            }
+
+            .toc {
+                position: static;
+            }
+
+            .endpoint-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .params-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="api-docs">
+    <!-- Sidebar TOC -->
+        <aside class="api-docs-sidebar">
+            <nav class="toc">
+                <h3>Contents</h3>
+                <ul>
+                    <li><a href="#getting-started">Getting Started</a></li>
+                    <li><a href="#denominations">Denominations</a></li>
+                    <li><a href="#religious-bodies">Religious Bodies (Congregations)</a></li>
+                    <li><a href="#aggregations">Aggregation Endpoints</a></li>
+                    <li><a href="#usage-tips">Usage Tips</a></li>
+                </ul>
+                <a href="#top" class="back-to-top" id="back-to-top">&uarr; Back to top</a>
+            </nav>
+        </aside>
+
+    <!-- Main Content -->
+        <div class="api-docs-content">
+    <!-- Header -->
+        <header id="top" class="mb-8">
+            <h1 class="text-4xl font-heading font-bold text-content-primary mb-4">API Documentation</h1>
+        </header>
+
+
+    <!-- Getting Started -->
+        <section id="getting-started" class="api-section">
+            <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Getting Started</h2>
+
+            <div class="endpoint-card">
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        The API is read-only and does not require authentication. All endpoints are accessible via HTTP GET requests.
+                        The base URL for all API endpoints is:
+                    </p>
+                    <div class="code-block">
+                        <code>{{ api_base_url }}</code>
+                    </div>
+                    <p class="endpoint-description">
+                        Responses are returned in JSON format. For large datasets, always use filters to limit results.
+                    </p>
+
+                    <h4 class="font-semibold mt-4 mb-2">API Root</h4>
+                    <p class="endpoint-description">
+                        Visit the API root to see a summary of all available endpoints with links:
+                    </p>
+                    <a href="{{ api_base_url }}" target="_blank" class="example-link">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        {{ api_base_url }}
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    <!-- Denominations -->
+        <section id="denominations" class="api-section">
+            <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Denominations</h2>
+            <p class="text-content-secondary mb-4">
+                Access denomination taxonomy and family classifications from the 1926 Census.
+            </p>
+
+        <!-- List Denominations -->
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="http-method http-get">GET</span>
+                    <span class="endpoint-path">/census/api/denominations/</span>
+                </div>
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        Returns a paginated list of all denominations with their family classifications.
+                    </p>
+
+                    <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
+                    <table class="params-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by census family (e.g., "Baptist bodies")</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">family_relec</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by Religious Ecologies family classification</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">search</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Search denomination names</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/" target="_blank" class="example-link">All denominations</a><br>
+                        <a href="{{ api_base_url }}denominations/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
+                        <a href="{{ api_base_url }}denominations/?search=Methodist" target="_blank" class="example-link">Search for "Methodist"</a>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Denomination Families -->
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="http-method http-get">GET</span>
+                    <span class="endpoint-path">/census/api/denominations/families/</span>
+                </div>
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        Returns unique denomination families with counts. Only includes families that have location data available.
+                    </p>
+
+                    <div class="response-example">
+                        <h5>Example Response</h5>
+                        <div class="code-block">
+                            <code>{
+                                "census_families": [
+                                {"name": "Baptist bodies", "count": 24},
+                                {"name": "Methodist bodies", "count": 18}
+                                ],
+                                "relec_families": ["Baptist", "Methodist", "Catholic"]
+                                }</code>
+                        </div>
+                    </div>
+
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/families/" target="_blank" class="example-link">All families</a>
+                    </div>
+                </div>
+            </div>
+
+        <!-- By Family -->
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="http-method http-get">GET</span>
+                    <span class="endpoint-path">/census/api/denominations/by_family/</span>
+                </div>
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        Returns denominations grouped by family. Only includes denominations with location data.
+                    </p>
+
+                    <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
+                    <table class="params-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter to specific census family</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Methodist+bodies" target="_blank" class="example-link">Methodist bodies</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    <!-- Religious Bodies -->
+        <section id="religious-bodies" class="api-section">
+            <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Religious Bodies (Congregations)</h2>
+            <p class="text-content-secondary mb-4">
+                Access individual congregation records from the 1926 Census.
+            </p>
+
+        <!-- List Religious Bodies -->
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="http-method http-get">GET</span>
+                    <span class="endpoint-path">/census/api/religious-bodies/</span>
+                </div>
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        Returns detailed congregation records including location, denomination, membership,
+                        finances, pastors, transcription status, and schedule IDs. Use filters to limit results.
+                    </p>
+
+                    <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
+                    <table class="params-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="param-name">denomination</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Filter by denomination ID</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by census family (e.g., "Adventist bodies")</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">family_relec</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by Religious Ecologies family</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">transcription_status</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by transcription status (e.g., "approved")</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">exclude_families</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Comma-separated census families to exclude</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">urban_rural</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Filter by "urban" or "rural"</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">bounds</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Geographic bounding box as "south,west,north,east"</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">search</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Search name, address, or census code</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">limit</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Limit number of results per page</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 class="font-semibold mt-4 mb-2">Response Structure</h4>
+                    <p class="text-content-secondary text-sm mb-2">The response envelope includes <code>count</code>, <code>next</code>, <code>previous</code> (pagination), <code>denominations</code> (array of denomination names matched by your query), and <code>results</code> (array of records).</p>
+                    <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
+                        <li><code>transcription_status</code> - Status of the census record transcription</li>
+                        <li><code>schedule_id</code> - Census schedule identifier</li>
+                        <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>county_name</code>, <code>state_name</code>, <code>place_id</code>, <code>address</code>, <code>urban_rural_code</code></li>
+                        <li><code>denomination_details</code> - Nested object with denomination info and family classifications</li>
+                        <li><code>membership_details</code> - Full membership breakdown: sex/age demographics, Sunday school, VBS, weekday school, and parochial school data</li>
+                        <li><code>finances</code> - Financial data: <code>expenditures</code>, <code>benevolences</code>, <code>total_expenditures</code>, <code>edifice_value</code>, <code>edifice_debt</code>, <code>residence_value</code>, <code>residence_debt</code></li>
+                        <li><code>pastors</code> - Pastor info including education</li>
+                        <li><code>urls</code> - Links to schedule detail and filtered data table views</li>
+                        <li><code>denominations</code> (pagination envelope) - Array of distinct denomination names in the filtered results</li>
+                    </ul>
+
+                    <div class="response-example">
+                        <h5>Example Response (single record)</h5>
+                        <div class="code-block">
+                            <code>{
+  "id": 42,
+  "name": "Seventh-day Adventist Church",
+  "census_code": "003",
+  "division": null,
+  "transcription_status": "approved",
+  "schedule_id": 1234,
+  "location_details": {
+    "lat": 38.9072, "lon": -77.0369,
+    "city_name": "Washington", "county_name": "District of Columbia",
+    "state_name": "DC", "place_id": 567,
+    "address": "123 Main St",
+    "urban_rural_code": "U"
+  },
+  "denomination_details": {
+    "id": 5, "name": "Seventh-day Adventists",
+    "family_census": "Adventist bodies", "family_relec": "Adventist"
+  },
+  "membership_details": {
+    "male_members": 45, "female_members": 62, "total_members": 107,
+    "members_under_13": 18, "members_13_and_older": 89, "total_by_age": 107,
+    "sunday_school_num_officers_teachers": 5,
+    "sunday_school_num_scholars": 35,
+    "vbs_num_officers_teachers": null, "vbs_num_scholars": null,
+    "weekday_num_officers_teachers": null, "weekday_num_scholars": null,
+    "parochial_num_administrators": null,
+    "parochial_num_elementary_teachers": null,
+    "parochial_num_secondary_teachers": null,
+    "parochial_num_elementary_scholars": null,
+    "parochial_num_secondary_scholars": null
+  },
+  "finances": {
+    "expenditures": 1200.00, "benevolences": 350.00,
+    "total_expenditures": 1550.00, "edifice_value": 25000.00,
+    "edifice_debt": null, "residence_value": 5000.00,
+    "residence_debt": null
+  },
+  "urls": {
+    "self": "https://religiousecologies.org/census/record/1234/",
+    "family_census": "https://religiousecologies.org/census/browser/?family=Adventist+bodies",
+    "family_relec": "https://religiousecologies.org/census/browser/?family=Adventist&denomination=2"
+  },
+  "pastors": {
+    "name": "Elder James White", "is_assistant": false,
+    "college": "Battle Creek College", "theological_seminary": null
+  }
+}</code>
+                        </div>
+                    </div>
+
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?family_relec=Adventist&limit=10" target="_blank" class="example-link">Adventist congregations (RelEc family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?family_census=Adventist+bodies&limit=10" target="_blank" class="example-link">Adventist bodies (census family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?denomination=2&limit=10" target="_blank" class="example-link">Seventh-day Adventist (denomination ID)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?search=Seventh-day&limit=10" target="_blank" class="example-link">Search "Seventh-day"</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?transcription_status=approved&limit=10" target="_blank" class="example-link">Approved records only</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?bounds=38,-78,40,-75&limit=100" target="_blank" class="example-link">Mid-Atlantic bounding box</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?urban_rural=urban&limit=10" target="_blank" class="example-link">Urban congregations</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?exclude_families=Baptist+bodies,Methodist+bodies&limit=100" target="_blank" class="example-link">Exclude Baptist and Methodist</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    <!-- Aggregation Endpoints -->
+        <section id="aggregations" class="api-section">
+            <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Aggregation Endpoints</h2>
+            <p class="text-content-secondary mb-4">
+                Pre-aggregated data for analysis and visualization.
+            </p>
+
+        <!-- Denomination Families -->
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="http-method http-get">GET</span>
+                    <span class="endpoint-path">/census/api/religious-bodies/denomination_families/</span>
+                </div>
+                <div class="endpoint-body">
+                    <p class="endpoint-description">
+                        Returns comprehensive list of denomination families with counts of denominations
+                        and congregations in each family. Includes both census families and Religious Ecologies families.
+                    </p>
+
+                    <div class="response-example">
+                        <h5>Example Response</h5>
+                        <div class="code-block">
+                            <code>{
+                                "census_families": [
+                                {
+                                "name": "Baptist bodies",
+                                "denominations": 24,
+                                "congregations": 1500,
+                                "total_congregations": 2000,
+                                "has_location_data": true
+                                }
+                                ],
+                                "relec_families": [
+                                {
+                                "name": "Baptist",
+                                "denominations": 24,
+                                "congregations": 1500,
+                                "has_location_data": true
+                                }
+                                ]
+                                }</code>
+                        </div>
+                    </div>
+
+                    <div class="example-links">
+                        <h5>Examples</h5>
+                        <a href="{{ api_base_url }}religious-bodies/denomination_families/" target="_blank" class="example-link">All families with counts</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    <!-- Usage Tips -->
+        <section id="usage-tips" class="api-section">
+            <h2 class="text-2xl font-heading font-semibold text-content-primary mb-4">Usage Tips</h2>
+
+            <div class="endpoint-card">
+                <div class="endpoint-body">
+                    <h4 class="font-semibold mb-3">Best Practices</h4>
+                    <ul class="list-disc list-inside text-content-secondary space-y-2">
+                        <li><strong>Always use filters</strong> to limit results and improve response times</li>
+                        <li>Add <code>?limit=10</code> to test queries before running full requests</li>
+                        <li>Use <code>bounds</code> filter for geographic queries</li>
+                        <li>Use <code>transcription_status=approved</code> for verified data only</li>
+                        <li>Use <code>exclude_families</code> to remove large denomination families from results</li>
+                    </ul>
+
+
+                    <h4 class="font-semibold mt-6 mb-3">CORS</h4>
+                    <p class="text-content-secondary">
+                        The API supports CORS (Cross-Origin Resource Sharing) for client-side JavaScript applications.
+                        You can make requests directly from browser-based applications.
+                    </p>
+
+                    <h4 class="font-semibold mt-6 mb-3">Caching</h4>
+                    <p class="text-content-secondary">
+                        API responses are cached for one hour. Since the underlying census data changes
+                        infrequently, most requests will be served from cache for faster response times.
+                    </p>
+
+                    <h4 class="font-semibold mt-6 mb-3">Rate Limiting</h4>
+                    <p class="text-content-secondary">
+                        There are currently no rate limits on the API, but please be considerate with your requests.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+    <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t border-gray-200">
+            <p class="text-content-tertiary text-sm">
+                Questions about the API? Contact the
+                <a href="/about/" class="text-religious-primary hover:underline">Religious Ecologies project team</a>.
+            </p>
+        </footer>
+        </div><!-- /.api-docs-content -->
+    </div><!-- /.api-docs -->
+
+    <script>
+        (function() {
+            var backToTop = document.getElementById('back-to-top');
+            var header = document.getElementById('top');
+            if (!backToTop || !header) return;
+
+            var observer = new IntersectionObserver(function(entries) {
+                backToTop.classList.toggle('visible', !entries[0].isIntersecting);
+            }, { threshold: 0 });
+
+            observer.observe(header);
+        })();
+    </script>
+{% endblock %}

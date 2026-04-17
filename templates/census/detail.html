@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+{% load static thumbnail %}
+
+{% block title %}{{ census_record.schedule_title|default:"Census Record" }} - Detail{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .detail-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .image-viewer {
+            background: #f9fafb;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .image-placeholder {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 1rem;
+            min-height: 300px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background-color: #f9fafb;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.875rem;
+        }
+
+        .data-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f3f4f6;
+            color: #6b7280;
+        }
+
+        .data-table tbody tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #0060b1;
+        }
+
+        .section-title h2 {
+            color: #0060b1;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-blue {
+            background-color: #eff8ff;
+            color: #0060b1;
+        }
+
+        .badge-green {
+            background-color: #ecfdf5;
+            color: #065f46;
+        }
+
+        .badge-amber {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0060b1;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #0060b1;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* Tooltip styles */
+        .tooltip-trigger {
+          position: relative;
+          border-bottom: 1px dotted #6b7280;
+          cursor: help;
+          display: inline-block;
+        }
+
+        .tooltip-trigger:hover {
+          border-bottom-color: #0060b1;
+        }
+
+        .tooltip-trigger .tooltip-content {
+          visibility: hidden;
+          opacity: 0;
+          width: 220px;
+          background-color: #1f2937;
+          color: #fff;
+          text-align: center;
+          border-radius: 6px;
+          padding: 8px 12px;
+          position: absolute;
+          z-index: 1000;
+          bottom: 125%;
+          left: 50%;
+          margin-left: -110px;
+          font-size: 0.875rem;
+          font-weight: normal;
+          transition: opacity 0.3s, visibility 0.3s;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .tooltip-trigger .tooltip-content::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          margin-left: -5px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: #1f2937 transparent transparent transparent;
+        }
+
+        .tooltip-trigger:hover .tooltip-content {
+          visibility: visible;
+          opacity: 1;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+    <!-- Breadcrumb -->
+        <nav class="breadcrumb">
+            <a href="{% url 'census_browser' %}">Census Browser</a>
+            <span>›</span>
+            <span>Record {{ census_record.resource_id }}</span>
+        </nav>
+
+    <!-- Header -->
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-content-primary mb-2">
+                    {{ census_record.schedule_title|default:"Census Record" }}
+                </h1>
+                <p class="text-content-secondary">
+                    Record ID: {{ census_record.resource_id }} • Schedule ID: {{ census_record.schedule_id }}
+                </p>
+            </div>
+            <div class="flex gap-2 items-center">
+                {% if user.is_authenticated %}
+                    <a href="/admin/census/censusschedule/{{ census_record.id }}/change/"
+                       target="_blank"
+                       class="inline-flex items-center gap-2 bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-gray-800 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        Edit in Admin
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+    <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Image Column -->
+            <div class="lg:col-span-1">
+                <div class="detail-card">
+                    <h2 class="text-lg font-semibold text-content-primary mb-4">Original Census Image</h2>
+                    <div class="image-viewer">
+                        {% if census_record.original_image %}
+                            <img src="{% thumbnail census_record.original_image 'large' %}"
+                                 alt="Archival image of census schedule {{ census_record.resource_id }}. See the transcription below for the contents of this document."
+                                 class="w-full h-auto">
+                            <div class="p-4 bg-gray-50 text-sm text-content-tertiary">
+                                <a href="{{ census_record.original_image.url }}"
+                                   target="_blank"
+                                   class="text-religious-primary hover:text-primary-700 font-medium">
+                                    View Full Resolution →
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="image-placeholder">
+                                <div class="text-center">
+                                    <svg class="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div class="text-lg font-medium mb-2">No Image Available</div>
+                                    <div class="text-sm">Original census schedule image not yet digitized</div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+            <!-- Schedule Information -->
+
+            </div>
+
+        <!-- Main Data Column -->
+            <div class="lg:col-span-2">
+              <!-- Religious Bodies -->
+                {% for church in census_record.church_details.all %}
+                    <div class="detail-card">
+                        <div class="section-title">
+                            <h2>{{ church.name|default:"Religious Body" }}</h2>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Basic Information -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-content-primary mb-3">Basic Information</h3>
+                                <table class="data-table">
+                                    <tbody>
+                                        {% if church.denomination %}
+                                            {% if census_record.schedule_denomination %}
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <td>
+                                                        <a href="{% url 'census_browser' %}?denomination={{ census_record.schedule_denomination.id }}"
+                                                           class="text-religious-primary hover:underline">
+                                                            {{ census_record.schedule_denomination.name }}
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                                {% if census_record.schedule_denomination.family_relec %}
+                                                    <tr>
+                                                        <th>Denomination Family</th>
+                                                        <td>
+                                                            <a href="{% url 'census_browser' %}?family={{ census_record.schedule_denomination.family_relec|urlencode }}"
+                                                               class="text-religious-primary hover:underline">
+                                                                {{ census_record.schedule_denomination.family_relec }}
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% else %}
+                                                <tr>
+                                                    <td colspan="2" class="text-content-tertiary italic">No denomination assigned</td>
+                                                </tr>
+                                            {% endif %}
+
+                                        {% endif %}
+                                        {% if church.census_code %}
+                                            <tr>
+                                                <th>Census Code</th>
+                                                <td>{{ church.census_code }}</td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        <!-- Property & Financial -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-content-primary mb-3">Property & Finances</h3>
+                                <table class="data-table">
+                                    <tbody>
+                                    {% if church.num_edifices or church.edifice_value or church.edifice_debt or church.has_pastors_residence is not None or church.residence_value or church.expenses or church.benevolences or church.total_expenditures %}
+                                      {% if church.num_edifices %}
+                                        <tr>
+                                          <th>Number of Edifices</th>
+                                          <td>{{ church.num_edifices }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.edifice_value %}
+                                        <tr>
+                                          <th>Edifice Value</th>
+                                          <td>${{ church.edifice_value|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.edifice_debt %}
+                                        <tr>
+                                          <th>Edifice Debt</th>
+                                          <td>${{ church.edifice_debt|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.has_pastors_residence is not None %}
+                                        <tr>
+                                          <th>Pastor's Residence</th>
+                                          <td>{{ church.has_pastors_residence|yesno:"Yes,No,Unknown" }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.residence_value %}
+                                        <tr>
+                                          <th>Residence Value</th>
+                                          <td>${{ church.residence_value|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.expenses %}
+                                        <tr>
+                                          <th>Expenses</th>
+                                          <td>${{ church.expenses|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.benevolences %}
+                                        <tr>
+                                          <th>Benevolences</th>
+                                          <td>${{ church.benevolences|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                      {% if church.total_expenditures %}
+                                        <tr>
+                                          <th>Total Expenditures</th>
+                                          <td>${{ church.total_expenditures|floatformat:2 }}</td>
+                                        </tr>
+                                      {% endif %}
+                                    {% else %}
+                                      <tr>
+                                        <td colspan="2" class="text-content-tertiary italic text-center py-4">
+                                          No property or financial data currently transcribed
+                                        </td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+
+            <!-- Location -->
+                <div class="detail-card">
+                    <div class="section-title">
+                        <h2>Location</h2>
+                    </div>
+
+                    <table class="data-table">
+                        <tbody>
+                        <tr>
+                          <th>
+                                    <span class="tooltip-trigger">
+                                        Populated Place
+                                        <span class="tooltip-content">City, town, village, township, etc.</span>
+                                    </span>
+                          </th>
+                          <td>{{ census_record.populated_place.name|default:"—" }}</td>
+                        </tr>
+                            {% if census_record.county %}
+                                <tr>
+                                    <th>County</th>
+                                    <td>
+                                        {% if census_record.county.state %}
+                                            <a href="{% url 'census_browser_county' census_record.county.state.code census_record.county.name %}"
+                                               class="text-religious-primary hover:underline">
+                                                {{ census_record.county.name }}
+                                            </a>
+                                        {% else %}
+                                            {{ census_record.county.name }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            {% if census_record.county.state %}
+                                <tr>
+                                    <th>State</th>
+                                    <td>
+                                        <a href="{% url 'census_browser_state' census_record.county.state.code %}"
+                                           class="text-religious-primary hover:underline">
+                                            {{ census_record.county.state.name }}
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            {% if not census_record.county and not census_record.populated_place %}
+                                <tr>
+                                    <td colspan="2" class="text-content-tertiary italic">No location data available</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+
+
+            <!-- Membership Details -->
+                {% for membership in census_record.membership_details.all %}
+                  {% if membership.male_members or membership.female_members or membership.members_under_13 or membership.members_13_and_older or membership.sunday_school_num_officers_teachers or membership.sunday_school_num_scholars or membership.vbs_num_officers_teachers or membership.vbs_num_scholars or membership.weekday_num_officers_teachers or membership.weekday_num_scholars or membership.parochial_num_elementary_teachers or membership.parochial_num_elementary_scholars or membership.parochial_num_secondary_teachers or membership.parochial_num_secondary_scholars %}
+                    <div class="detail-card">
+                      <div class="section-title">
+                        <h2>Membership & Educational Programs</h2>
+                      </div>
+
+                      <!-- Membership Stats Grid -->
+                      <div class="stat-grid">
+                        {% if membership.male_members %}
+                          <div class="stat-box">
+                            <span class="stat-number">{{ membership.male_members }}</span>
+                            <div class="stat-label">Male Members</div>
+                          </div>
+                        {% endif %}
+                        {% if membership.female_members %}
+                          <div class="stat-box">
+                            <span class="stat-number">{{ membership.female_members }}</span>
+                            <div class="stat-label">Female Members</div>
+                          </div>
+                        {% endif %}
+                        {% if membership.members_under_13 %}
+                          <div class="stat-box">
+                            <span class="stat-number">{{ membership.members_under_13 }}</span>
+                            <div class="stat-label">Under 13</div>
+                          </div>
+                        {% endif %}
+                        {% if membership.members_13_and_older %}
+                          <div class="stat-box">
+                            <span class="stat-number">{{ membership.members_13_and_older }}</span>
+                            <div class="stat-label">13 and Older</div>
+                          </div>
+                        {% endif %}
+                      </div>
+
+                      <!-- Educational Programs -->
+                      {% if membership.sunday_school_num_officers_teachers or membership.sunday_school_num_scholars or membership.vbs_num_officers_teachers or membership.vbs_num_scholars or membership.weekday_num_officers_teachers or membership.weekday_num_scholars or membership.parochial_num_elementary_teachers or membership.parochial_num_elementary_scholars or membership.parochial_num_secondary_teachers or membership.parochial_num_secondary_scholars %}
+                        <div class="mt-6">
+                          <h3 class="text-lg font-semibold text-content-primary mb-3">Educational Programs</h3>
+                          <table class="data-table">
+                            <thead>
+                            <tr>
+                              <th>Program</th>
+                              <th>Officers/Teachers</th>
+                              <th>Scholars/Students</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% if membership.sunday_school_num_officers_teachers or membership.sunday_school_num_scholars %}
+                              <tr>
+                                <td>Sunday School</td>
+                                <td>{{ membership.sunday_school_num_officers_teachers|default:"—" }}</td>
+                                <td>{{ membership.sunday_school_num_scholars|default:"—" }}</td>
+                              </tr>
+                            {% endif %}
+                            {% if membership.vbs_num_officers_teachers or membership.vbs_num_scholars %}
+                              <tr>
+                                <td>Vacation Bible School</td>
+                                <td>{{ membership.vbs_num_officers_teachers|default:"—" }}</td>
+                                <td>{{ membership.vbs_num_scholars|default:"—" }}</td>
+                              </tr>
+                            {% endif %}
+                            {% if membership.weekday_num_officers_teachers or membership.weekday_num_scholars %}
+                              <tr>
+                                <td>Weekday Religious School</td>
+                                <td>{{ membership.weekday_num_officers_teachers|default:"—" }}</td>
+                                <td>{{ membership.weekday_num_scholars|default:"—" }}</td>
+                              </tr>
+                            {% endif %}
+                            {% if membership.parochial_num_elementary_teachers or membership.parochial_num_elementary_scholars %}
+                              <tr>
+                                <td>Parochial School (Elementary)</td>
+                                <td>{{ membership.parochial_num_elementary_teachers|default:"—" }}</td>
+                                <td>{{ membership.parochial_num_elementary_scholars|default:"—" }}</td>
+                              </tr>
+                            {% endif %}
+                            {% if membership.parochial_num_secondary_teachers or membership.parochial_num_secondary_scholars %}
+                              <tr>
+                                <td>Parochial School (Secondary)</td>
+                                <td>{{ membership.parochial_num_secondary_teachers|default:"—" }}</td>
+                                <td>{{ membership.parochial_num_secondary_scholars|default:"—" }}</td>
+                              </tr>
+                            {% endif %}
+                            </tbody>
+                          </table>
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+
+            <!-- Clergy -->
+                {% if census_record.clergy.exists %}
+                    <div class="detail-card">
+                        <div class="section-title">
+                            <h2>Clergy</h2>
+                        </div>
+
+                        <div class="space-y-4">
+                            {% for clergy in census_record.clergy.all %}
+                                <div class="p-4 bg-gray-50 rounded-lg">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h3 class="text-lg font-semibold text-content-primary">{{ clergy.name }}</h3>
+                                        {% if clergy.is_assistant %}
+                                            <span class="badge badge-amber">Assistant</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        {% if clergy.college %}
+                                            <div>
+                                                <span class="font-medium text-content-secondary">College:</span>
+                                                <span class="text-content-tertiary">{{ clergy.college }}</span>
+                                            </div>
+                                        {% endif %}
+                                        {% if clergy.theological_seminary %}
+                                            <div>
+                                                <span class="font-medium text-content-secondary">Seminary:</span>
+                                                <span class="text-content-tertiary">{{ clergy.theological_seminary }}</span>
+                                            </div>
+                                        {% endif %}
+                                        {% if clergy.num_other_churches_served %}
+                                            <div>
+                                                <span class="font-medium text-content-secondary">Other Churches Served:</span>
+                                                <span class="text-content-tertiary">{{ clergy.num_other_churches_served }}</span>
+                                            </div>
+                                        {% endif %}
+                                        {% if clergy.serving_congregation is not None %}
+                                            <div>
+                                                <span class="font-medium text-content-secondary">Currently Serving:</span>
+                                                <span class="text-content-tertiary">{{ clergy.serving_congregation|yesno:"Yes,No,Unknown" }}</span>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    <!-- Navigation -->
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <a href="{% url 'census_browser' %}"
+               class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
+                ← Back to Census Browser
+            </a>
+        </div>
+    </div>
+{% endblock %}

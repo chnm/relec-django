@@ -1,0 +1,706 @@
+{% extends "base.html" %}
+{% load static thumbnail humanize %}
+
+{% block title %}Census Records Browser{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .filter-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .record-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        .record-card:hover {
+            box-shadow: 0 4px 12px -1px rgba(0, 96, 177, 0.15);
+            border-color: #0060b1;
+        }
+
+        .image-placeholder {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 0.875rem;
+            border-radius: 6px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-blue {
+            background-color: #eff8ff;
+            color: #0060b1;
+        }
+
+        .badge-green {
+            background-color: #ecfdf5;
+            color: #065f46;
+        }
+
+        .badge-amber {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .pagination-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .pagination a, .pagination span {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+
+        .pagination .current {
+            background-color: #0060b1;
+            color: white;
+            border-color: #0060b1;
+        }
+
+        .pagination a:hover {
+            background-color: #f3f4f6;
+        }
+
+        .table-header {
+            background-color: #f9fafb;
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        #filter-body {
+            overflow: hidden;
+            transition: opacity 0.2s ease;
+        }
+
+        #filter-body.collapsed {
+            display: none;
+        }
+
+        #filter-toggle {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .filter-group-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6b7280;
+            margin-bottom: 0.75rem;
+        }
+
+        .filter-group-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div>
+        {% if location_filter %}
+        <!-- Breadcrumb for location filtering -->
+            <nav class="flex items-center gap-2 text-sm text-content-secondary mb-4">
+                <a href="{% url 'census_browser' %}" class="text-religious-primary hover:underline">All Records</a>
+                <span>›</span>
+                {% if current_state %}
+                    {% if county_filter %}
+                        <a href="{% url 'census_browser_state' location_filter %}" class="text-religious-primary hover:underline">{{ current_state.name }}</a>
+                        <span>›</span>
+                        <span class="font-medium text-content-primary">{{ county_filter }} County</span>
+                    {% else %}
+                        <span class="font-medium text-content-primary">{{ current_state.name }}</span>
+                    {% endif %}
+                {% endif %}
+            </nav>
+        {% endif %}
+
+        <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">
+            {% if county_filter and current_state %}
+                {{ county_filter }} County, {{ current_state.name }}
+            {% elif current_state %}
+                {{ current_state.name }}
+            {% else %}
+                Census Records Browser
+            {% endif %}
+        </h1>
+        <p class="text-content-secondary mb-6">
+            {% if location_filter %}
+                {{ total_records|intcomma }} religious census record{{ total_records|pluralize }} found.
+            {% else %}
+                Explore {{ total_records|intcomma }} religious census records.
+            {% endif %}
+        </p>
+
+    <!-- Filters -->
+        <div class="filter-card" id="filter-card">
+            <!-- Collapsible header -->
+            <button type="button" id="filter-toggle"
+                    class="w-full flex justify-between items-center text-left mb-4 group"
+                    aria-expanded="true" aria-controls="filter-body">
+                <span class="font-semibold text-content-primary text-sm uppercase tracking-wide">Filters</span>
+                <svg id="filter-caret" class="w-4 h-4 text-content-secondary transition-transform duration-200"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+
+            <div id="filter-body">
+            <form method="get" class="space-y-5" id="filter-form">
+                <!-- Search -->
+                <div>
+                    <label for="search-input" class="block text-sm font-medium text-content-secondary mb-2">Search</label>
+                    <input type="text" name="search" id="search-input" value="{{ search }}"
+                           placeholder="Search records, churches, denominations..."
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                </div>
+
+                <!-- Denomination group -->
+                <div>
+                    <div class="filter-group-label">Denomination</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <label for="family-select" class="block text-sm font-medium text-content-secondary mb-2">Denomination Family</label>
+                            <select name="family" id="family-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">All Families</option>
+                                {% for family in census_families %}
+                                    {% if family %}
+                                        <option value="{{ family }}" {% if family == family_filter %}selected{% endif %}>{{ family }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="denomination-select" class="block text-sm font-medium text-content-secondary mb-2">Denomination</label>
+                            <select name="denomination" id="denomination-select"
+                                    {% if not family_filter and not denomination_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Denominations</option>
+                                {% for denomination in denominations %}
+                                    <option value="{{ denomination.id }}"
+                                            data-family="{{ denomination.family_relec|default:'Other' }}"
+                                            {% if denomination.id|stringformat:"s" == denomination_filter %}selected{% endif %}>
+                                        {{ denomination.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Location group -->
+                <div>
+                    <div class="filter-group-label">Location</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label for="state-select" class="block text-sm font-medium text-content-secondary mb-2">State</label>
+                            <select id="state-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">All States</option>
+                                {% for state in states %}
+                                    <option value="{{ state.code }}" {% if state.code == location_filter %}selected{% endif %}>
+                                        {{ state.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="county-select" class="block text-sm font-medium text-content-secondary mb-2">County</label>
+                            <select id="county-select"
+                                    {% if not location_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Counties</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="place-select" class="block text-sm font-medium text-content-secondary mb-2">Populated Place</label>
+                            <select id="place-select"
+                                    {% if not county_filter %}disabled{% endif %}
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
+                                <option value="">All Places</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="urban-rural-select" class="block text-sm font-medium text-content-secondary mb-2">Urban or Rural</label>
+                            <select name="urban_rural" id="urban-rural-select"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-religious-primary focus:border-transparent">
+                                <option value="">Any</option>
+                                <option value="urban" {% if urban_rural == "urban" %}selected{% endif %}>Urban</option>
+                                <option value="rural" {% if urban_rural == "rural" %}selected{% endif %}>Rural</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-1">
+                    <button type="submit" class="bg-religious-primary text-white px-6 py-2 rounded-md hover:bg-primary-700 transition-colors">
+                        Apply Filters
+                    </button>
+                    <a href="{% url 'census_browser' %}" class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition-colors">
+                        Clear All
+                    </a>
+                </div>
+            </form>
+            </div>
+        </div>
+
+        <script>
+            // Data from Django
+            const countiesByState = {{ counties_by_state_json|safe }};
+            const placesByCounty = {{ places_by_county_json|safe }};
+            const denominationsByFamily = {{ denominations_by_family_json|safe }};
+
+            // Get form elements
+            const familySelect = document.getElementById('family-select');
+            const denominationSelect = document.getElementById('denomination-select');
+            const stateSelect = document.getElementById('state-select');
+            const countySelect = document.getElementById('county-select');
+            const placeSelect = document.getElementById('place-select');
+
+            // Store original values
+            const selectedDenomination = "{{ denomination_filter }}";
+            const selectedCounty = "{{ county_filter }}";
+            const selectedPlace = "{{ place_filter }}";
+
+            // Update denomination dropdown based on family selection
+            function updateDenominationOptions() {
+                const selectedFamily = familySelect.value;
+
+                // Clear existing options and rebuild
+                denominationSelect.innerHTML = '<option value="">All Denominations</option>';
+
+                if (!selectedFamily) {
+                    // No family selected - disable denomination dropdown
+                    denominationSelect.disabled = true;
+                } else {
+                    // Family selected - populate with matching denominations
+                    denominationSelect.disabled = false;
+                    const denominations = denominationsByFamily[selectedFamily] || [];
+                    denominations.forEach(denom => {
+                        const option = document.createElement('option');
+                        option.value = denom.id;
+                        option.textContent = denom.name;
+                        if (String(denom.id) === selectedDenomination) {
+                            option.selected = true;
+                        }
+                        denominationSelect.appendChild(option);
+                    });
+                }
+            }
+
+            // Update county dropdown based on state selection
+            function updateCountyOptions() {
+                const selectedState = stateSelect.value;
+
+                // Clear existing options
+                countySelect.innerHTML = '<option value="">All Counties</option>';
+
+                if (!selectedState) {
+                    // No state selected - disable county dropdown
+                    countySelect.disabled = true;
+                } else {
+                    // State selected - populate counties
+                    countySelect.disabled = false;
+                    const counties = countiesByState[selectedState] || [];
+                    counties.forEach(county => {
+                        const option = document.createElement('option');
+                        option.value = county;
+                        option.textContent = county;
+                        if (county === selectedCounty) {
+                            option.selected = true;
+                        }
+                        countySelect.appendChild(option);
+                    });
+                }
+            }
+
+            // Update populated place dropdown based on state + county selection
+            function updatePlaceOptions() {
+                const selectedState = stateSelect.value;
+                const selectedCountyVal = countySelect.value;
+
+                placeSelect.innerHTML = '<option value="">All Places</option>';
+
+                if (!selectedState || !selectedCountyVal) {
+                    placeSelect.disabled = true;
+                } else {
+                    const places = ((placesByCounty[selectedState] || {})[selectedCountyVal]) || [];
+                    if (places.length > 0) {
+                        placeSelect.disabled = false;
+                        places.forEach(place => {
+                            const option = document.createElement('option');
+                            option.value = place;
+                            option.textContent = place;
+                            if (place === selectedPlace) {
+                                option.selected = true;
+                            }
+                            placeSelect.appendChild(option);
+                        });
+                    } else {
+                        placeSelect.disabled = true;
+                    }
+                }
+            }
+
+            // Add event listeners
+            familySelect.addEventListener('change', updateDenominationOptions);
+            stateSelect.addEventListener('change', function() {
+                updateCountyOptions();
+                countySelect.value = '';
+                updatePlaceOptions();
+            });
+            countySelect.addEventListener('change', function() {
+                updatePlaceOptions();
+                placeSelect.value = '';
+            });
+
+            // Handle form submission - build URL with path-based state/county
+            document.getElementById('filter-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const state = stateSelect.value;
+                const county = countySelect.value;
+
+                // Build base path
+                let basePath = '{% url "census_browser" %}';
+                if (state) {
+                    basePath = `/census/browser/${state}/`;
+                    if (county) {
+                        basePath = `/census/browser/${state}/${encodeURIComponent(county)}/`;
+                    }
+                }
+
+                // Build query params for other filters
+                const params = new URLSearchParams();
+                const search = this.querySelector('[name="search"]').value;
+                const family = this.querySelector('[name="family"]').value;
+                const denomination = this.querySelector('[name="denomination"]').value;
+                const urbanRural = this.querySelector('[name="urban_rural"]').value;
+                const place = placeSelect.value;
+
+                if (search) params.set('search', search);
+                if (family) params.set('family', family);
+                if (denomination) params.set('denomination', denomination);
+                if (urbanRural) params.set('urban_rural', urbanRural);
+                if (place) params.set('place', place);
+
+                // Navigate to the new URL
+                const queryString = params.toString();
+                window.location.href = basePath + (queryString ? '?' + queryString : '');
+            });
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                // If a denomination is pre-selected but no family is set,
+                // auto-select the denomination's family so the dropdown reflects the filter
+                if (selectedDenomination && !familySelect.value) {
+                    // Find the denomination's family from the data
+                    for (const [family, denoms] of Object.entries(denominationsByFamily)) {
+                        if (denoms.some(d => String(d.id) === selectedDenomination)) {
+                            familySelect.value = family;
+                            break;
+                        }
+                    }
+                }
+
+                updateDenominationOptions();
+                updateCountyOptions();
+                updatePlaceOptions();
+
+                // Collapsible filter panel
+                const toggle = document.getElementById('filter-toggle');
+                const body = document.getElementById('filter-body');
+                const caret = document.getElementById('filter-caret');
+
+                toggle.addEventListener('click', function() {
+                    const isOpen = !body.classList.contains('collapsed');
+                    body.classList.toggle('collapsed', isOpen);
+                    caret.style.transform = isOpen ? 'rotate(-90deg)' : '';
+                    toggle.setAttribute('aria-expanded', String(!isOpen));
+                });
+            });
+        </script>
+
+    <!-- Results Summary -->
+        <div class="table-header rounded-t-lg">
+            <div class="flex justify-between items-center w-full">
+                <div>
+                    <span class="text-content-primary font-medium">
+                        {% if page_obj.paginator.count %}
+                            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count|intcomma }} records
+                        {% else %}
+                            No records found
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    {% if search %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Search: "{{ search }}"
+                            <a href="{% url 'census_browser' %}?{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if family_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Family: {{ family_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if denomination_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Denomination
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if location_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            State: {{ current_state.name|default:location_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if county_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            County: {{ county_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if place_filter %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            Place: {{ place_filter }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if urban_rural %}urban_rural={{ urban_rural }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                    {% if urban_rural %}
+                        <span class="badge badge-amber inline-flex items-center gap-1">
+                            {{ urban_rural|title }}
+                            <a href="{% url 'census_browser' %}?{% if search %}search={{ search|urlencode }}&{% endif %}{% if family_filter %}family={{ family_filter|urlencode }}&{% endif %}{% if denomination_filter %}denomination={{ denomination_filter }}&{% endif %}{% if location_filter %}location={{ location_filter }}&{% endif %}{% if county_filter %}county={{ county_filter|urlencode }}&{% endif %}{% if place_filter %}place={{ place_filter|urlencode }}&{% endif %}{% if has_membership %}has_membership={{ has_membership }}{% endif %}"
+                               class="ml-1 hover:text-red-700" title="Remove filter">&times;</a>
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    <!-- Records Table -->
+        <div class="bg-white border border-t-0 border-gray-200 rounded-b-lg">
+            {% if page_obj %}
+                <div class="divide-y divide-gray-200">
+                    {% for record in page_obj %}
+                        <div class="p-6 hover:bg-gray-50 transition-colors">
+                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                            <!-- Image Column -->
+                                <div class="lg:col-span-1">
+                                    {% if record.original_image %}
+                                        <div class="aspect-[4/3] rounded-lg overflow-hidden">
+                                            <img src="{% thumbnail record.original_image 'medium' %}"
+                                                 alt="Archival image of census schedule {{ record.resource_id }}. See the transcription for the contents of this document."
+                                                 class="w-full h-full object-cover">
+                                        </div>
+                                    {% else %}
+                                        <div class="aspect-[4/3] image-placeholder rounded-lg">
+                                            <div class="text-center">
+                                                <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <div>No Image</div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                            <!-- Main Content -->
+                                <div class="lg:col-span-4">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-content-primary">
+                                                <a href="{% url 'census_detail' record.resource_id %}"
+                                                   class="hover:text-religious-primary transition-colors">
+                                                    {{ record.schedule_title|default:"Census Record" }}
+                                                </a>
+                                            </h3>
+                                            <p class="text-sm text-content-tertiary">Record ID: {{ record.resource_id }}</p>
+                                        </div>
+                                        {% if record.original_image %}
+                                            <span class="badge badge-green">Has Image</span>
+                                        {% endif %}
+                                    </div>
+
+                                <!-- Church Details -->
+                                    {% with record.church_details.all.0 as church %}
+                                        {% if church %}
+                                            <div class="mb-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <h4 class="font-medium text-content-primary">{{ church.name|default:"Unnamed Church" }}</h4>
+                                                        {% if church.denomination %}
+                                                            <p class="text-sm text-content-secondary">{{ church.denomination.name }}</p>
+                                                          {% if church.denomination.family_relec %}
+                                                            <p
+                                                              class="text-xs text-content-tertiary">{{ church.denomination.family_relec }}</p>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                        {% if record.county or record.populated_place %}
+                                                            <p class="text-sm text-content-tertiary mt-1">
+                                                                {% if record.populated_place %}{{ record.populated_place.name }}, {% endif %}
+                                                                {% if record.county %}{{ record.county.name }} County, {{ record.county.state.code }}{% endif %}
+                                                            </p>
+                                                        {% endif %}
+                                                    </div>
+
+                                                <!-- Quick Stats -->
+                                                    {% with record.membership_details.all.0 as membership %}
+                                                        {% if membership %}
+                                                            <div class="stats-grid">
+                                                                {% if membership.male_members or membership.female_members %}
+                                                                    <div class="stat-item">
+                                                                        <div class="text-lg font-semibold text-religious-primary">
+                                                                            {{ membership.male_members|add:membership.female_members|default:"—" }}
+                                                                        </div>
+                                                                        <div class="text-xs text-content-tertiary">Total Members</div>
+                                                                    </div>
+                                                                {% endif %}
+                                                                {% if membership.sunday_school_num_scholars %}
+                                                                    <div class="stat-item">
+                                                                        <div class="text-lg font-semibold text-religious-primary">{{ membership.sunday_school_num_scholars }}</div>
+                                                                        <div class="text-xs text-content-tertiary">Sunday School</div>
+                                                                    </div>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endwith %}
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+
+                                <!-- Clergy -->
+                                    {% if record.clergy.exists %}
+                                        <div class="text-sm text-content-secondary">
+                                            <strong>Clergy:</strong>
+                                            {% for clergy in record.clergy.all %}
+                                                {{ clergy.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+
+                                <!-- Actions -->
+                                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+                                        <a href="{% url 'census_detail' record.resource_id %}"
+                                           class="text-religious-primary hover:text-primary-700 font-medium text-sm transition-colors">
+                                            View Full Record →
+                                        </a>
+                                        {% if user.is_authenticated %}
+                                            <a href="/admin/census/censusschedule/{{ record.id }}/change/"
+                                               target="_blank"
+                                               class="inline-flex items-center gap-1 text-gray-600 hover:text-gray-800 text-sm transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                                Edit
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="p-12 text-center">
+                            <div class="text-content-tertiary mb-4">
+                                <svg class="w-12 h-12 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-content-primary mb-2">No records found</h3>
+                            <p class="text-content-secondary">Try adjusting your search terms or filters</p>
+                            <a href="{% url 'census_browser' %}"
+                               class="text-religious-primary hover:text-primary-700 font-medium mt-2 inline-block">
+                                Clear all filters
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+    <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <div class="pagination-wrapper">
+                <div class="pagination">
+                    {% if page_obj.has_previous %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">First</a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a>
+                    {% endif %}
+
+                    <span class="current">
+                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                    </span>
+
+                    {% if page_obj.has_next %}
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">Last</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

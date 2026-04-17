@@ -1,0 +1,205 @@
+from django.contrib import admin
+from django.utils.html import format_html
+from simple_history.admin import SimpleHistoryAdmin
+from unfold.admin import ModelAdmin
+
+from .models import BlogPost, Page, Visualization
+
+
+@admin.register(Page)
+class PageAdmin(ModelAdmin, SimpleHistoryAdmin):
+    list_display = [
+        "title",
+        "slug",
+        "is_published",
+        "show_in_nav",
+        "nav_order",
+        "updated_at",
+        "view_on_site_link",
+    ]
+    list_filter = ["is_published", "show_in_nav", "created_at", "updated_at"]
+    search_fields = ["title", "slug", "content"]
+    prepopulated_fields = {"slug": ("title",)}
+    list_editable = ["is_published", "show_in_nav", "nav_order"]
+
+    fieldsets = (
+        ("Basic Information", {"fields": ("title", "slug", "content")}),
+        ("SEO & Meta", {"fields": ("meta_description",), "classes": ("collapse",)}),
+        (
+            "Publishing",
+            {"fields": ("is_published", "publish_date"), "classes": ("collapse",)},
+        ),
+        (
+            "Navigation",
+            {
+                "fields": ("show_in_nav", "nav_title", "nav_order"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    # Show timestamps in readonly
+    readonly_fields = ("created_at", "updated_at")
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+
+        # Add timestamps section if editing existing object
+        if obj:
+            fieldsets = fieldsets + (
+                (
+                    "Timestamps",
+                    {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+                ),
+            )
+
+        return fieldsets
+
+    def view_on_site_link(self, obj):
+        """Add a 'View on site' link in the admin list"""
+        if obj.is_live:
+            url = obj.get_absolute_url()
+            return format_html('<a href="{}" target="_blank">View →</a>', url)
+        return "Not live"
+
+    view_on_site_link.short_description = "View on site"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related()
+
+    # Custom admin actions
+    actions = ["make_published", "make_unpublished", "add_to_nav", "remove_from_nav"]
+
+    def make_published(self, request, queryset):
+        count = queryset.update(is_published=True)
+        self.message_user(request, f"{count} pages marked as published.")
+
+    make_published.short_description = "Mark selected pages as published"
+
+    def make_unpublished(self, request, queryset):
+        count = queryset.update(is_published=False)
+        self.message_user(request, f"{count} pages marked as unpublished.")
+
+    make_unpublished.short_description = "Mark selected pages as unpublished"
+
+    def add_to_nav(self, request, queryset):
+        count = queryset.update(show_in_nav=True)
+        self.message_user(request, f"{count} pages added to navigation.")
+
+    add_to_nav.short_description = "Add selected pages to navigation"
+
+    def remove_from_nav(self, request, queryset):
+        count = queryset.update(show_in_nav=False)
+        self.message_user(request, f"{count} pages removed from navigation.")
+
+    remove_from_nav.short_description = "Remove selected pages from navigation"
+
+
+@admin.register(BlogPost)
+class BlogPostAdmin(ModelAdmin):
+    list_display = (
+        "title",
+        "author",
+        "published_date",
+        "is_draft",
+        "thumbnail_preview",
+    )
+    list_filter = ("is_draft", "published_date", "author")
+    search_fields = ("title", "content", "abstract")
+    prepopulated_fields = {"slug": ("title",)}
+    date_hierarchy = "published_date"
+    ordering = ("-published_date",)
+    readonly_fields = ("thumbnail_preview", "created_at", "updated_at")
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("title", "slug", "author", "published_date")},
+        ),
+        ("Content", {"fields": ("abstract", "content")}),
+        (
+            "Thumbnail Image",
+            {
+                "fields": ("thumbnail_image", "thumbnail_preview", "image_alt_text"),
+                "description": "Upload a thumbnail image for blog post listings",
+            },
+        ),
+        (
+            "Legacy Fields",
+            {
+                "fields": ("featured_image",),
+                "classes": ("collapse",),
+                "description": "Deprecated: Old static image path field",
+            },
+        ),
+        ("Publishing", {"fields": ("is_draft",)}),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def thumbnail_preview(self, obj):
+        """Show thumbnail preview in admin"""
+        url = obj.get_thumbnail_url()
+        if url:
+            return format_html(
+                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', url
+            )
+        return "No image"
+
+    thumbnail_preview.short_description = "Preview"
+
+
+@admin.register(Visualization)
+class VisualizationAdmin(ModelAdmin):
+    list_display = (
+        "title",
+        "author",
+        "published_date",
+        "updated_date",
+        "doi",
+        "thumbnail_preview",
+    )
+    list_filter = ("published_date", "author")
+    search_fields = ("title", "author", "content", "abstract")
+    prepopulated_fields = {"slug": ("title",)}
+    date_hierarchy = "published_date"
+    ordering = ("-published_date",)
+    readonly_fields = ("thumbnail_preview", "created_at", "updated_at")
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("title", "slug", "author", "published_date", "updated_date")},
+        ),
+        ("Content", {"fields": ("abstract", "content")}),
+        (
+            "Thumbnail Image",
+            {
+                "fields": (
+                    "thumbnail_image",
+                    "thumbnail_preview",
+                    "thumbnail_description",
+                ),
+                "description": "Upload a thumbnail image for visualization listings",
+            },
+        ),
+        ("Visualization Assets", {"fields": ("script_file", "style_file")}),
+        ("Metadata", {"fields": ("doi",), "classes": ("collapse",)}),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def thumbnail_preview(self, obj):
+        """Show thumbnail preview in admin"""
+        url = obj.get_thumbnail_url()
+        if url:
+            return format_html(
+                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', url
+            )
+        return "No image"
+
+    thumbnail_preview.short_description = "Preview"

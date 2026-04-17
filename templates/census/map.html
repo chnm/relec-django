@@ -140,7 +140,7 @@
 
                         <div id="familyList" class="max-h-56 overflow-y-auto mb-3">
                         <!-- Family items will be populated here via JS -->
-                            <div class="text-gray-500 text-sm text-center py-4">Loading...</div>
+                            <div class="text-gray-600 text-sm text-center py-4">Loading...</div>
                         </div>
                     </div>
 
@@ -151,12 +151,13 @@
                             <button id="clearDenominationFilter" class="text-sm text-indigo-600 hover:text-indigo-800">Clear</button>
                         </div>
 
+                        <label for="denominationSearch" class="sr-only">Search denominations</label>
                         <input type="text" id="denominationSearch" placeholder="Search denominations..."
                                class="w-full border border-gray-300 rounded p-2 mb-2">
 
                         <div id="denominationList" class="max-h-64 overflow-y-auto">
                         <!-- Denomination items will be populated here via JS -->
-                            <div class="text-gray-500 text-sm text-center py-4">Select a family first</div>
+                            <div class="text-gray-600 text-sm text-center py-4">Select a family first</div>
                         </div>
                     </div>
                 </div>
@@ -187,7 +188,7 @@
                         </label>
                         <span class="text-sm font-medium text-gray-700">Clustering</span>
                     </div>
-                    <div id="mapStatus" class="text-sm text-gray-500"></div>
+                    <div id="mapStatus" class="text-sm text-gray-600"></div>
                 </div>
 
             <!-- The map container -->
@@ -208,9 +209,11 @@
     // Initialize the map
             const map = L.map('map').setView([39.8283, -98.5795], 4); // Centered on US
 
-    // Add tile layer (OpenStreetMap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // Add tile layer (Carto Positron - clean, minimal design)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
             }).addTo(map);
 
     // Create a marker cluster group and a regular layer group
@@ -267,19 +270,31 @@
             }
 
     // Function to get color based on denomination family
+            const FAMILY_COLORS = [
+                "#1f77b4", // blue
+                "#ff7f0e", // orange
+                "#2ca02c", // green
+                "#d62728", // red
+                "#9467bd", // purple
+                "#8c564b", // brown
+                "#e377c2", // pink
+                "#7f7f7f", // gray
+                "#bcbd22", // yellow-green
+                "#17becf"  // cyan
+            ];
+
             function getFamilyColor(family) {
-        // Simple hash function to generate colors
+  // Always map the same family to the same index
+                const index = Math.abs(hashString(family)) % FAMILY_COLORS.length;
+                return FAMILY_COLORS[index];
+            }
+
+            function hashString(str) {
                 let hash = 0;
-                for (let i = 0; i < family.length; i++) {
-                    hash = family.charCodeAt(i) + ((hash << 5) - hash);
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
                 }
-
-        // Convert hash to RGB color
-                const r = (hash & 0xFF) % 200 + 20;
-                const g = ((hash >> 8) & 0xFF) % 200 + 20;
-                const b = ((hash >> 16) & 0xFF) % 200 + 20;
-
-                return `rgb(${r}, ${g}, ${b})`;
+                return hash;
             }
 
     // Function to toggle clustering
@@ -365,22 +380,34 @@
                 statsContainer.innerHTML = statsHTML;
             }
 
+            function showLoading() {
+                const mapEl = document.getElementById('map');
+                let overlay = document.getElementById('map-loading-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'map-loading-overlay';
+                    overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;border-radius:0.5rem;';
+                    overlay.innerHTML = '<div style="text-align:center"><div style="border:3px solid #e5e7eb;border-top-color:#0060b1;border-radius:50%;width:2.5rem;height:2.5rem;animation:spin 0.8s linear infinite;margin:0 auto 0.75rem;"></div><p style="color:#4b5563;font-size:0.875rem;">Loading congregation data&hellip;</p></div>';
+                    mapEl.style.position = 'relative';
+                    mapEl.appendChild(overlay);
+                    if (!document.getElementById('spin-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'spin-style';
+                        style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+                        document.head.appendChild(style);
+                    }
+                }
+                overlay.style.display = 'flex';
+            }
+
+            function hideLoading() {
+                const overlay = document.getElementById('map-loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+
     // Function to load marker data
             function loadMarkers(filters = {}) {
-    // Show loading indicator
-                const loadingDiv = document.createElement('div');
-                loadingDiv.id = 'map-loading';
-                loadingDiv.style.position = 'absolute';
-                loadingDiv.style.top = '50%';
-                loadingDiv.style.left = '50%';
-                loadingDiv.style.transform = 'translate(-50%, -50%)';
-                loadingDiv.style.background = 'white';
-                loadingDiv.style.padding = '10px';
-                loadingDiv.style.borderRadius = '5px';
-                loadingDiv.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-                loadingDiv.style.zIndex = '1000';
-                loadingDiv.innerHTML = 'Loading data...';
-                document.getElementById('map').appendChild(loadingDiv);
+                showLoading();
 
     // Clear existing markers
                 markers.clearLayers();
@@ -389,9 +416,9 @@
 
     // Build the query string
                 let queryParams = new URLSearchParams();
-                if (filters.family_census) {
-                    queryParams.append('family_census', filters.family_census);
-                    currentFamily = filters.family_census;
+              if (filters.family_relec) {
+                queryParams.append('family_relec', filters.family_relec);
+                currentFamily = filters.family_relec;
                 } else {
                     currentFamily = null;
                 }
@@ -410,17 +437,10 @@
     // Add timestamp to prevent caching
                 queryParams.append('_', Date.now());
 
-    // Fetch data from API with timeout
-                const timeoutId = setTimeout(() => {
-                    const loadingElem = document.getElementById('map-loading');
-                    if (loadingElem) {
-                        loadingElem.innerHTML = 'Loading is taking longer than expected. Please wait...';
-                    }
-                }, 3000);
-
-                fetch(`/census/api/religious-bodies/map_data/?${queryParams.toString()}`)
+                queryParams.set('page_size', '5000');
+                fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
-                        clearTimeout(timeoutId);
+
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
                         }
@@ -429,17 +449,21 @@
                     .then(data => {
             // Create a legend for denomination families
                         const families = new Set();
+                        const results = data.results || data;
 
             // Process each religious body and add to map
-                        data.forEach(church => {
-                            if (church.lat && church.lon) {
+                        results.forEach(church => {
+                            const loc = church.location_details || {};
+                            const lat = loc.lat;
+                            const lon = loc.lon;
+                            if (lat && lon) {
                     // Get family info, handling potential missing data
-                                const family = church.family || 'Unknown';
+                                const family = (church.denomination_details && church.denomination_details.family_census) || 'Unknown';
                                 families.add(family);
 
                     // Create marker
                                 const marker = L.circleMarker(
-                                    [church.lat, church.lon],
+                                    [lat, lon],
                                     {
                                         radius: 3,
                                         fillColor: getFamilyColor(family),
@@ -451,12 +475,14 @@
                                 );
 
                     // Get total members
-                                const totalMembers = church.total_members || 0;
+                                const mem = church.membership_details || {};
+                                const totalMembers = mem.total_members || 0;
+                                const denomName = (church.denomination_details && church.denomination_details.name) || 'Unknown';
 
                     // Add popup content
                                 marker.bindPopup(`
                         <h5 class="font-bold text-lg">${church.name || 'Unnamed Religious Body'}</h5>
-                        <p><strong>Denomination:</strong> ${church.denomination_name || 'Unknown'}</p>
+                        <p><strong>Denomination:</strong> ${denomName}</p>
                         <p><strong>Family:</strong> ${family}</p>
                         <p><strong>Members:</strong> ${totalMembers}</p>
                     `);
@@ -481,31 +507,19 @@
                         updateMapStatus();
                         updateFamilyStats();
 
-            // Remove loading indicator
-                        const loadingElem = document.getElementById('map-loading');
-                        if (loadingElem) {
-                            loadingElem.remove();
-                        }
+                        hideLoading();
                     })
                     .catch(error => {
-                        clearTimeout(timeoutId);
-                        console.error('Error loading religious body data:', error);
 
-            // Remove loading indicator and show error
-                        const loadingElem = document.getElementById('map-loading');
-                        if (loadingElem) {
-                            loadingElem.innerHTML = 'Error loading data. Please try again.';
-                            setTimeout(() => {
-                                loadingElem.remove();
-                            }, 3000);
-                        }
+                        console.error('Error loading religious body data:', error);
+                        hideLoading();
                     });
             }
 
     // Function to load families data
             function loadFamilies() {
                 const familyList = document.getElementById('familyList');
-                familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+                familyList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Loading...</div>';
 
                 fetch('/census/api/denominations/families/')
                     .then(response => {
@@ -515,7 +529,7 @@
                         return response.json();
                     })
                     .then(data => {
-                        allFamilies = data.census_families || [];
+                      allFamilies = data.relec_families || [];
 
                 // Check if we have families data
                         if (allFamilies.length > 0) {
@@ -528,7 +542,7 @@
                                 familyHTML += `
                             <div class="family-card" data-family="${family.name}">
                                 <div class="font-medium">${family.name}</div>
-                                <div class="text-sm text-gray-500">
+                                <div class="text-sm text-gray-600">
                                     ${family.count} denomination${family.count !== 1 ? 's' : ''}
                                 </div>
                             </div>
@@ -552,7 +566,7 @@
                                     loadDenominations(familyName);
 
                             // Apply filter to map
-                                    loadMarkers({family_census: familyName});
+                                  loadMarkers({family_relec: familyName});
                                 });
                             });
 
@@ -570,7 +584,7 @@
                                 }
                             }
                         } else {
-                            familyList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No families found</div>';
+                            familyList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">No families found</div>';
                         }
                     })
                     .catch(error => {
@@ -582,9 +596,9 @@
     // Function to load denominations for a specific family
             function loadDenominations(familyName) {
                 const denominationList = document.getElementById('denominationList');
-                denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Loading...</div>';
+                denominationList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Loading...</div>';
 
-                fetch(`/census/api/denominations/by_family/?family_census=${encodeURIComponent(familyName)}`)
+              fetch(`/census/api/denominations/by_family/?family_relec=${encodeURIComponent(familyName)}`)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
@@ -616,7 +630,7 @@
                                     if (item.classList.contains('active')) {
                                 // If already selected, deselect it
                                         item.classList.remove('active');
-                                        loadMarkers({family_census: currentFamily});
+                                      loadMarkers({family_relec: currentFamily});
                                         currentDenomination = null;
                                     } else {
                                 // Select this denomination
@@ -625,7 +639,7 @@
                                         });
                                         item.classList.add('active');
                                         loadMarkers({
-                                            family_census: currentFamily,
+                                          family_relec: currentFamily,
                                             denomination: denominationId
                                         });
                                         currentDenomination = denominationName;
@@ -633,7 +647,7 @@
                                 });
                             });
                         } else {
-                            denominationList.innerHTML = '<div class="text-gray-500 text-sm text-center py-4">No denominations found</div>';
+                            denominationList.innerHTML = '<div class="text-gray-600 text-sm text-center py-4">No denominations found</div>';
                         }
                     })
                     .catch(error => {
@@ -669,7 +683,7 @@
                 });
 
         // Clear denomination selection and list
-                document.getElementById('denominationList').innerHTML = '<div class="text-gray-500 text-sm text-center py-4">Select a family first</div>';
+                document.getElementById('denominationList').innerHTML = '<div class="text-gray-600 text-sm text-center py-4">Select a family first</div>';
 
         // Clear filters on map
                 currentFamily = null;
@@ -685,7 +699,7 @@
 
         // Keep family filter, remove denomination filter
                 currentDenomination = null;
-                loadMarkers({family_census: currentFamily});
+              loadMarkers({family_relec: currentFamily});
             });
 
     // Denomination search
@@ -703,7 +717,7 @@
 
             // Keep existing filters
                     if (currentFamily) {
-                        filters.family_census = currentFamily;
+                      filters.family_relec = currentFamily;
                     }
 
                     if (currentDenomination) {

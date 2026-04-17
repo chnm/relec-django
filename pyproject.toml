@@ -1,39 +1,57 @@
-[tool.poetry]
+[project]
 name = "religious_ecologies"
 version = "0.1.0"
 description = "Religious Ecologies: Django project for the Religious Ecologies project."
-authors = ["Jason Heppler <jheppler@gmu.edu>"]
-license = "Mozilla Public License"
+authors = [
+    {name = "Jason Heppler", email = "jheppler@gmu.edu"}
+]
+license = {text = "Mozilla Public License"}
 readme = "README.md"
-packages = [{include = "religious_ecologies"}]
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=1.0.1",
+    "daphne>=4.1.2",
+    "whitenoise>=6.8.2",
+    "django>=5.1.4",
+    "django-environ>=0.11.2",
+    "django-tailwind>=3.8.0",
+    "django-storages>=1.14.4",
+    "boto3>=1.35.94",
+    "django-unfold>=0.45.0",
+    "django-simple-history>=3.7.0",
+    "requests>=2.32.3",
+    "django-dbml>=0.10.1",
+    "pillow>=11.0.0",
+    "easy-thumbnails>=2.10.1",
+    "djangorestframework>=3.16.1",
+    "django-filter>=25.2",
+    "psycopg2-binary>=2.9.11",
+    "markdown>=3.10.1",
+    "django-import-export>=4.4.0",
+    "openpyxl>=3.1.5",
+    "django-tables2>=2.8.0",
+    "django-cors-headers>=4.0.0",
+    "pymemcache>=4.0.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-python-dotenv = "^1.2.1"
-daphne = "^4.2.1"
-whitenoise = "^6.11.0"
-django = "^5.2.8"
-django-environ = "^0.12.0"
-django-allauth = {version="^65.13.0", extras=["github"]}
+[dependency-groups]
+dev = [
+    "black>=24.10.0",
+    "djhtml>=3.0.7",
+    "pre-commit>=4.0.1",
+    "pytest-django>=4.9.0",
+    "pylint-django>=2.6.1",
+    "factory-boy>=3.3.0",
+]
 
-django-tailwind = "^4.4.1"
-django-storages = "^1.14.6"
-boto3 = "^1.40.74"
-django-unfold = "^0.71.0"
-django-simple-history = "^3.10.1"
-requests = "^2.32.5"
-django-dbml = "^0.10.1"
-djangorestframework = "^3.16.1"
-django-filter = "^25.2"
-psycopg2 = "^2.9.11"
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
 
-[tool.poetry.group.dev.dependencies]
-black = "^25.11.0"
-djhtml = "^3.0.10"
-pre-commit = "^4.4.0"
-django-debug-toolbar = "^6.1.0"
-pytest-django = "^4.11.1"
-pylint-django = "^2.6.1"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 # [tool.ruff]
 # # Use PEP8 line-length

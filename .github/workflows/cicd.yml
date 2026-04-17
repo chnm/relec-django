@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "main"
+      - "preview"
     paths:
       - "**"
       - "!.github/**"
@@ -19,14 +20,13 @@ jobs:
 
       django-context-root: "."
 
-      website-devl-fqdn: "dev.database.religiousecologies.org"
-      website-prod-fqdn: "dev.database.religiousecologies.org"
+      website-devl-fqdn: "dev.religiousecologies.org"
+      website-prod-fqdn: "religiousecologies.org"
 
   deploy:
     uses: chnm/.github/.github/workflows/django--deploy.yml@main
     needs: [build-publish]
-    if: github.ref == 'refs/heads/main'
     secrets: inherit
     with:
-      website-devl-fqdn: "dev.database.religiousecologies.org"
-      website-prod-fqdn: "dev.database.religiousecologies.org"
+      website-devl-fqdn: "dev.religiousecologies.org"
+      website-prod-fqdn: "religiousecologies.org"

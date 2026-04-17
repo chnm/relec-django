@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Urban Congregations Map - Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .viz-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        .viz-header {
+            margin-bottom: 2rem;
+        }
+        .viz-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+        .control-group select {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            background-color: white;
+            font-size: 0.875rem;
+        }
+        #map {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: #f3f4f6;
+        }
+        .leaflet-popup-content {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .leaflet-popup-content strong {
+            color: #0060b1;
+        }
+        .viz-description {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #f0f9ff;
+            border-left: 4px solid #0060b1;
+            border-radius: 0.375rem;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 600px;
+            font-size: 1.125rem;
+            color: #6b7280;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="viz-container">
+        <div class="viz-header">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Urban Congregations Map</h1>
+            <p class="text-lg text-gray-600">Explore religious membership by city in the 1926 U.S. Census of Religious Bodies</p>
+        </div>
+
+        <div class="viz-controls">
+            <div class="control-group">
+                <label for="family-select">Denomination Family</label>
+                <select id="family-select">
+                    <option value="">All Families</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="denomination-select">Denomination</label>
+                <select id="denomination-select">
+                    <option value="">All Denominations</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="metric-select">Display Metric</label>
+                <select id="metric-select">
+                    <option value="congregations">Number of Congregations</option>
+                    <option value="members">Total Membership</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="map" class="loading">Loading map data...</div>
+
+        <div class="viz-description">
+            <h3 class="text-xl font-semibold mb-2">About This Visualization</h3>
+            <p class="text-gray-700 mb-2">
+                This interactive map displays religious congregations and membership data from the 1926 U.S. Census of Religious Bodies.
+                Use the filters above to explore specific denominations or families. Circle sizes represent either the number of
+                congregations or total membership in each city.
+            </p>
+            <p class="text-sm text-gray-600">
+                <strong>Data Source:</strong> 1926 U.S. Census of Religious Bodies<br>
+                <strong>API:</strong> Local Django REST API
+            </p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+// Initialize the map
+        let map = L.map('map').setView([39.8283, -98.5795], 4); // Center on USA
+
+// Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+// Store markers layer group
+        let markersLayer = L.layerGroup().addTo(map);
+
+// Store data
+        let allData = [];
+        let denominations = [];
+        let families = [];
+
+// Load initial data
+        async function loadData() {
+            try {
+        // Load families
+                const familiesResponse = await fetch('/census/api/religious-bodies/denomination_families/');
+                const familiesData = await familiesResponse.json();
+                families = familiesData.relec_families || [];
+
+        // Load denominations
+                const denomsResponse = await fetch('/census/api/denominations/');
+                const denomsData = await denomsResponse.json();
+
+        // Handle paginated response
+                if (denomsData.results) {
+                    denominations = denomsData.results;
+                } else {
+                    denominations = denomsData;
+                }
+
+        // Load congregation data and transform to flat format
+                const citiesResponse = await fetch('/census/api/religious-bodies/?page_size=5000');
+                const citiesJson = await citiesResponse.json();
+                const citiesResults = citiesJson.results || citiesJson;
+                allData = citiesResults.map(b => {
+                    const loc = b.location_details || {};
+                    const denom = b.denomination_details || {};
+                    const mem = b.membership_details || {};
+                    return {
+                        id: b.id, name: b.name,
+                        lat: loc.lat, lon: loc.lon,
+                        city: loc.city_name, county: loc.county_name, state: loc.state_name,
+                        denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+                        total_members: mem.total_members || 0,
+                        congregations: 1,
+                        denominations: [denom.name].filter(Boolean),
+                        denominations_count: denom.name ? 1 : 0,
+                    };
+                });
+
+        // Populate dropdowns
+                populateFamilyDropdown();
+                populateDenominationDropdown();
+
+        // Render initial map
+                updateMap();
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('map').innerHTML =
+                    '<div class="loading" style="color: #dc2626;">Error loading data. Please check the console.</div>';
+            }
+        }
+
+        function populateFamilyDropdown() {
+            const select = document.getElementById('family-select');
+            select.innerHTML = '<option value="">All Families</option>';
+
+            families.forEach(family => {
+                const option = document.createElement('option');
+                option.value = family.name;
+                option.textContent = `${family.name} (${family.congregations} congregations)`;
+                select.appendChild(option);
+            });
+        }
+
+        function populateDenominationDropdown(filterFamily = null) {
+            const select = document.getElementById('denomination-select');
+            select.innerHTML = '<option value="">All Denominations</option>';
+
+            let filteredDenoms = denominations;
+            if (filterFamily) {
+                filteredDenoms = denominations.filter(d => d.family_relec === filterFamily);
+            }
+
+            filteredDenoms
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .forEach(denom => {
+                    const option = document.createElement('option');
+                    option.value = denom.name;
+                    option.textContent = denom.name;
+                    select.appendChild(option);
+                });
+        }
+
+        function updateMap() {
+    // Clear existing markers
+            markersLayer.clearLayers();
+
+    // Get current filters
+            const selectedFamily = document.getElementById('family-select').value;
+            const selectedDenom = document.getElementById('denomination-select').value;
+            const metric = document.getElementById('metric-select').value;
+
+    // Filter data
+            let filteredData = allData;
+
+            if (selectedDenom) {
+        // If specific denomination selected, filter by that
+                filteredData = allData.filter(city =>
+                    city.denominations && city.denominations.includes(selectedDenom)
+                );
+            } else if (selectedFamily) {
+        // If family selected, filter by denominations in that family
+                const familyDenoms = denominations
+                    .filter(d => d.family_relec === selectedFamily)
+                    .map(d => d.name);
+
+                filteredData = allData.filter(city =>
+                    city.denominations && city.denominations.some(d => familyDenoms.includes(d))
+                );
+            }
+
+    // Find max value for scaling circles
+            const values = filteredData.map(d =>
+                metric === 'members' ? d.total_members : d.congregations
+            );
+            const maxValue = Math.max(...values, 1);
+
+    // Add markers
+            filteredData.forEach(city => {
+                if (!city.lat || !city.lon) return;
+
+                const value = metric === 'members' ? city.total_members : city.congregations;
+                const radius = Math.sqrt(value / maxValue) * 30 + 5; // Scale radius
+
+                const circle = L.circleMarker([city.lat, city.lon], {
+                    radius: radius,
+                    fillColor: '#0060b1',
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.6
+                });
+
+        // Create popup content
+                const popupContent = `
+            <strong>${city.city}, ${city.state}</strong><br>
+            Congregations: ${city.congregations.toLocaleString()}<br>
+            Total Members: ${city.total_members.toLocaleString()}<br>
+            ${city.county ? `County: ${city.county}<br>` : ''}
+            Denominations: ${city.denominations_count}
+        `;
+
+                circle.bindPopup(popupContent);
+                circle.addTo(markersLayer);
+            });
+
+    // Update map container message if no data
+            const mapDiv = document.getElementById('map');
+            if (filteredData.length === 0) {
+                mapDiv.classList.add('loading');
+                mapDiv.innerHTML = '<div class="loading">No data available for current filters</div>';
+            } else {
+                mapDiv.classList.remove('loading');
+            }
+        }
+
+// Event listeners
+        document.getElementById('family-select').addEventListener('change', (e) => {
+            populateDenominationDropdown(e.target.value || null);
+            updateMap();
+        });
+
+        document.getElementById('denomination-select').addEventListener('change', updateMap);
+        document.getElementById('metric-select').addEventListener('change', updateMap);
+
+// Load data on page load
+        loadData();
+    </script>
+{% endblock %}

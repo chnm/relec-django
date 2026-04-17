@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Browse Populated Places - Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+  <style>
+    .browse-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .state-section {
+      margin-bottom: 2rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .state-header {
+      background: #0060b1;
+      color: white;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .state-header:hover {
+      background: #004d91;
+    }
+
+    .state-title {
+      font-weight: 600;
+      font-size: 1.125rem;
+    }
+
+    .state-count {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .counties-container {
+      background: #f9fafb;
+      padding: 1.5rem;
+    }
+
+    .county-section {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .county-header {
+      background: #f3f4f6;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .places-grid {
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .place-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      background: #f9fafb;
+      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .place-item:hover {
+      border-color: #0060b1;
+      box-shadow: 0 2px 4px rgba(0, 96, 177, 0.1);
+      background: #eff6ff;
+    }
+
+    .place-name {
+      color: #0060b1;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+
+    .place-count {
+      color: #6b7280;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+
+    .summary-stats {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .collapsible-content.active {
+      max-height: 10000px;
+    }
+
+    .expand-icon {
+      transition: transform 0.2s ease;
+    }
+
+    .expanded .expand-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Two-column layout with sticky nav */
+    .toc-container {
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1.5rem;
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+    }
+
+    .toc-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #0060b1;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 0.5rem;
+    }
+
+    .toc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .toc-item {
+      color: #0060b1;
+      text-decoration: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      font-size: 0.875rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toc-item:hover {
+      background: #f3f4f6;
+      text-decoration: underline;
+    }
+
+    .toc-item.active {
+      background: #0060b1;
+      color: white;
+    }
+
+    .toc-item.active:hover {
+      background: #004d91;
+      text-decoration: none;
+    }
+
+    .toc-count {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .toc-item.active .toc-count {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .content-wrapper {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    @media (min-width: 1024px) {
+      .content-wrapper {
+        grid-template-columns: 280px 1fr;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const stateHeaders = document.querySelectorAll('.state-header');
+
+      stateHeaders.forEach(header => {
+        header.addEventListener('click', function (e) {
+          const content = this.nextElementSibling;
+          const icon = this.querySelector('.expand-icon');
+
+          if (content.classList.contains('active')) {
+            content.classList.remove('active');
+            this.classList.remove('expanded');
+          } else {
+            content.classList.add('active');
+            this.classList.add('expanded');
+          }
+        });
+      });
+
+      // Handle anchor links from TOC - expand the state section when clicked
+      const tocLinks = document.querySelectorAll('.toc-item');
+      tocLinks.forEach(link => {
+        link.addEventListener('click', function (e) {
+          const targetId = this.getAttribute('href').substring(1);
+          const targetSection = document.getElementById(targetId);
+
+          if (targetSection) {
+            const content = targetSection.querySelector('.collapsible-content');
+            const header = targetSection.querySelector('.state-header');
+
+            if (content && !content.classList.contains('active')) {
+              content.classList.add('active');
+              header.classList.add('expanded');
+            }
+          }
+        });
+      });
+
+      // Highlight active TOC item on scroll
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            document.querySelectorAll('.toc-item').forEach(item => {
+              item.classList.remove('active');
+              if (item.getAttribute('href') === '#' + id) {
+                item.classList.add('active');
+              }
+            });
+          }
+        });
+      }, {rootMargin: '-20% 0px -70% 0px'});
+
+      document.querySelectorAll('.state-section').forEach(section => {
+        observer.observe(section);
+      });
+    });
+  </script>
+{% endblock %}
+
+{% block content %}
+  <div>
+    <h1 class="text-3xl font-bold text-content-primary mb-2 font-heading">Browse by Populated Place</h1>
+    <p class="text-content-secondary mb-6">Explore religious census schedules organized by state, county, and populated
+      place.</p>
+
+    <!-- Summary Statistics -->
+    <div class="summary-stats">
+      <div class="text-2xl font-bold text-religious-primary mb-2">
+        {{ total_states }} states &middot; {{ total_counties }} counties &middot; {{ total_places }} populated places
+      </div>
+      <div class="text-content-secondary">Click a state to expand and see counties and places</div>
+    </div>
+
+    <!-- Content Wrapper with TOC -->
+    <div class="content-wrapper">
+      <!-- Table of Contents / State Navigation -->
+      <aside class="toc-container">
+        <div class="toc-title">Jump to State</div>
+        <nav class="toc-list">
+          {% for state_code, state_data in states_data.items %}
+            <a href="#state-{{ state_code }}" class="toc-item">
+              <span>{{ state_data.name }}</span>
+              <span class="toc-count">{{ state_data.counties|length }}</span>
+            </a>
+          {% endfor %}
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <div class="browse-card">
+        {% for state_code, state_data in states_data.items %}
+          <div class="state-section" id="state-{{ state_code }}">
+            <div class="state-header">
+              <div class="state-title">
+                {{ state_data.name }} ({{ state_code }})
+              </div>
+              <div class="flex items-center gap-3">
+                <span
+                  class="state-count">{{ state_data.total_count }} schedule{{ state_data.total_count|pluralize }}</span>
+                <svg class="expand-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+
+            <div class="collapsible-content">
+              <div class="counties-container">
+                {% for county in state_data.counties %}
+                  <div class="county-section">
+                    <div class="county-header">
+                      <span>{{ county.name }} County</span>
+                      <span
+                        class="text-sm text-content-tertiary">{{ county.total_count }} schedule{{ county.total_count|pluralize }}</span>
+                    </div>
+                    <div class="places-grid">
+                      {% for place in county.places %}
+                        <a class="place-item"
+                           href="{% url 'census_browser_county' state_code county.name %}?place={{ place.name|urlencode }}">
+                          <span class="place-name">{{ place.name }}</span>
+                          <span class="place-count">{{ place.count }}</span>
+                        </a>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div> <!-- End content-wrapper -->
+
+    <!-- Navigation -->
+    <div class="mt-8 pt-6 border-t border-gray-200">
+      <div class="flex gap-4">
+        <a href="{% url 'index' %}"
+           class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
+          &larr; Back to Home
+        </a>
+        <a href="{% url 'locations_browse' %}"
+           class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
+          Browse by Location &rarr;
+        </a>
+        <a href="{% url 'denominations_browse' %}"
+           class="inline-flex items-centers text-religious-primary hover:text-primary-700 font-medium transition-colors">
+          Browse by Denomination &rarr;
+        </a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

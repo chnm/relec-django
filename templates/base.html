@@ -3,31 +3,81 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>{% block title %}Religious Ecologies{% endblock %}</title>
+        <title>{% block title %}American Religious Ecologies{% endblock %}</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+        <!-- Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500;600;700&family=Quattrocento:wght@400;700&display=swap" rel="stylesheet">
+
         {% tailwind_css %}
         {% block extra_css %}{% endblock %}
+
+        <!-- Matomo -->
+        <script>
+          var _paq = window._paq = window._paq || [];
+          /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+          _paq.push(['trackPageView']);
+          _paq.push(['enableLinkTracking']);
+          (function() {
+            var u="https://stats.rrchnm.org/";
+            _paq.push(['setTrackerUrl', u+'matomo.php']);
+            _paq.push(['setSiteId', '17']);
+            var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+            g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+          })();
+        </script>
+        <!-- End Matomo Code -->
     </head>
 
-    <body class="bg-gray-50 font-serif leading-normal tracking-normal min-h-screen flex flex-col">
+    <body class="bg-surface-secondary font-body leading-normal tracking-normal min-h-screen flex flex-col">
         <!-- Navigation -->
-        <nav class="bg-indigo-700 text-white shadow-md">
+        <nav class="bg-religious-primary text-white shadow-religious">
             <div class="container mx-auto px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
-                        <a href="{% url 'index' %}" class="text-xl font-bold">Religious Ecologies</a>
+                        <a href="{% url 'index' %}" class="text-2xl font-bold">American Religious Ecologies</a>
                     </div>
-                    <div class="hidden md:flex space-x-6">
-                        <a href="{% url 'index' %}" class="hover:text-indigo-200 transition duration-150">Home</a>
-                        <a href="{% url 'denomination_map' %}" class="hover:text-indigo-200 transition duration-150">Map</a>
-                        <a href="/admin/" class="hover:text-indigo-200 transition duration-150">Admin</a>
-                        <a href="/census/api/" class="hover:text-indigo-200 transition duration-150">API</a>
+                    <div class="hidden md:flex space-x-6 items-center">
+                        <a href="{% url 'index' %}" class="hover:text-primary-200 transition duration-150">Home</a>
+                        {% for page in nav_pages %}
+                            <a href="{% url 'page_detail' page.slug %}" class="hover:text-primary-200 transition duration-150">{{ page.get_nav_title }}</a>
+                        {% endfor %}
+                        <!-- Records Dropdown -->
+                        <div class="relative group">
+                            <button class="hover:text-primary-200 transition duration-150 flex items-center">
+                                Records
+                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                          <div
+                            class="absolute left-0 mt-2 w-52 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                                <div class="py-1">
+                                  <a href="{% url 'census_browser' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse
+                                    Schedules</a>
+                                  <a href="{% url 'locations_browse' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by
+                                    Counties</a>
+                                  <a href="{% url 'browse_popplaces' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by Populated
+                                    Places</a>
+                                  <a href="{% url 'denominations_browse' %}"
+                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Browse by
+                                    Denominations</a>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="{% url 'blog-list' %}" class="hover:text-primary-200 transition duration-150">Blog</a>
+                        <a href="{% url 'visualization-list' %}" class="hover:text-primary-200 transition duration-150">Visualizations</a>
                     </div>
                     <!-- Mobile menu button -->
                     <div class="md:hidden">
-                        <button id="mobile-menu-button" class="text-white">
+                        <button id="mobile-menu-button" class="text-white" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                             </svg>
@@ -37,11 +87,32 @@
             </div>
             <!-- Mobile menu -->
             <div id="mobile-menu" class="hidden md:hidden">
-                <div class="px-4 py-2 space-y-1 bg-indigo-600">
-                    <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Home</a>
-                    <a href="{% url 'denomination_map' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Map</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">About</a>
-                    <a href="#" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-500">Contact</a>
+                <div class="px-4 py-2 space-y-1 bg-primary-600">
+                    <a href="{% url 'index' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Home</a>
+                    {% for page in nav_pages %}
+                        <a href="{% url 'page_detail' page.slug %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">{{ page.get_nav_title }}</a>
+                    {% endfor %}
+                    <!-- Records submenu -->
+                    <div>
+                        <button id="mobile-records-toggle" class="w-full text-left px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500 flex items-center justify-between">
+                            Records
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="mobile-records-submenu" class="hidden pl-6 space-y-1">
+                          <a href="{% url 'census_browser' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Schedules</a>
+                          <a href="{% url 'locations_browse' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Counties</a>
+                          <a href="{% url 'browse_popplaces' %} class=" block px-3 py-2 rounded-md text-sm
+                             hover:bg-primary-500">Browse Populated Places</a>
+                          <a href="{% url 'denominations_browse' %}"
+                             class="block px-3 py-2 rounded-md text-sm hover:bg-primary-500">Browse Denominations</a>
+                        </div>
+                    </div>
+                    <a href="{% url 'blog-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Blog</a>
+                    <a href="{% url 'visualization-list' %}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-500">Visualizations</a>
                 </div>
             </div>
         </nav>
@@ -54,16 +125,68 @@
         </main>
 
         <!-- Footer -->
-        <footer class="bg-gray-100 border-t border-gray-200">
-            <div class="container mx-auto px-4 py-6">
-                <div class="flex flex-col md:flex-row justify-between">
-                    <div class="mb-4 md:mb-0">
-                        <h3 class="text-lg font-semibold mb-2">Religious Ecologies</h3>
-                        <p class="text-gray-600">Exploring the religious landscape of America</p>
+        <footer class="bg-surface-tertiary border-t border-gray-200">
+            <div class="container mx-auto px-4 py-10">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+                    <div class="sm:col-span-2 flex flex-col">
+                        <p class="text-sm text-content-tertiary leading-relaxed mb-6">American Religious Ecologies digitizes and publishes the 1926 Federal Census of Religious Bodies to make historical American religious data searchable and accessible. Generously funded in part by the <a href="https://www.neh.gov/" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">National Endowment for the Humanities</a> and developed by the <a href="https://rrchnm.org/" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">Roy Rosenzweig Center for History and New Media</a> at <a href="https://gmu.edu" class="text-religious-primary border-b border-religious-primary hover:text-primary-700 transition-colors">George Mason University</a>. All of the census schedules on this website are in the public domain.</p>
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mt-auto">
+                            <a href="https://rrchnm.org/">
+                                <img src="{% static 'images/rrchnm-logo-3.png' %}"
+                                     alt="Roy Rosenzweig Center for History and New Media"
+                                     class="h-10 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                            <a href="https://gmu.edu">
+                                <img src="{% static 'images/gmu-logo-2.png' %}"
+                                     alt="George Mason University"
+                                     class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                            <a href="https://www.neh.gov/">
+                                <img src="{% static 'images/NEH-Preferred-Seal.png' %}"
+                                     alt="National Endowment for the Humanities"
+                                     class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity">
+                            </a>
+                        </div>
                     </div>
+
                     <div>
-                        <p class="text-gray-600 text-sm">&copy; {% now "Y" %} Religious Ecologies. All rights reserved.</p>
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Explore</h4>
+                        <ul class="space-y-2 text-sm">
+                            {% for page in nav_pages %}
+                                <li><a href="{% url 'page_detail' page.slug %}" class="text-content-secondary hover:text-religious-primary transition-colors">{{ page.get_nav_title }}</a></li>
+                            {% endfor %}
+                            <li><a href="{% url 'visualization-list' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Visualizations</a></li>
+                        </ul>
+
+                        <h4 class="font-semibold mb-3 mt-6 text-content-primary font-heading">Resources</h4>
+                        <ul class="space-y-2 text-sm">
+                            <li><a href="{% url 'blog-list' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Blog</a></li>
+                            <li><a href="{% url 'api_documentation' %}" class="text-content-secondary hover:text-religious-primary transition-colors">API Documentation</a></li>
+                        </ul>
                     </div>
+
+                    <div class="flex flex-col">
+                        <h4 class="font-semibold mb-3 text-content-primary font-heading">Browse Data</h4>
+                        <ul class="space-y-2 text-sm">
+                            <li><a href="{% url 'census_browser' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse Schedules</a></li>
+                            <li><a href="{% url 'locations_browse' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Counties</a></li>
+                            <li><a href="{% url 'browse_popplaces' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Populated Places</a></li>
+                            <li><a href="{% url 'denominations_browse' %}" class="text-content-secondary hover:text-religious-primary transition-colors">Browse by Denominations</a></li>
+                        </ul>
+
+                        <div class="mt-auto text-sm">
+                            <a href="mailto:chnm@gmu.edu" class="text-content-tertiary hover:text-religious-primary transition-colors">Contact Us</a>
+                            {% if user.is_authenticated %}
+                                <span class="text-content-tertiary mx-1">&middot;</span>
+                                <a href="/admin/" class="text-content-tertiary hover:text-religious-primary transition-colors">Admin</a>
+                                <span class="text-content-tertiary mx-1">&middot;</span>
+                                <a href="{% url 'admin:logout' %}" class="text-content-tertiary hover:text-religious-primary transition-colors">Logout</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-gray-200 mt-8 pt-6 text-center text-sm text-content-tertiary">
+                    &copy; 2020–{% now "Y" %} Roy Rosenzweig Center for History and New Media, George Mason University
                 </div>
             </div>
         </footer>
@@ -71,7 +194,14 @@
         <!-- JavaScript for mobile menu toggle -->
         <script>
             document.getElementById('mobile-menu-button').addEventListener('click', function() {
-                document.getElementById('mobile-menu').classList.toggle('hidden');
+                var menu = document.getElementById('mobile-menu');
+                menu.classList.toggle('hidden');
+                this.setAttribute('aria-expanded', !menu.classList.contains('hidden'));
+            });
+
+            // Toggle mobile records submenu
+            document.getElementById('mobile-records-toggle').addEventListener('click', function() {
+                document.getElementById('mobile-records-submenu').classList.toggle('hidden');
             });
         </script>
 
