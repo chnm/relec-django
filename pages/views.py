@@ -105,6 +105,26 @@ class VisualizationListView(ListView):
     def get_queryset(self):
         return Visualization.objects.all().order_by("-published_date")
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django.db.models import Count
+
+        from datalayers.models import DataLayer
+
+        # Add data layer sources with point counts
+        datalayer_qs = (
+            DataLayer.objects.filter(lat__isnull=False, lon__isnull=False)
+            .values("source")
+            .annotate(count=Count("id"))
+            .order_by("source")
+        )
+        # Add display titles
+        context["datalayer_sources"] = [
+            {**dl, "display_title": dl["source"].replace("-", " ").title()}
+            for dl in datalayer_qs
+        ]
+        return context
+
 
 @method_decorator(cache_page(60 * 15), name="dispatch")  # 15 minutes
 class VisualizationDetailView(DetailView):

@@ -17,10 +17,28 @@ class DataLayer(models.Model):
     lat = models.FloatField(null=True, blank=True)
     lon = models.FloatField(null=True, blank=True)
 
-    # Location fields for filtering/display
+    # Text location fields (from import)
     city = models.CharField(max_length=255, blank=True)
     county = models.CharField(max_length=255, blank=True)
     state = models.CharField(max_length=255, blank=True)
+
+    # Linked location references (matched from location app)
+    county_ref = models.ForeignKey(
+        "location.County",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="data_layers",
+        help_text="Matched county from location data",
+    )
+    populated_place_ref = models.ForeignKey(
+        "location.PopulatedPlace",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="data_layers",
+        help_text="Matched populated place from location data",
+    )
 
     # Optional link to a census schedule
     census_schedule = models.ForeignKey(

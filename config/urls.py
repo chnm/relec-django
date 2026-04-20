@@ -39,6 +39,7 @@ urlpatterns = [
         name="django.contrib.sitemaps.views.sitemap",
     ),
     path("census/", include("census.urls")),
+    path("datalayers/", include("datalayers.urls")),
     path("analytics/", include("analytics.urls")),
     path("", include("pages.urls")),
     # pages - keep this last so it doesn't interfere with other URL patterns

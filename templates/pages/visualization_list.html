@@ -7,7 +7,7 @@
     <div class="max-w-6xl mx-auto">
         <h1 class="text-4xl font-bold text-gray-900 mb-8">Visualizations</h1>
 
-        {% if visualizations %}
+        {% if visualizations or datalayer_sources %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {% for viz in visualizations %}
                     <article class="bg-white shadow-sm rounded-lg overflow-hidden hover:shadow-md transition duration-150">
@@ -36,13 +36,13 @@
                             <div class="text-sm text-gray-600 mb-3">
                                 {% if viz.author %}
                                     <span class="font-medium">{{ viz.author }}</span>
-                                    <span class="mx-2">•</span>
+                                    <span class="mx-2">&bull;</span>
                                 {% endif %}
                                 <time datetime="{{ viz.published_date|date:'Y-m-d' }}">
                                     {{ viz.published_date|date:"F j, Y" }}
                                 </time>
                                 {% if viz.updated_date and viz.updated_date != viz.published_date %}
-                                    <span class="mx-2">•</span>
+                                    <span class="mx-2">&bull;</span>
                                     <span>Updated {{ viz.updated_date|date:"F j, Y" }}</span>
                                 {% endif %}
                             </div>
@@ -58,6 +58,29 @@
                             {% endif %}
                         </div>
                     </a>
+                    </article>
+                {% endfor %}
+
+                {% for dl in datalayer_sources %}
+                    <article class="bg-white shadow-sm rounded-lg overflow-hidden hover:shadow-md transition duration-150">
+                        <a href="{% url 'datalayer_map' dl.source %}" class="block">
+                            <div class="w-full h-48 bg-gray-100 flex items-center justify-center">
+                                <svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                            </div>
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-900 mb-2 hover:text-indigo-600 transition">
+                                    {{ dl.display_title }}
+                                </h2>
+                                <p class="text-gray-700 text-sm leading-relaxed">
+                                    {{ dl.count }} mapped locations
+                                </p>
+                            </div>
+                        </a>
                     </article>
                 {% endfor %}
             </div>
