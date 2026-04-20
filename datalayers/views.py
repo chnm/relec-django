@@ -2,6 +2,7 @@ import json
 
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
+from django.template.loader import select_template
 from django.views.decorators.cache import cache_page
 
 from .models import DataLayer
@@ -9,7 +10,13 @@ from .models import DataLayer
 
 @cache_page(60 * 15)
 def datalayer_map_view(request, source):
-    """Render a map visualization for a given data layer source."""
+    """
+    Render a map visualization for a given data layer source.
+
+    Template resolution order:
+      1. templates/datalayers/<source>.html  (custom per-source template)
+      2. templates/datalayers/map.html       (generic map fallback)
+    """
     points = DataLayer.objects.filter(source=source, lat__isnull=False, lon__isnull=False)
 
     if not points.exists():
@@ -55,7 +62,13 @@ def datalayer_map_view(request, source):
         "point_count": len(features),
     }
 
-    return render(request, "datalayers/map.html", context)
+    # Check for custom template, fall back to generic map
+    template = select_template([
+        f"datalayers/{source}.html",
+        "datalayers/map.html",
+    ])
+
+    return render(request, template.template.name, context)
 
 
 @cache_page(60 * 15)
