@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "pages",
     "analytics",
     "datalayers",
+    "visualizations",
 ]
 
 MIDDLEWARE = [
