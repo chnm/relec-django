@@ -387,14 +387,16 @@
         }
 
 // Load data
+        const DATA_API_BASE = 'https://data.chnm.org/relcensus';
+
         async function loadData() {
             try {
-        // Load families
+        // Load families from our local API
                 const familiesResponse = await fetch('/census/api/religious-bodies/denomination_families/');
                 const familiesData = await familiesResponse.json();
                 families = familiesData.relec_families || [];
 
-        // Load denominations
+        // Load denominations from our local API
                 const denomsResponse = await fetch('/census/api/denominations/');
                 let denomsData = await denomsResponse.json();
                 denominations = denomsData.results || denomsData;
@@ -413,7 +415,7 @@
                 populateDenominationDropdown(initialState.family);
                 document.getElementById('denomination-select').value = initialState.denomination;
 
-        // Render map (will fetch data for initial family)
+        // Render map
                 await updateMap();
 
             } catch (error) {
@@ -483,54 +485,29 @@
             document.getElementById('no-data-message').classList.add('hidden');
 
             try {
-        // Fetch from consolidated religious-bodies endpoint
-                let apiUrl = `/census/api/religious-bodies/?page_size=5000`;
+        // Build URL for the old data API
+                let apiUrl = `${DATA_API_BASE}/city-membership?year=${year}`;
 
                 if (selectedDenom !== 'All denominations') {
-                    apiUrl += `&search=${encodeURIComponent(selectedDenom)}`;
+                    apiUrl += `&denomination=${encodeURIComponent(selectedDenom)}`;
                 } else if (selectedFamily) {
-                    apiUrl += `&family_relec=${encodeURIComponent(selectedFamily)}`;
+                    apiUrl += `&denominationFamily=${encodeURIComponent(selectedFamily)}`;
                 }
 
-        // Fetch filtered data from API
+        // Fetch city-level data
                 const response = await fetch(apiUrl);
-                let rawData = await response.json();
-                const results = rawData.results || rawData;
+                const results = await response.json();
 
-        // Transform nested response to flat congregation records
-                const rawRecords = results.map(b => {
-                    const loc = b.location_details || {};
-                    const denom = b.denomination_details || {};
-                    const mem = b.membership_details || {};
-                    return {
-                        id: b.id, name: b.name,
-                        lat: loc.lat, lon: loc.lon,
-                        city: loc.city_name, county: loc.county_name, state: loc.state_name,
-                        denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
-                        total_members: mem.total_members || 0,
-                    };
-                });
-
-        // Aggregate by city+state (the old API returned pre-grouped data)
-                const cityMap = {};
-                rawRecords.forEach(r => {
-                    if (!r.city || !r.state) return;
-                    const key = `${r.city}|${r.state}`;
-                    if (!cityMap[key]) {
-                        cityMap[key] = {
-                            city: r.city, county: r.county, state: r.state,
-                            lat: r.lat, lon: r.lon,
-                            denomination: r.denomination,
-                            family_census: r.family_census,
-                            family_relec: r.family_relec,
-                            congregations: 0,
-                            total_members: 0,
-                        };
-                    }
-                    cityMap[key].congregations += 1;
-                    cityMap[key].total_members += r.total_members;
-                });
-                allCityData = Object.values(cityMap);
+                allCityData = results.map(d => ({
+                    city: d.city,
+                    state: d.state,
+                    lat: d.lat,
+                    lon: d.lon,
+                    congregations: d.churches || 0,
+                    total_members: d.members || 0,
+                    denominations: d.denominations || 0,
+                    population_1926: d.population_1926 || 0,
+                }));
 
                 document.getElementById('loading-overlay').classList.add('hidden');
 
