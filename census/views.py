@@ -86,64 +86,6 @@ def _get_census_browser_filter_data():
     return data
 
 
-@cache_page(60 * 15)  # 15 minutes
-def map_view(request):
-    """Render the map view with denomination filters"""
-    # Get all denominations for the filter dropdown
-    denominations = Denomination.objects.all().order_by("name")
-
-    # Get unique denomination families for the family filter dropdown
-    census_families = (
-        Denomination.objects.values_list("family_census", flat=True)
-        .distinct()
-        .order_by("family_census")
-    )
-    relec_families = (
-        Denomination.objects.values_list("family_relec", flat=True)
-        .distinct()
-        .order_by("family_relec")
-    )
-
-    context = {
-        "denominations": denominations,
-        "census_families": census_families,
-        "relec_families": relec_families,
-    }
-
-    return render(request, "census/map.html", context)
-
-
-@cache_page(60 * 15)  # 15 minutes
-def demographics_map_view(request):
-    """Render the demographics map view with demographic filters"""
-    # Get all denominations for the filter dropdown
-    denominations = Denomination.objects.all().order_by("name")
-
-    # Get unique denomination families for the family filter dropdown
-    census_families = (
-        Denomination.objects.values_list("family_census", flat=True)
-        .distinct()
-        .order_by("family_census")
-    )
-    relec_families = (
-        Denomination.objects.values_list("family_relec", flat=True)
-        .distinct()
-        .order_by("family_relec")
-    )
-
-    context = {
-        "denominations": denominations,
-        "census_families": census_families,
-        "relec_families": relec_families,
-    }
-
-    return render(request, "census/demographics_map.html", context)
-
-
-def denomination_geojson_map_view(request):
-    """Render the GeoJSON map test view for denominations by populated place"""
-    return render(request, "census/denomination_geojson_map.html")
-
 
 @cache_page(60 * 10)  # 10 minutes
 def census_browser_view(request, state_code=None, county_name=None):
@@ -467,25 +409,6 @@ def populated_places_browse_view(request):
 
     return render(request, "census/populated_places_browse.html", context)
 
-
-def urban_congregations_map_view(request):
-    """
-    Urban American Congregations Map visualization.
-
-    Faithful recreation of the original cities-map visualization using local Django API.
-    Matches original styling, colors, layout, and functionality.
-    """
-    return render(request, "census/visualizations/urban_congregations_map.html")
-
-
-def urban_congregations_simple_view(request):
-    """
-    Simplified Urban Congregations Map visualization.
-
-    Self-contained template with inline JavaScript using local Django API.
-    Much simpler to maintain than separate JS modules.
-    """
-    return render(request, "census/visualizations/urban_congregations_simple.html")
 
 
 @cache_page(60 * 15)  # 15 minutes

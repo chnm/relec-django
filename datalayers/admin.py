@@ -3,7 +3,7 @@ from import_export.admin import ImportExportModelAdmin
 from unfold.admin import ModelAdmin
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 
-from .models import DataLayer, DataLayerSource
+from .models import DataLayer
 from .resources import DataLayerResource
 
 
@@ -100,29 +100,6 @@ def match_locations(modeladmin, request, queryset):
 
 match_locations.short_description = "Match locations to database"
 
-
-@admin.register(DataLayerSource)
-class DataLayerSourceAdmin(ModelAdmin):
-    list_display = ["title", "slug", "author", "published_date", "has_thumbnail"]
-    search_fields = ["title", "slug", "author"]
-    prepopulated_fields = {"slug": ("title",)}
-    readonly_fields = ["created_at", "updated_at"]
-
-    fieldsets = (
-        (None, {
-            "fields": ("title", "slug", "abstract", "content"),
-        }),
-        ("Publication", {
-            "fields": ("author", "published_date", "doi", "thumbnail_image"),
-        }),
-        ("Metadata", {
-            "fields": ("created_at", "updated_at"),
-        }),
-    )
-
-    @admin.display(boolean=True, description="Thumbnail")
-    def has_thumbnail(self, obj):
-        return bool(obj.thumbnail_image)
 
 
 @admin.register(DataLayer)
