@@ -1,0 +1,121 @@
+from django.db import models
+
+
+class DataLayerSource(models.Model):
+    """
+    Metadata for a data layer dataset. Each source groups DataLayer points
+    and provides publication metadata for the visualizations page.
+    """
+
+    slug = models.SlugField(
+        max_length=255,
+        unique=True,
+        help_text="URL-safe identifier matching the DataLayer.source field (e.g., 'dc-churches')",
+    )
+    title = models.CharField(max_length=255, help_text="Display title for the visualization")
+    abstract = models.TextField(blank=True, help_text="Brief description for the visualization card")
+    content = models.TextField(blank=True, help_text="Full writeup/essay in Markdown, displayed below the map")
+    author = models.CharField(max_length=255, blank=True)
+    published_date = models.DateField(null=True, blank=True)
+    doi = models.URLField(blank=True, help_text="Digital Object Identifier")
+    thumbnail_image = models.ImageField(
+        upload_to="datalayers/thumbnails/",
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_date"]
+        verbose_name = "Data Layer Source"
+        verbose_name_plural = "Data Layer Sources"
+
+    def __str__(self):
+        return self.title
+
+    def get_thumbnail_url(self):
+        if self.thumbnail_image:
+            return self.thumbnail_image.url
+        return None
+
+
+class DataLayer(models.Model):
+    """
+    A bespoke data point that can be linked to a census schedule.
+
+    Use the JSONB `data` field for visualization-specific attributes that
+    vary across datasets (e.g., pastor_name, pastor_gender, notes for the
+    spiritualist map; or address, zip_code for church location data).
+
+    Structured fields (title, lat/lon, location info, schedule FK) are
+    available for filtering, indexing, and cross-referencing with census data.
+    """
+
+    title = models.CharField(max_length=255, help_text="Name of the church or data point")
+    lat = models.FloatField(null=True, blank=True)
+    lon = models.FloatField(null=True, blank=True)
+
+    # Text location fields (from import)
+    city = models.CharField(max_length=255, blank=True)
+    county = models.CharField(max_length=255, blank=True)
+    state = models.CharField(max_length=255, blank=True)
+
+    # Linked location references (matched from location app)
+    county_ref = models.ForeignKey(
+        "location.County",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="data_layers",
+        help_text="Matched county from location data",
+    )
+    populated_place_ref = models.ForeignKey(
+        "location.PopulatedPlace",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="data_layers",
+        help_text="Matched populated place from location data",
+    )
+
+    # Optional link to a census schedule
+    census_schedule = models.ForeignKey(
+        "census.CensusSchedule",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="data_layers",
+        help_text="Link to a census schedule record, if applicable",
+    )
+
+    # Source dataset identifier (e.g., "spiritualist-pastors", "dc-churches")
+    source = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        help_text="Identifier for the dataset this point belongs to",
+    )
+
+    # Flexible JSONB field for bespoke data
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Arbitrary key-value data for this point (e.g., pastor_name, gender, notes)",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["source", "title"]
+        verbose_name = "Data Layer"
+        verbose_name_plural = "Data Layers"
+        indexes = [
+            models.Index(fields=["source"]),
+            models.Index(fields=["state", "county"]),
+        ]
+
+    def __str__(self):
+        return self.title
