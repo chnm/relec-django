@@ -3,7 +3,8 @@ from django.urls import reverse
 
 from census.models import CensusSchedule
 from location.models import State
-from pages.models import BlogPost, Page, Visualization
+from pages.models import BlogPost, Page
+from visualizations.models import Visualization
 
 
 class StaticViewSitemap(Sitemap):

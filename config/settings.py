@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "pages",
     "analytics",
     "datalayers",
+    "visualizations",
 ]
 
 MIDDLEWARE = [
@@ -371,12 +372,7 @@ UNFOLD = {
                     {
                         "title": "Visualizations",
                         "icon": "article",
-                        "link": lambda request: "/admin/pages/visualization/",
-                    },
-                    {
-                        "title": "Data Layer Sources",
-                        "icon": "database",
-                        "link": lambda request: "/admin/datalayers/datalayersource/",
+                        "link": lambda request: "/admin/visualizations/visualization/",
                     },
                     {
                         "title": "Data Layer Points",

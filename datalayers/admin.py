@@ -3,7 +3,7 @@ from import_export.admin import ImportExportModelAdmin
 from unfold.admin import ModelAdmin
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 
-from .models import DataLayer, DataLayerSource
+from .models import DataLayer
 from .resources import DataLayerResource
 
 
@@ -101,28 +101,44 @@ def match_locations(modeladmin, request, queryset):
 match_locations.short_description = "Match locations to database"
 
 
-@admin.register(DataLayerSource)
-class DataLayerSourceAdmin(ModelAdmin):
-    list_display = ["title", "slug", "author", "published_date", "has_thumbnail"]
-    search_fields = ["title", "slug", "author"]
-    prepopulated_fields = {"slug": ("title",)}
-    readonly_fields = ["created_at", "updated_at"]
+def link_schedules_by_omeka(modeladmin, request, queryset):
+    """Link DataLayer records to CensusSchedule via Omeka item ID in the omeka_url data field."""
+    import re
 
-    fieldsets = (
-        (None, {
-            "fields": ("title", "slug", "abstract", "content"),
-        }),
-        ("Publication", {
-            "fields": ("author", "published_date", "doi", "thumbnail_image"),
-        }),
-        ("Metadata", {
-            "fields": ("created_at", "updated_at"),
-        }),
+    from census.models import CensusSchedule
+
+    matched = 0
+    skipped = 0
+
+    for obj in queryset:
+        if obj.census_schedule_id:
+            skipped += 1
+            continue
+
+        url = obj.data.get("omeka_url", "") if isinstance(obj.data, dict) else ""
+        if not url:
+            skipped += 1
+            continue
+
+        m = re.search(r"/item/(\d+)", url)
+        if not m:
+            skipped += 1
+            continue
+
+        omeka_id = int(m.group(1))
+        schedule = CensusSchedule.objects.filter(datascribe_omeka_item_id=omeka_id).first()
+        if schedule:
+            obj.census_schedule = schedule
+            obj.save(update_fields=["census_schedule", "updated_at"])
+            matched += 1
+
+    messages.success(
+        request,
+        f"Omeka linking complete: {matched} linked, {skipped} skipped.",
     )
 
-    @admin.display(boolean=True, description="Thumbnail")
-    def has_thumbnail(self, obj):
-        return bool(obj.thumbnail_image)
+
+link_schedules_by_omeka.short_description = "Link to schedules via Omeka ID"
 
 
 @admin.register(DataLayer)
@@ -145,7 +161,7 @@ class DataLayerAdmin(ImportExportModelAdmin, ModelAdmin):
     search_fields = ["title", "city", "county", "state"]
     autocomplete_fields = ["census_schedule", "county_ref", "populated_place_ref"]
     readonly_fields = ["created_at", "updated_at"]
-    actions = [geocode_selected, match_locations]
+    actions = [geocode_selected, match_locations, link_schedules_by_omeka]
 
     fieldsets = (
         (None, {

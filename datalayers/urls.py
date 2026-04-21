@@ -1,8 +1,8 @@
 from django.urls import path
 
-from . import views
+from visualizations import views
 
 urlpatterns = [
-    path("<slug:source>/", views.datalayer_map_view, name="datalayer_map_legacy"),
-    path("<slug:source>/geojson/", views.datalayer_geojson, name="datalayer_geojson"),
+    # Legacy endpoint — primary routes are now under /visualizations/<slug>/geojson/
+    path("<slug:source>/geojson/", views.datalayer_geojson_by_slug, name="datalayer_geojson_legacy"),
 ]
