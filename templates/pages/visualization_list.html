@@ -64,21 +64,47 @@
                 {% for dl in datalayer_sources %}
                     <article class="bg-white shadow-sm rounded-lg overflow-hidden hover:shadow-md transition duration-150">
                         <a href="{% url 'datalayer_map' dl.source %}" class="block">
-                            <div class="w-full h-48 bg-gray-100 flex items-center justify-center">
-                                <svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                </svg>
-                            </div>
+                            {% if dl.meta and dl.meta.thumbnail_image %}
+                                <img src="{{ dl.meta.get_thumbnail_url }}"
+                                     alt="{{ dl.display_title }}"
+                                     class="w-full h-48 object-cover">
+                            {% else %}
+                                <div class="w-full h-48 bg-gray-100 flex items-center justify-center">
+                                    <svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                </div>
+                            {% endif %}
                             <div class="p-6">
                                 <h2 class="text-xl font-bold text-gray-900 mb-2 hover:text-indigo-600 transition">
                                     {{ dl.display_title }}
                                 </h2>
-                                <p class="text-gray-700 text-sm leading-relaxed">
-                                    {{ dl.count }} mapped locations
-                                </p>
+                                <div class="text-sm text-gray-600 mb-3">
+                                    {% if dl.meta and dl.meta.author %}
+                                        <span class="font-medium">{{ dl.meta.author }}</span>
+                                        <span class="mx-2">&bull;</span>
+                                    {% endif %}
+                                    {% if dl.meta and dl.meta.published_date %}
+                                        <time datetime="{{ dl.meta.published_date|date:'Y-m-d' }}">
+                                            {{ dl.meta.published_date|date:"F j, Y" }}
+                                        </time>
+                                        <span class="mx-2">&bull;</span>
+                                    {% endif %}
+                                    <span>{{ dl.count }} locations</span>
+                                </div>
+                                {% if dl.meta and dl.meta.abstract %}
+                                    <p class="text-gray-700 text-sm leading-relaxed">
+                                        {{ dl.meta.abstract|truncatewords:30 }}
+                                    </p>
+                                {% endif %}
+                                {% if dl.meta and dl.meta.doi %}
+                                    <div class="mt-3 text-xs text-gray-500">
+                                        DOI: {{ dl.meta.doi|slice:"18:" }}
+                                    </div>
+                                {% endif %}
                             </div>
                         </a>
                     </article>

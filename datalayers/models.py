@@ -1,6 +1,46 @@
 from django.db import models
 
 
+class DataLayerSource(models.Model):
+    """
+    Metadata for a data layer dataset. Each source groups DataLayer points
+    and provides publication metadata for the visualizations page.
+    """
+
+    slug = models.SlugField(
+        max_length=255,
+        unique=True,
+        help_text="URL-safe identifier matching the DataLayer.source field (e.g., 'dc-churches')",
+    )
+    title = models.CharField(max_length=255, help_text="Display title for the visualization")
+    abstract = models.TextField(blank=True, help_text="Brief description for the visualization card")
+    content = models.TextField(blank=True, help_text="Full writeup/essay in Markdown, displayed below the map")
+    author = models.CharField(max_length=255, blank=True)
+    published_date = models.DateField(null=True, blank=True)
+    doi = models.URLField(blank=True, help_text="Digital Object Identifier")
+    thumbnail_image = models.ImageField(
+        upload_to="datalayers/thumbnails/",
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-published_date"]
+        verbose_name = "Data Layer Source"
+        verbose_name_plural = "Data Layer Sources"
+
+    def __str__(self):
+        return self.title
+
+    def get_thumbnail_url(self):
+        if self.thumbnail_image:
+            return self.thumbnail_image.url
+        return None
+
+
 class DataLayer(models.Model):
     """
     A bespoke data point that can be linked to a census schedule.

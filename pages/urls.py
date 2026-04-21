@@ -1,6 +1,7 @@
 from django.urls import path
 
 from census import views as census_views
+from datalayers import views as datalayer_views
 
 from . import views
 
@@ -39,6 +40,12 @@ urlpatterns = [
         "visualizations/urban-congregations-simple/",
         census_views.urban_congregations_simple_view,
         name="urban_congregations_simple",
+    ),
+    # Data layer visualizations
+    path(
+        "visualizations/data/<slug:source>/",
+        datalayer_views.datalayer_map_view,
+        name="datalayer_map",
     ),
     # Generic visualization detail (for model-backed visualizations)
     path(

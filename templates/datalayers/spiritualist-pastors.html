@@ -101,6 +101,18 @@
             </div>
         </div>
     </div>
+
+    {% if content_html %}
+        <div class="mt-8 max-w-3xl prose prose-gray">
+            {{ content_html|safe }}
+        </div>
+    {% endif %}
+
+    {% if source_meta and source_meta.doi %}
+        <div class="mt-4 text-sm text-gray-500">
+            DOI: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 

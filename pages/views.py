@@ -109,20 +109,27 @@ class VisualizationListView(ListView):
         context = super().get_context_data(**kwargs)
         from django.db.models import Count
 
-        from datalayers.models import DataLayer
+        from datalayers.models import DataLayer, DataLayerSource
 
-        # Add data layer sources with point counts
+        # Get data layer sources with point counts
         datalayer_qs = (
             DataLayer.objects.filter(lat__isnull=False, lon__isnull=False)
             .values("source")
             .annotate(count=Count("id"))
             .order_by("source")
         )
-        # Display titles for known sources
-        from datalayers.views import SOURCE_TITLES
-
+        # Look up source metadata for titles, thumbnails, etc.
+        source_meta = {s.slug: s for s in DataLayerSource.objects.all()}
         context["datalayer_sources"] = [
-            {**dl, "display_title": SOURCE_TITLES.get(dl["source"], dl["source"].replace("-", " ").title())}
+            {
+                **dl,
+                "meta": source_meta.get(dl["source"]),
+                "display_title": (
+                    source_meta[dl["source"]].title
+                    if dl["source"] in source_meta
+                    else dl["source"].replace("-", " ").title()
+                ),
+            }
             for dl in datalayer_qs
         ]
         return context

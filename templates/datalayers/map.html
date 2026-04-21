@@ -55,8 +55,29 @@
             <div id="map"></div>
         </div>
 
-        <!-- Details panel -->
-        <div class="lg:col-span-1">
+        <!-- Sidebar -->
+        <div class="lg:col-span-1 space-y-4">
+            <!-- Filters (only shown if denomination data exists) -->
+            <div id="filter-panel" class="info-panel" style="display: none;">
+                <h3 class="font-semibold text-gray-900 mb-3">Filter</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label for="family-filter" class="block text-sm font-medium text-gray-700 mb-1">Denomination Family</label>
+                        <select id="family-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                            <option value="">All Families</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="denom-filter" class="block text-sm font-medium text-gray-700 mb-1">Denomination</label>
+                        <select id="denom-filter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" disabled>
+                            <option value="">All Denominations</option>
+                        </select>
+                    </div>
+                    <div id="filter-count" class="text-xs text-gray-500"></div>
+                </div>
+            </div>
+
+            <!-- Details panel -->
             <div class="info-panel">
                 <h3 class="font-semibold text-gray-900 mb-3">Details</h3>
                 <div id="details-content">
@@ -65,6 +86,18 @@
             </div>
         </div>
     </div>
+
+    {% if content_html %}
+        <div class="mt-8 max-w-3xl prose prose-gray">
+            {{ content_html|safe }}
+        </div>
+    {% endif %}
+
+    {% if source_meta and source_meta.doi %}
+        <div class="mt-4 text-sm text-gray-500">
+            DOI: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -126,8 +159,18 @@
                 html += `<p class="popup-detail"><strong>Zip:</strong> ${props.zip_code}</p>`;
             }
 
+            if (props.denomination) {
+                html += `<p class="popup-detail"><strong>Denomination:</strong> ${props.denomination}</p>`;
+            }
+            if (props.denomination_family) {
+                html += `<p class="popup-detail"><strong>Family:</strong> ${props.denomination_family}</p>`;
+            }
+
             // Show any extra data fields
-            const knownKeys = new Set(['title', 'city', 'county', 'state', 'address', 'zip_code', 'schedule_resource_id']);
+            const knownKeys = new Set([
+                'title', 'city', 'county', 'state', 'address', 'zip_code',
+                'schedule_resource_id', 'denomination', 'denomination_family',
+            ]);
             for (const [key, value] of Object.entries(props)) {
                 if (!knownKeys.has(key) && value) {
                     const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -148,20 +191,14 @@
                 return L.circleMarker(latlng, markerStyle);
             },
             onEachFeature: function(feature, layer) {
-                // Popup
                 layer.bindPopup(`<strong>${feature.properties.title}</strong>`);
 
-                // Click handler for details panel
                 layer.on('click', function() {
-                    // Reset previous selection
                     if (selectedMarker) {
                         selectedMarker.setStyle(markerStyle);
                     }
-                    // Highlight selected
                     layer.setStyle(highlightStyle);
                     selectedMarker = layer;
-
-                    // Update details panel
                     detailsContent.innerHTML = buildDetails(feature.properties);
                 });
             }
@@ -171,5 +208,81 @@
         if (geojsonData.features.length > 0) {
             map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30] });
         }
+
+        // Denomination family/denomination filters
+        const familyFilter = document.getElementById('family-filter');
+        const denomFilter = document.getElementById('denom-filter');
+        const filterPanel = document.getElementById('filter-panel');
+        const filterCount = document.getElementById('filter-count');
+
+        // Collect unique families and denominations from the data
+        const families = new Set();
+        const denomsByFamily = {};
+        geojsonData.features.forEach(f => {
+            const family = f.properties.denomination_family;
+            const denom = f.properties.denomination;
+            if (family) {
+                families.add(family);
+                if (!denomsByFamily[family]) denomsByFamily[family] = new Set();
+                if (denom) denomsByFamily[family].add(denom);
+            }
+        });
+
+        // Only show filter panel if we have denomination data
+        if (families.size > 0) {
+            filterPanel.style.display = '';
+            [...families].sort().forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                familyFilter.appendChild(opt);
+            });
+        }
+
+        function updateDenomOptions() {
+            const family = familyFilter.value;
+            denomFilter.innerHTML = '<option value="">All Denominations</option>';
+            if (family && denomsByFamily[family]) {
+                denomFilter.disabled = false;
+                [...denomsByFamily[family]].sort().forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = d;
+                    denomFilter.appendChild(opt);
+                });
+            } else {
+                denomFilter.disabled = true;
+            }
+        }
+
+        function applyFilters() {
+            const family = familyFilter.value;
+            const denom = denomFilter.value;
+            let shown = 0;
+            let total = 0;
+
+            geojsonLayer.eachLayer(function(layer) {
+                total++;
+                const props = layer.feature.properties;
+                const matchFamily = !family || props.denomination_family === family;
+                const matchDenom = !denom || props.denomination === denom;
+
+                if (matchFamily && matchDenom) {
+                    layer.addTo(map);
+                    shown++;
+                } else {
+                    map.removeLayer(layer);
+                }
+            });
+
+            filterCount.textContent = `Showing ${shown} of ${total} locations`;
+        }
+
+        familyFilter.addEventListener('change', function() {
+            updateDenomOptions();
+            denomFilter.value = '';
+            applyFilters();
+        });
+        denomFilter.addEventListener('change', applyFilters);
     </script>
 {% endblock %}

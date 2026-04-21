@@ -1,17 +1,12 @@
 import json
 
+import markdown as md
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.template.loader import select_template
 from django.views.decorators.cache import cache_page
 
-from .models import DataLayer
-
-# Display titles for known sources; falls back to title-cased slug
-SOURCE_TITLES = {
-    "dc-churches": "Churches of Washington, D.C.",
-    "spiritualist-pastors": "Male and Female Pastors in the National Spiritual Alliance",
-}
+from .models import DataLayer, DataLayerSource
 
 
 @cache_page(60 * 15)
@@ -23,7 +18,11 @@ def datalayer_map_view(request, source):
       1. templates/datalayers/<source>.html  (custom per-source template)
       2. templates/datalayers/map.html       (generic map fallback)
     """
-    points = DataLayer.objects.filter(source=source, lat__isnull=False, lon__isnull=False)
+    points = DataLayer.objects.filter(
+        source=source, lat__isnull=False, lon__isnull=False
+    ).select_related(
+        "census_schedule__schedule_denomination",
+    )
 
     if not points.exists():
         raise Http404(f"No data layer found for source: {source}")
@@ -40,9 +39,13 @@ def datalayer_map_view(request, source):
         # Merge in the JSONB data
         if point.data:
             properties.update(point.data)
-        # Add schedule link if available
+        # Add schedule and denomination info if available
         if point.census_schedule_id:
-            properties["schedule_resource_id"] = point.census_schedule.resource_id
+            schedule = point.census_schedule
+            properties["schedule_resource_id"] = schedule.resource_id
+            if schedule.schedule_denomination:
+                properties["denomination"] = schedule.schedule_denomination.name
+                properties["denomination_family"] = schedule.schedule_denomination.family_relec or ""
 
         features.append({
             "type": "Feature",
@@ -58,11 +61,23 @@ def datalayer_map_view(request, source):
         "features": features,
     }
 
-    display_title = SOURCE_TITLES.get(source, source.replace("-", " ").title())
+    # Look up source metadata if it exists
+    source_meta = DataLayerSource.objects.filter(slug=source).first()
+    display_title = source_meta.title if source_meta else source.replace("-", " ").title()
+
+    # Render markdown content if available
+    content_html = ""
+    if source_meta and source_meta.content:
+        content_html = md.markdown(
+            source_meta.content,
+            extensions=["extra", "codehilite", "toc"],
+        )
 
     context = {
         "source": source,
+        "source_meta": source_meta,
         "display_title": display_title,
+        "content_html": content_html,
         "geojson_data": json.dumps(geojson),
         "point_count": len(features),
     }
@@ -79,7 +94,11 @@ def datalayer_map_view(request, source):
 @cache_page(60 * 15)
 def datalayer_geojson(request, source):
     """Return GeoJSON for a data layer source (API endpoint for JS consumption)."""
-    points = DataLayer.objects.filter(source=source, lat__isnull=False, lon__isnull=False)
+    points = DataLayer.objects.filter(
+        source=source, lat__isnull=False, lon__isnull=False
+    ).select_related(
+        "census_schedule__schedule_denomination",
+    )
 
     features = []
     for point in points:
@@ -92,7 +111,11 @@ def datalayer_geojson(request, source):
         if point.data:
             properties.update(point.data)
         if point.census_schedule_id:
-            properties["schedule_resource_id"] = point.census_schedule.resource_id
+            schedule = point.census_schedule
+            properties["schedule_resource_id"] = schedule.resource_id
+            if schedule.schedule_denomination:
+                properties["denomination"] = schedule.schedule_denomination.name
+                properties["denomination_family"] = schedule.schedule_denomination.family_relec or ""
 
         features.append({
             "type": "Feature",
