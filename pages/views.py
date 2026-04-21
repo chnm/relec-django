@@ -118,9 +118,11 @@ class VisualizationListView(ListView):
             .annotate(count=Count("id"))
             .order_by("source")
         )
-        # Add display titles
+        # Display titles for known sources
+        from datalayers.views import SOURCE_TITLES
+
         context["datalayer_sources"] = [
-            {**dl, "display_title": dl["source"].replace("-", " ").title()}
+            {**dl, "display_title": SOURCE_TITLES.get(dl["source"], dl["source"].replace("-", " ").title())}
             for dl in datalayer_qs
         ]
         return context

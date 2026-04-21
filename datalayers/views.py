@@ -7,6 +7,12 @@ from django.views.decorators.cache import cache_page
 
 from .models import DataLayer
 
+# Display titles for known sources; falls back to title-cased slug
+SOURCE_TITLES = {
+    "dc-churches": "Churches of Washington, D.C.",
+    "spiritualist-pastors": "Male and Female Pastors in the National Spiritual Alliance",
+}
+
 
 @cache_page(60 * 15)
 def datalayer_map_view(request, source):
@@ -52,8 +58,7 @@ def datalayer_map_view(request, source):
         "features": features,
     }
 
-    # Get a display title from the source slug
-    display_title = source.replace("-", " ").title()
+    display_title = SOURCE_TITLES.get(source, source.replace("-", " ").title())
 
     context = {
         "source": source,
