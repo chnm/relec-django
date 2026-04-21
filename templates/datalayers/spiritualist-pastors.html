@@ -108,9 +108,15 @@
         </div>
     {% endif %}
 
-    {% if source_meta and source_meta.doi %}
-        <div class="mt-4 text-sm text-gray-500">
-            DOI: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>
+    {% if source_meta and source_meta.author %}
+        <div class="mt-8 max-w-3xl border-t border-gray-200 pt-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Suggested Citation</h3>
+            <p class="text-sm text-gray-700 leading-relaxed">
+                {{ source_meta.author }}, "{{ source_meta.title }},"
+                <em>American Religious Ecologies</em>,
+                Roy Rosenzweig Center for History and New Media, George Mason University
+                ({{ source_meta.published_date|date:"Y" }}){% if source_meta.doi %}: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>{% endif %}.
+            </p>
         </div>
     {% endif %}
 </div>
@@ -170,11 +176,8 @@
             if (props.address) {
                 html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
             }
-            if (props.omeka_url) {
-                html += `<a href="${props.omeka_url}" target="_blank" class="popup-link">See the census schedule &rarr;</a>`;
-            }
             if (props.schedule_resource_id) {
-                html += `<br><a href="/census/record/${props.schedule_resource_id}/" class="popup-link">View in database &rarr;</a>`;
+                html += `<a href="/census/record/${props.schedule_resource_id}/" class="popup-link">View census record &rarr;</a>`;
             }
             return html;
         }

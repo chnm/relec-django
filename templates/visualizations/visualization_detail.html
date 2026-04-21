@@ -142,6 +142,19 @@
             {{ content_html|safe }}
         </div>
 
+    <!-- Citation -->
+        {% if visualization.author %}
+            <div class="mt-8 max-w-3xl border-t border-gray-200 pt-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Suggested Citation</h3>
+                <p class="text-sm text-gray-700 leading-relaxed">
+                    {{ visualization.author }}, "{{ visualization.title }},"
+                    <em>American Religious Ecologies</em>,
+                    Roy Rosenzweig Center for History and New Media, George Mason University
+                    ({{ visualization.published_date|date:"Y" }}){% if visualization.doi %}: <a href="{{ visualization.doi }}" class="text-religious-primary hover:underline">{{ visualization.doi }}</a>{% endif %}.
+                </p>
+            </div>
+        {% endif %}
+
     <!-- Footer -->
         <footer class="mt-12 pt-8 border-t border-gray-200">
             <a href="{% url 'visualization-list' %}"

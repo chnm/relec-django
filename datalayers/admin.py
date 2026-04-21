@@ -101,6 +101,45 @@ def match_locations(modeladmin, request, queryset):
 match_locations.short_description = "Match locations to database"
 
 
+def link_schedules_by_omeka(modeladmin, request, queryset):
+    """Link DataLayer records to CensusSchedule via Omeka item ID in the omeka_url data field."""
+    import re
+
+    from census.models import CensusSchedule
+
+    matched = 0
+    skipped = 0
+
+    for obj in queryset:
+        if obj.census_schedule_id:
+            skipped += 1
+            continue
+
+        url = obj.data.get("omeka_url", "") if isinstance(obj.data, dict) else ""
+        if not url:
+            skipped += 1
+            continue
+
+        m = re.search(r"/item/(\d+)", url)
+        if not m:
+            skipped += 1
+            continue
+
+        omeka_id = int(m.group(1))
+        schedule = CensusSchedule.objects.filter(datascribe_omeka_item_id=omeka_id).first()
+        if schedule:
+            obj.census_schedule = schedule
+            obj.save(update_fields=["census_schedule", "updated_at"])
+            matched += 1
+
+    messages.success(
+        request,
+        f"Omeka linking complete: {matched} linked, {skipped} skipped.",
+    )
+
+
+link_schedules_by_omeka.short_description = "Link to schedules via Omeka ID"
+
 
 @admin.register(DataLayer)
 class DataLayerAdmin(ImportExportModelAdmin, ModelAdmin):
@@ -122,7 +161,7 @@ class DataLayerAdmin(ImportExportModelAdmin, ModelAdmin):
     search_fields = ["title", "city", "county", "state"]
     autocomplete_fields = ["census_schedule", "county_ref", "populated_place_ref"]
     readonly_fields = ["created_at", "updated_at"]
-    actions = [geocode_selected, match_locations]
+    actions = [geocode_selected, match_locations, link_schedules_by_omeka]
 
     fieldsets = (
         (None, {

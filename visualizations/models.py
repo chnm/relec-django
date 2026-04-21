@@ -80,10 +80,6 @@ class Visualization(models.Model):
         return self.title
 
     def get_absolute_url(self):
-        if self.render_type == "datalayer" and self.datalayer_source:
-            return reverse("datalayer_map", kwargs={"source": self.datalayer_source})
-        if self.render_type == "custom" and self.custom_view_name:
-            return reverse(self.custom_view_name)
         return reverse("visualization-detail", kwargs={"slug": self.slug})
 
     def get_thumbnail_url(self):
