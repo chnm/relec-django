@@ -3,7 +3,6 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import cache_page
-from django.views.decorators.vary import vary_on_nothing
 
 from location.models import County, State
 from .models import CensusSchedule, Denomination
@@ -88,7 +87,6 @@ def _get_census_browser_filter_data():
 
 
 
-@vary_on_nothing()
 @cache_page(60 * 10)  # 10 minutes
 def census_browser_view(request, state_code=None, county_name=None):
     """Render the census records browser with filtering and pagination"""
@@ -205,7 +203,6 @@ def census_browser_view(request, state_code=None, county_name=None):
     return render(request, "census/browser.html", context)
 
 
-@vary_on_nothing()
 @cache_page(60 * 15)  # 15 minutes
 def census_detail_view(request, resource_id):
     """Render detailed view of a single census record"""
