@@ -40,6 +40,7 @@ services:
   memcached:
     image: memcached:1-alpine
     restart: unless-stopped
+    command: ["-m", "256"]
   db:
     image: postgres:17
     volumes:
