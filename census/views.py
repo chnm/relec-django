@@ -1,11 +1,11 @@
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import cache_page
 
 from location.models import County, State
-from .models import CensusSchedule, Denomination
+from .models import CensusSchedule, Denomination, Membership, ReligiousBody
 
 
 def _get_census_browser_filter_data():
@@ -163,18 +163,48 @@ def census_browser_view(request, state_code=None, county_name=None):
         queryset = queryset.filter(populated_place__name__iexact=place_filter)
 
     if has_membership == "yes":
-        queryset = queryset.filter(membership_details__isnull=False).distinct()
+        queryset = queryset.filter(
+            Exists(Membership.objects.filter(census_record=OuterRef("pk")))
+        )
     elif has_membership == "no":
         queryset = queryset.filter(membership_details__isnull=True)
 
     if urban_rural == "urban":
-        queryset = queryset.filter(church_details__urban_rural_code="Urban")
+        queryset = queryset.filter(
+            Exists(ReligiousBody.objects.filter(
+                census_record=OuterRef("pk"), urban_rural_code="Urban"
+            ))
+        )
     elif urban_rural == "rural":
-        queryset = queryset.filter(church_details__urban_rural_code="Rural")
+        queryset = queryset.filter(
+            Exists(ReligiousBody.objects.filter(
+                census_record=OuterRef("pk"), urban_rural_code="Rural"
+            ))
+        )
 
-    # Pagination
-    paginator = Paginator(queryset.distinct(), 20)  # Show 20 records per page
+    # DISTINCT is only required when filters join across to-many relations
+    # (search across church/membership, denomination/family on church_details).
+    # The Exists-based and FK-equality filters above don't multiply rows.
+    needs_distinct = bool(
+        search or denomination_filter or family_filter or family_census_filter
+    )
+    qs_for_paginator = queryset.distinct() if needs_distinct else queryset
+    paginator = Paginator(qs_for_paginator, 20)
     page_number = request.GET.get("page")
+
+    # The unfiltered total dominates browse traffic and is the most expensive
+    # count to compute. Cache it; it changes only when transcribers add records.
+    # Django's Paginator.count is a cached_property -- masking it via __dict__
+    # short-circuits the SQL count.
+    if not (needs_distinct or state_filter or county_filter or place_filter
+            or has_membership or urban_rural):
+        total = cache.get("census_total_unfiltered")
+        if total is None:
+            total = paginator.count
+            cache.set("census_total_unfiltered", total, 60 * 30)
+        else:
+            paginator.__dict__["count"] = total
+
     page_obj = paginator.get_page(page_number)
 
     # Get cached filter/dropdown data (most expensive part of this view)
