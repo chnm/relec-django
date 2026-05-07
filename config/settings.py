@@ -115,7 +115,12 @@ if DEBUG:
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 # https://django-debug-toolbar.readthedocs.io/en/latest/configuration.html#debug-toolbar-config
 DEBUG_TOOLBAR_CONFIG = {
-    "DISABLE_PANELS": ["debug_toolbar.panels.redirects.RedirectsPanel"],
+    "DISABLE_PANELS": [
+        "debug_toolbar.panels.redirects.RedirectsPanel",
+        # Templates panel triggers SynchronousOnlyOperation under Daphne/ASGI
+        # when it tries to repr() querysets in template context
+        "debug_toolbar.panels.templates.TemplatesPanel",
+    ],
     "SHOW_TEMPLATE_CONTEXT": True,
 }
 
