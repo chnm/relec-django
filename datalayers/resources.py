@@ -4,7 +4,6 @@ from import_export import fields, resources
 from import_export.widgets import ForeignKeyWidget
 
 from census.models import CensusSchedule
-
 from .models import DataLayer
 
 
@@ -28,15 +27,15 @@ class DataLayerResource(resources.ModelResource):
     are collected into the JSONB `data` field automatically on import.
 
     Expected CSV headers (all optional except title):
-        title, lat, lon, city, county, state, source, schedule_id, data
+        title, lat, lon, city, county, state, source, resource_id, data
 
     Any columns not in the list above are stored as keys in `data`.
-    The `schedule_id` column looks up CensusSchedule by resource_id.
+    The `resource_id` column looks up CensusSchedule by resource_id.
     If the schedule doesn't exist, the field is set to None.
     """
 
     census_schedule = fields.Field(
-        column_name="schedule_id",
+        column_name="resource_id",
         attribute="census_schedule",
         widget=LenientForeignKeyWidget(CensusSchedule, field="resource_id"),
     )
@@ -60,7 +59,7 @@ class DataLayerResource(resources.ModelResource):
         report_skipped = False
 
     # Known model columns (excluding `data` and `census_schedule` which are handled separately)
-    KNOWN_COLUMNS = {"id", "title", "lat", "lon", "city", "county", "state", "source", "schedule_id", "data"}
+    KNOWN_COLUMNS = {"id", "title", "lat", "lon", "city", "county", "state", "source", "resource_id", "data"}
 
     def before_import_row(self, row, **kwargs):
         """Collect any extra columns into the `data` JSON field."""

@@ -12,7 +12,6 @@ from django.views.generic import ListView
 
 from census.models import Denomination
 from datalayers.models import DataLayer
-
 from .models import Visualization
 
 logger = logging.getLogger(__name__)
@@ -218,6 +217,36 @@ def _render_datalayer(request, viz):
         "point_count": len(features),
     }
 
+    # Check for a companion layer (e.g., dc-churches has dc-churches-2019)
+    companion_source = f"{source}-2019"
+    companion_points = DataLayer.objects.filter(
+        source=companion_source, lat__isnull=False, lon__isnull=False
+    )
+    if companion_points.exists():
+        companion_features = _build_datalayer_features(companion_points)
+        context["companion_geojson"] = json.dumps({
+            "type": "FeatureCollection",
+            "features": companion_features,
+        })
+        context["companion_count"] = len(companion_features)
+        context["companion_year"] = "2019"
+        context["primary_year"] = "1926"
+
+        # Match status counts
+        matched_count = sum(
+            1 for f in features if f["properties"].get("match_status") == "matched"
+        )
+        only_primary = sum(
+            1 for f in features if f["properties"].get("match_status") == "1926_only"
+        )
+        only_companion = sum(
+            1 for f in companion_features
+            if f["properties"].get("match_status") == "2019_only"
+        )
+        context["matched_count"] = matched_count
+        context["only_primary_count"] = only_primary
+        context["only_companion_count"] = only_companion
+
     template = select_template([
         f"datalayers/{source}.html",
         "datalayers/map.html",
@@ -228,6 +257,29 @@ def _render_datalayer(request, viz):
 
 def _build_datalayer_features(points):
     """Build GeoJSON features from DataLayer queryset."""
+    # Pre-fetch ReligiousBody financial data keyed by census_schedule_id
+    schedule_ids = [p.census_schedule_id for p in points if p.census_schedule_id]
+    finances_by_schedule = {}
+    if schedule_ids:
+        from census.models import ReligiousBody
+
+        bodies = ReligiousBody.objects.filter(
+            census_record_id__in=schedule_ids
+        ).values(
+            "census_record_id",
+            "name",
+            "edifice_value",
+            "edifice_debt",
+            "residence_value",
+            "residence_debt",
+            "expenses",
+            "benevolences",
+            "total_expenditures",
+            "num_edifices",
+        )
+        for body in bodies:
+            finances_by_schedule[body["census_record_id"]] = body
+
     features = []
     for point in points:
         properties = {
@@ -244,6 +296,31 @@ def _build_datalayer_features(points):
             if schedule.schedule_denomination:
                 properties["denomination"] = schedule.schedule_denomination.name
                 properties["denomination_family"] = schedule.schedule_denomination.family_relec or ""
+
+        # Fallback: use overrides from data field for unlinked records
+        if not properties.get("denomination") and properties.get("denomination_override"):
+            properties["denomination"] = properties["denomination_override"]
+        if not properties.get("denomination_family") and properties.get("denomination_family_override"):
+            properties["denomination_family"] = properties["denomination_family_override"]
+
+        # Attach financial data from ReligiousBody if available
+        if point.census_schedule_id:
+            body = finances_by_schedule.get(point.census_schedule_id)
+            if body:
+                properties["congregation_name"] = body["name"] or ""
+                properties["finances"] = {
+                    k: float(v) if v is not None else None
+                    for k, v in {
+                        "edifice_value": body["edifice_value"],
+                        "edifice_debt": body["edifice_debt"],
+                        "residence_value": body["residence_value"],
+                        "residence_debt": body["residence_debt"],
+                        "expenses": body["expenses"],
+                        "benevolences": body["benevolences"],
+                        "total_expenditures": body["total_expenditures"],
+                    }.items()
+                }
+                properties["num_edifices"] = body["num_edifices"]
 
         features.append({
             "type": "Feature",
