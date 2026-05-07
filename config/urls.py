@@ -49,3 +49,6 @@ urlpatterns = [
 if settings.DEBUG:
     # Serve static files in development
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+    # django-debug-toolbar
+    urlpatterns = [path("__debug__/", include("debug_toolbar.urls"))] + urlpatterns
