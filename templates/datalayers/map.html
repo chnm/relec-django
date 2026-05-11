@@ -9,283 +9,52 @@
           crossorigin=""/>
     <style>
       .viz-container {
-        max-width: 1400px;
+        max-width: 1200px;
         margin: 0 auto;
         padding: 2rem 1rem;
       }
-
       .viz-header h1 {
         font-size: 2.5rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         color: #1f2937;
       }
-
       .viz-subtitle {
         color: #6b7280;
         margin-bottom: 1.5rem;
         font-size: 1rem;
       }
-
-      /* Controls above the map */
-      .controls-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-      }
-
-      .control-group label {
-        display: block;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: #374151;
-        font-size: 0.875rem;
-      }
-
-      .control-group select {
+      #map {
+        height: 650px;
         width: 100%;
-        padding: 0.5rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.375rem;
-        background-color: white;
-        font-size: 0.875rem;
-      }
-
-      /* Toggle switches */
-      .toggle-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1.5rem;
-        align-items: center;
-        margin-bottom: 1.5rem;
-        padding: 0.75rem 1rem;
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 0.375rem;
-      }
-
-      .toggle-group {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        color: #374151;
-      }
-
-      .toggle-switch {
-        position: relative;
-        display: inline-block;
-        width: 40px;
-        height: 22px;
-      }
-
-      .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        transition: .3s;
-        border-radius: 22px;
-      }
-
-      .slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-      }
-
-      input:checked + .slider {
-        background-color: #0060b1;
-      }
-
-      input:checked + .slider:before {
-        transform: translateX(18px);
-      }
-
-      .toggle-label {
-        font-weight: 500;
-        user-select: none;
-        cursor: pointer;
-      }
-
-      .radio-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #374151;
-        cursor: pointer;
-        user-select: none;
-      }
-
-      .radio-label input[type="radio"] {
-        accent-color: #0060b1;
-      }
-
-      .bubble-metric-select {
-        padding: 0.35rem 0.5rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.375rem;
-        font-size: 0.8rem;
-        background: white;
-      }
-
-      #filter-count {
-        font-size: 0.8rem;
-        color: #6b7280;
-        margin-bottom: 1rem;
-      }
-
-      /* Three-column layout */
-      .map-layout {
-        display: grid;
-        grid-template-columns: 260px 1fr 200px;
-        gap: 1rem;
-        align-items: start;
-      }
-
-      .panel-left, .panel-right {
-        position: sticky;
-        top: 1rem;
-        max-height: calc(100vh - 2rem);
-        overflow-y: auto;
-      }
-
-      .panel-left {
-        min-width: 0;
-      }
-        #map {
-            height: 650px;
-            width: 100%;
-            border-radius: 8px;
-          border: 1px solid #e5e7eb;
-        }
-        .info-panel {
-            background: white;
-          padding: 1.25rem;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        }
-        .popup-title {
-            font-weight: 600;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-        }
-        .popup-detail {
-            font-size: 0.85rem;
-            color: #4b5563;
-            margin: 0.2rem 0;
-        }
-        .popup-link {
-            display: inline-block;
-            margin-top: 0.5rem;
-            color: #0060b1;
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-        .popup-link:hover {
-            text-decoration: underline;
-        }
-
-      /* Legend */
-      .legend {
-        background: white;
-        padding: 1rem;
         border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        border: 1px solid #e5e7eb;
       }
-
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.8rem;
-        color: #374151;
-        margin: 0.25rem 0;
-        cursor: pointer;
+      .info-panel {
+        background: white;
+        padding: 1.25rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
       }
-
-      .legend-item:hover {
-        color: #111827;
-      }
-
-      .legend-swatch {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        border: 1px solid rgba(0, 0, 0, 0.2);
-      }
-
-      /* Finance details */
-      .finance-section {
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #e5e7eb;
-      }
-
-      .finance-section h4 {
-        font-size: 0.8rem;
+      .popup-title {
         font-weight: 600;
-        color: #374151;
-        margin-bottom: 0.4rem;
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
       }
-
-      .finance-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.8rem;
+      .popup-detail {
+        font-size: 0.85rem;
         color: #4b5563;
-        margin: 0.15rem 0;
+        margin: 0.2rem 0;
       }
-
-      .finance-row .value {
-        font-weight: 500;
-        color: #111827;
+      .popup-link {
+        display: inline-block;
+        margin-top: 0.5rem;
+        color: #0060b1;
+        text-decoration: none;
+        font-size: 0.85rem;
       }
-
-      @media (max-width: 1024px) {
-        .map-layout {
-          grid-template-columns: 1fr;
-        }
-
-        .map-layout .panel-center {
-          order: -1;
-        }
-
-        .panel-left, .panel-right {
-          position: static;
-          max-height: none;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .controls-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .toggle-row {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
-        }
+      .popup-link:hover {
+        text-decoration: underline;
       }
     </style>
 {% endblock %}
@@ -297,115 +66,38 @@
       <p class="viz-subtitle">{{ point_count }} locations mapped</p>
     </div>
 
-    <!-- Controls above the map -->
-    <div id="filter-panel" style="display: none;">
-      <div class="controls-grid">
-        <div class="control-group">
-          <label for="family-filter">Denomination family</label>
-          <select id="family-filter">
-            <option value="">All families</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="denom-filter">Denomination</label>
-          <select id="denom-filter" disabled>
-            <option value="">All denominations</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="toggle-row">
-        <div class="toggle-group">
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-bubbles">
-            <span class="slider"></span>
-          </label>
-          <label class="toggle-label" for="toggle-bubbles">Size by value</label>
-          <select id="bubble-metric" class="bubble-metric-select" disabled>
-            <option value="edifice_value">Church property value</option>
-            <option value="total_expenditures">Total expenditures</option>
-            <option value="benevolences">Benevolences</option>
-            <option value="expenses">Expenses</option>
-          </select>
-        </div>
-
-        <div class="toggle-group">
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-edifices">
-            <span class="slider"></span>
-          </label>
-          <label class="toggle-label" for="toggle-edifices">Size by number of buildings</label>
-        </div>
-      </div>
-
-      <div id="filter-count"></div>
-    </div>
-
-    {% if companion_geojson %}
-      <div class="toggle-row" id="year-toggle-row">
-        <label class="radio-label">
-          <input type="radio" name="status-filter" value="all" checked>
-          All
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="status-filter" value="matched">
-          Both years ({{ matched_count }})
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="status-filter" value="1926">
-          {{ primary_year }} ({{ point_count }})
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="status-filter" value="2019">
-          {{ companion_year }} ({{ companion_count }})
-        </label>
-      </div>
-    {% endif %}
-
-    <!-- Three-column layout: Details | Map | Legend -->
-    <div class="map-layout">
-      <!-- Left: Details panel -->
-      <div class="panel-left">
-            <div class="info-panel">
-                <h3 class="font-semibold text-gray-900 mb-3">Details</h3>
-                <div id="details-content">
-                    <p class="text-sm text-gray-500">Click a marker on the map to see details.</p>
-                </div>
-            </div>
-        </div>
-
-      <!-- Center: Map -->
-      <div class="panel-center">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div class="lg:col-span-3">
         <div id="map"></div>
       </div>
-
-      <!-- Right: Legend -->
-      <div class="panel-right">
-        <div id="legend-panel" class="legend" style="display: none;">
-          <h3 class="font-semibold text-gray-900 mb-2" style="font-size: 0.9rem;">Denomination Families</h3>
-          <div id="legend-items"></div>
+      <div class="lg:col-span-1">
+        <div class="info-panel">
+          <h3 class="font-semibold text-gray-900 mb-3">Details</h3>
+          <div id="details-content">
+            <p class="text-sm text-gray-500">Click a marker on the map to see details.</p>
+          </div>
         </div>
       </div>
     </div>
 
     {% if content_html %}
-        <div class="mt-8 max-w-3xl prose prose-gray">
-            {{ content_html|safe }}
-        </div>
+      <div class="mt-8 max-w-3xl prose prose-gray">
+        {{ content_html|safe }}
+      </div>
     {% endif %}
 
     {% if source_meta and source_meta.author %}
-        <div class="mt-8 max-w-3xl border-t border-gray-200 pt-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">Suggested Citation</h3>
-            <p class="text-sm text-gray-700 leading-relaxed">
-                {{ source_meta.author }}, "{{ source_meta.title }},"
-                <em>American Religious Ecologies</em>,
-                Roy Rosenzweig Center for History and New Media, George Mason University
-                ({{ source_meta.published_date|date:"Y" }}){% if source_meta.doi %}: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>{% endif %}.
-            </p>
-        </div>
+      <div class="mt-8 max-w-3xl border-t border-gray-200 pt-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Suggested Citation</h3>
+        <p class="text-sm text-gray-700 leading-relaxed">
+          {{ source_meta.author }}, "{{ source_meta.title }},"
+          <em>American Religious Ecologies</em>,
+          Roy Rosenzweig Center for History and New Media, George Mason University
+          ({{ source_meta.published_date|date:"Y" }}){% if source_meta.doi %}: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>{% endif %}.
+        </p>
+      </div>
     {% endif %}
-</div>
+  </div>
 {% endblock %}
 
 {% block extra_js %}
@@ -416,7 +108,6 @@
         const geojsonData = {{ geojson_data|safe }};
         const detailsContent = document.getElementById('details-content');
 
-        // Initialize map
         const map = L.map('map');
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -424,232 +115,41 @@
             maxZoom: 20,
         }).addTo(map);
 
-        // --- Color palette ---
-        const FAMILY_COLORS = {
-          'Baptist': '#e6194b',
-          'Methodist': '#3cb44b',
-          'Catholic': '#ffe119',
-          'Episcopalian': '#4363d8',
-          'Presbyterian': '#f58231',
-          'Lutheran': '#911eb4',
-          'Jewish': '#ffd700',
-          'Congregational': '#000075',
-          'Restorationist': '#42d4f4',
-          'Holiness': '#f032e6',
-          'Orthodox': '#bfef45',
-          'Adventist': '#fabed4',
-          'Pentecostal': '#469990',
-          'Reformed': '#dcbeff',
-          'Anabaptist': '#9A6324',
-          'Friends': '#800000',
-          'Spiritualist': '#e6beff',
-          'Swedenborgian': '#808000',
-          'Christian Science': '#aaffc3',
-        };
-        const DEFAULT_COLOR = '#7f8c8d';
-
-        function familyColor(family) {
-          return FAMILY_COLORS[family] || DEFAULT_COLOR;
-        }
-
-        function darken(hex) {
-          const num = parseInt(hex.slice(1), 16);
-          const r = Math.max(0, (num >> 16) - 40);
-          const g = Math.max(0, ((num >> 8) & 0xff) - 40);
-          const b = Math.max(0, (num & 0xff) - 40);
-          return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
-        }
-
-        // --- Bubble sizing ---
-        const BASE_RADIUS = 6;
-        const MIN_BUBBLE = 5;
-        const MAX_BUBBLE = 30;
-
-        // Pre-compute max values for scaling
-        const maxValues = {};
-        ['edifice_value', 'total_expenditures', 'benevolences', 'expenses'].forEach(metric => {
-          let max = 0;
-          geojsonData.features.forEach(f => {
-            const v = f.properties.finances && f.properties.finances[metric];
-            if (v != null && v > max) max = v;
-          });
-          maxValues[metric] = max;
-        });
-
-        let maxEdifices = 0;
-        geojsonData.features.forEach(f => {
-          const v = f.properties.num_edifices;
-          if (v != null && v > maxEdifices) maxEdifices = v;
-        });
-
-        function getRadius(props) {
-          const bubbleToggle = document.getElementById('toggle-bubbles');
-          const edificeToggle = document.getElementById('toggle-edifices');
-
-          if (bubbleToggle.checked) {
-            const metric = document.getElementById('bubble-metric').value;
-            const val = props.finances && props.finances[metric];
-            if (val != null && maxValues[metric] > 0) {
-              return MIN_BUBBLE + (val / maxValues[metric]) * (MAX_BUBBLE - MIN_BUBBLE);
-            }
-            return MIN_BUBBLE;
-          }
-
-          if (edificeToggle.checked) {
-            const val = props.num_edifices;
-            if (val != null && maxEdifices > 0) {
-              return MIN_BUBBLE + (val / maxEdifices) * (MAX_BUBBLE - MIN_BUBBLE);
-            }
-            return MIN_BUBBLE;
-          }
-
-          return BASE_RADIUS;
-        }
-
-        function markerStyleFor(props) {
-          const family = props.denomination_family || '';
-          const fill = familyColor(family);
-          return {
-            radius: getRadius(props),
-            fillColor: fill,
-            color: darken(fill),
+        const markerStyle = {
+            radius: 6,
+            fillColor: '#0060b1',
+            color: '#003d75',
             weight: 1,
             opacity: 1,
-            fillOpacity: 0.7,
-          };
-        }
-
-        function highlightStyleFor(props) {
-          const family = props.denomination_family || '';
-          const fill = familyColor(family);
-          return {
-            fillColor: fill,
-            color: '#111827',
-            weight: 3,
-            fillOpacity: 0.9,
-          };
-        }
+            fillOpacity: 0.8,
+        };
 
         let selectedMarker = null;
-        let selectedProps = null;
 
-        // --- Currency formatting ---
-        function fmtCurrency(val) {
-          if (val == null) return null;
-          return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
-        }
-
-        // --- Details panel ---
         function buildDetails(props) {
             let html = `<div class="popup-title">${props.title}</div>`;
-
-          if (props.congregation_name && props.congregation_name !== props.title) {
-            html += `<p class="popup-detail" style="font-style: italic;">${props.congregation_name}</p>`;
-          }
-
-            if (props.address) {
-                html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
-            }
-            if (props.city) {
-                html += `<p class="popup-detail"><strong>City:</strong> ${props.city}</p>`;
-            }
-            if (props.zip_code) {
-                html += `<p class="popup-detail"><strong>Zip:</strong> ${props.zip_code}</p>`;
-            }
-
-            if (props.denomination) {
-                html += `<p class="popup-detail"><strong>Denomination:</strong> ${props.denomination}</p>`;
-            }
-            if (props.denomination_family) {
-              const color = familyColor(props.denomination_family);
-              html += `<p class="popup-detail"><strong>Family:</strong> <span style="display:inline-flex;align-items:center;gap:4px;"><span class="legend-swatch" style="background:${color};width:10px;height:10px;"></span> ${props.denomination_family}</span></p>`;
-            }
-
-          // Financial data
-          if (props.finances) {
-            const fin = props.finances;
-            const hasAny = Object.values(fin).some(v => v != null);
-            if (hasAny) {
-              html += '<div class="finance-section">';
-              html += '<h4>Financial Data (1926)</h4>';
-
-              if (fin.edifice_value != null) {
-                html += `<div class="finance-row"><span>Church property</span><span class="value">${fmtCurrency(fin.edifice_value)}</span></div>`;
-              }
-              if (fin.edifice_debt != null) {
-                html += `<div class="finance-row"><span>Property debt</span><span class="value">${fmtCurrency(fin.edifice_debt)}</span></div>`;
-              }
-              if (fin.residence_value != null) {
-                html += `<div class="finance-row"><span>Parsonage value</span><span class="value">${fmtCurrency(fin.residence_value)}</span></div>`;
-              }
-              if (fin.expenses != null) {
-                html += `<div class="finance-row"><span>Expenses</span><span class="value">${fmtCurrency(fin.expenses)}</span></div>`;
-              }
-              if (fin.benevolences != null) {
-                html += `<div class="finance-row"><span>Benevolences</span><span class="value">${fmtCurrency(fin.benevolences)}</span></div>`;
-              }
-              if (fin.total_expenditures != null) {
-                html += `<div class="finance-row"><span>Total expenditures</span><span class="value">${fmtCurrency(fin.total_expenditures)}</span></div>`;
-              }
-              html += '</div>';
-            }
-          }
-
-          if (props.num_edifices != null) {
-            html += `<p class="popup-detail" style="margin-top:0.5rem;"><strong>Church buildings:</strong> ${props.num_edifices}</p>`;
-            }
-
-            // Show any extra data fields
-            const knownKeys = new Set([
-                'title', 'city', 'county', 'state', 'address', 'zip_code',
-                'schedule_resource_id', 'denomination', 'denomination_family',
-              'denomination_override', 'denomination_family_override',
-              'finances', 'congregation_name', 'num_edifices',
-              'matched_2019_title', 'matched_2019_id',
-              'matched_1926_title', 'matched_1926_id',
-              'match_status',
-              'religion', 'place_type', 'web_url',
-            ]);
-            for (const [key, value] of Object.entries(props)) {
-              if (!knownKeys.has(key) && value && typeof value !== 'object') {
-                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    html += `<p class="popup-detail"><strong>${label}:</strong> ${value}</p>`;
-                }
-            }
-
+            if (props.address) html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
+            if (props.city) html += `<p class="popup-detail"><strong>City:</strong> ${props.city}</p>`;
+            if (props.county) html += `<p class="popup-detail"><strong>County:</strong> ${props.county}</p>`;
+            if (props.state) html += `<p class="popup-detail"><strong>State:</strong> ${props.state}</p>`;
+            if (props.denomination) html += `<p class="popup-detail"><strong>Denomination:</strong> ${props.denomination}</p>`;
+            if (props.denomination_family) html += `<p class="popup-detail"><strong>Family:</strong> ${props.denomination_family}</p>`;
             if (props.schedule_resource_id) {
                 html += `<a href="/census/record/${props.schedule_resource_id}/" class="popup-link">View Census Record &rarr;</a>`;
             }
-
-          // Show 2019 match
-          if (props.matched_2019_title) {
-            html += '<div class="finance-section">';
-            html += `<p class="popup-detail"><span style="display:inline-block;width:8px;height:8px;border:2px solid #4682b4;border-radius:50%;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 2019:</strong> ${props.matched_2019_title}</p>`;
-            html += '</div>';
-          }
-
             return html;
         }
 
-        // --- GeoJSON layer ---
         const geojsonLayer = L.geoJSON(geojsonData, {
             pointToLayer: function(feature, latlng) {
-              return L.circleMarker(latlng, markerStyleFor(feature.properties));
+                return L.circleMarker(latlng, markerStyle);
             },
             onEachFeature: function(feature, layer) {
                 layer.bindPopup(`<strong>${feature.properties.title}</strong>`);
-
                 layer.on('click', function() {
-                  // Restore previous selection
-                  if (selectedMarker && selectedProps) {
-                    selectedMarker.setStyle(markerStyleFor(selectedProps));
-                    }
-                  layer.setStyle({
-                    ...highlightStyleFor(feature.properties),
-                    radius: getRadius(feature.properties) + 2,
-                  });
+                    if (selectedMarker) selectedMarker.setStyle(markerStyle);
+                    layer.setStyle({ radius: 8, fillColor: '#e63946', color: '#9d0208', weight: 2, fillOpacity: 1 });
                     selectedMarker = layer;
-                  selectedProps = feature.properties;
                     detailsContent.innerHTML = buildDetails(feature.properties);
                 });
             }
@@ -657,241 +157,6 @@
 
         if (geojsonData.features.length > 0) {
             map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30] });
-          map.zoomIn(3);
         }
-
-        // --- Refresh all marker styles (after toggle change) ---
-        function refreshMarkerStyles() {
-          geojsonLayer.eachLayer(function (layer) {
-            if (layer === selectedMarker) {
-              layer.setStyle({
-                ...highlightStyleFor(layer.feature.properties),
-                radius: getRadius(layer.feature.properties) + 2,
-              });
-            } else {
-              layer.setStyle(markerStyleFor(layer.feature.properties));
-            }
-          });
-        }
-
-        // --- Toggle event handlers ---
-        const bubbleToggle = document.getElementById('toggle-bubbles');
-        const edificeToggle = document.getElementById('toggle-edifices');
-        const bubbleMetric = document.getElementById('bubble-metric');
-
-        bubbleToggle.addEventListener('change', function () {
-          bubbleMetric.disabled = !this.checked;
-          if (this.checked) {
-            edificeToggle.checked = false;
-          }
-          refreshMarkerStyles();
-        });
-
-        edificeToggle.addEventListener('change', function () {
-          if (this.checked) {
-            bubbleToggle.checked = false;
-            bubbleMetric.disabled = true;
-          }
-          refreshMarkerStyles();
-        });
-
-        bubbleMetric.addEventListener('change', refreshMarkerStyles);
-
-        // --- Legend ---
-        const legendPanel = document.getElementById('legend-panel');
-        const legendItems = document.getElementById('legend-items');
-
-        const familyCounts = {};
-        geojsonData.features.forEach(f => {
-          const fam = f.properties.denomination_family || 'Unknown';
-          familyCounts[fam] = (familyCounts[fam] || 0) + 1;
-        });
-        const sortedFamilies = Object.entries(familyCounts).sort((a, b) => b[1] - a[1]);
-
-        if (sortedFamilies.length > 0 && sortedFamilies.some(([f]) => f !== 'Unknown')) {
-          legendPanel.style.display = '';
-          sortedFamilies.forEach(([family, count]) => {
-            const color = familyColor(family === 'Unknown' ? '' : family);
-            const item = document.createElement('div');
-            item.className = 'legend-item';
-            item.innerHTML = `<span class="legend-swatch" style="background:${color};"></span> ${family} (${count})`;
-            item.addEventListener('click', function () {
-              familyFilter.value = family === 'Unknown' ? '' : family;
-              updateDenomOptions();
-              denomFilter.value = '';
-              applyFilters();
-            });
-            legendItems.appendChild(item);
-          });
-        }
-
-        // --- Denomination filters ---
-        const familyFilter = document.getElementById('family-filter');
-        const denomFilter = document.getElementById('denom-filter');
-        const filterPanel = document.getElementById('filter-panel');
-        const filterCount = document.getElementById('filter-count');
-
-        const families = new Set();
-        const denomsByFamily = {};
-        geojsonData.features.forEach(f => {
-            const family = f.properties.denomination_family;
-            const denom = f.properties.denomination;
-            if (family) {
-                families.add(family);
-                if (!denomsByFamily[family]) denomsByFamily[family] = new Set();
-                if (denom) denomsByFamily[family].add(denom);
-            }
-        });
-
-        if (families.size > 0) {
-            filterPanel.style.display = '';
-            [...families].sort().forEach(f => {
-                const opt = document.createElement('option');
-                opt.value = f;
-                opt.textContent = f;
-                familyFilter.appendChild(opt);
-            });
-        }
-
-        function updateDenomOptions() {
-            const family = familyFilter.value;
-          denomFilter.innerHTML = '<option value="">All denominations</option>';
-            if (family && denomsByFamily[family]) {
-                denomFilter.disabled = false;
-                [...denomsByFamily[family]].sort().forEach(d => {
-                    const opt = document.createElement('option');
-                    opt.value = d;
-                    opt.textContent = d;
-                    denomFilter.appendChild(opt);
-                });
-            } else {
-                denomFilter.disabled = true;
-            }
-        }
-
-        function applyFilters() {
-            const family = familyFilter.value;
-            const denom = denomFilter.value;
-            let shown = 0;
-            let total = 0;
-
-            geojsonLayer.eachLayer(function(layer) {
-                total++;
-                const props = layer.feature.properties;
-                const matchFamily = !family || props.denomination_family === family;
-                const matchDenom = !denom || props.denomination === denom;
-
-                if (matchFamily && matchDenom) {
-                    layer.addTo(map);
-                    shown++;
-                } else {
-                    map.removeLayer(layer);
-                }
-            });
-
-            filterCount.textContent = `Showing ${shown} of ${total} locations`;
-        }
-
-        familyFilter.addEventListener('change', function() {
-            updateDenomOptions();
-            denomFilter.value = '';
-            applyFilters();
-        });
-        denomFilter.addEventListener('change', applyFilters);
-
-        // --- Companion layer (e.g., 2019 data) ---
-        {% if companion_geojson %}
-          const companionData = {{ companion_geojson|safe }};
-
-          const companionStyle = {
-            radius: 5,
-            fillColor: 'transparent',
-            color: '#4682b4',
-            weight: 2,
-            opacity: 0.8,
-            fillOpacity: 0,
-          };
-
-          const companionHighlight = {
-            color: '#111827',
-            weight: 3,
-            fillColor: '#4682b4',
-            fillOpacity: 0.3,
-          };
-
-          const companionLayer = L.geoJSON(companionData, {
-            pointToLayer: function (feature, latlng) {
-              return L.circleMarker(latlng, companionStyle);
-            },
-            onEachFeature: function (feature, layer) {
-              const props = feature.properties;
-              layer.bindPopup(`<strong>${props.title}</strong>`);
-
-              layer.on('click', function () {
-                if (selectedMarker && selectedProps) {
-                  // Restore previous — could be either layer
-                  if (selectedMarker._companionLayer) {
-                    selectedMarker.setStyle(companionStyle);
-                  } else {
-                    selectedMarker.setStyle(markerStyleFor(selectedProps));
-                  }
-                }
-                layer.setStyle({...companionHighlight, radius: 7});
-                selectedMarker = layer;
-                selectedMarker._companionLayer = true;
-                selectedProps = props;
-
-                let html = `<div class="popup-title">${props.title}</div>`;
-                html += `<p class="popup-detail" style="color:#4682b4;font-weight:500;">{{ companion_year }} Data</p>`;
-                if (props.address) html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
-                if (props.religion) html += `<p class="popup-detail"><strong>Religion:</strong> ${props.religion}</p>`;
-                if (props.place_type) html += `<p class="popup-detail"><strong>Type:</strong> ${props.place_type}</p>`;
-                if (props.web_url) html += `<a href="https://${props.web_url}" class="popup-link" target="_blank">${props.web_url}</a>`;
-                if (props.matched_1926_title) {
-                  html += '<div class="finance-section">';
-                  html += `<p class="popup-detail"><span class="legend-swatch" style="background:#0060b1;width:8px;height:8px;display:inline-block;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 1926:</strong> ${props.matched_1926_title}</p>`;
-                  html += '</div>';
-                }
-                detailsContent.innerHTML = html;
-              });
-            }
-          }).addTo(map);
-
-          // Status radio handlers
-          const statusRadios = document.querySelectorAll('input[name="status-filter"]');
-
-          function applyStatusFilter() {
-            const selected = document.querySelector('input[name="status-filter"]:checked').value;
-
-            geojsonLayer.eachLayer(function (layer) {
-              const show = selected === 'all' ||
-                selected === '1926' ||
-                (selected === 'matched' && layer.feature.properties.match_status === 'matched');
-              if (show) {
-                layer.addTo(map);
-              } else {
-                map.removeLayer(layer);
-              }
-            });
-
-            companionLayer.eachLayer(function (layer) {
-              const show = selected === 'all' ||
-                selected === '2019' ||
-                (selected === 'matched' && layer.feature.properties.match_status === 'matched');
-              if (show) {
-                layer.addTo(map);
-              } else {
-                map.removeLayer(layer);
-              }
-            });
-          }
-
-          statusRadios.forEach(r => r.addEventListener('change', applyStatusFilter));
-
-          // Re-fit bounds to include both layers
-          const allBounds = geojsonLayer.getBounds().extend(companionLayer.getBounds());
-          map.fitBounds(allBounds, {padding: [30, 30]});
-          map.zoomIn(3);
-        {% endif %}
     </script>
 {% endblock %}
