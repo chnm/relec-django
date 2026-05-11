@@ -295,6 +295,7 @@ def _build_datalayer_features(points):
             properties["schedule_resource_id"] = schedule.resource_id
             if schedule.schedule_denomination:
                 properties["denomination"] = schedule.schedule_denomination.name
+                properties["denomination_id"] = schedule.schedule_denomination.id
                 properties["denomination_family"] = schedule.schedule_denomination.family_relec or ""
 
         # Fallback: use overrides from data field for unlinked records

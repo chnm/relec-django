@@ -365,7 +365,8 @@
       <!-- Right: Legend -->
       <div class="panel-right">
         <div id="legend-panel" class="legend" style="display: none;">
-          <h3 class="font-semibold text-gray-900 mb-2" style="font-size: 0.9rem;">Denomination Families</h3>
+          <h3 class="font-semibold text-gray-900 mb-1" style="font-size: 0.9rem;">Denomination Families</h3>
+          <p style="font-size:0.7rem;color:#9ca3af;margin:0 0 0.5rem;">Click to filter, select multiple to compare</p>
           <div style="margin-bottom:0.5rem;">
             <button id="legend-sort" type="button" class="legend-sort-btn" title="Toggle sort">Sort A–Z</button>
           </div>
@@ -554,7 +555,9 @@
             }
 
             if (props.denomination) {
-                const denomUrl = `/census/browser/?denomination=${encodeURIComponent(props.denomination)}`;
+                const denomUrl = props.denomination_id
+                  ? `/census/browser/?denomination=${props.denomination_id}`
+                  : `/census/browser/?search=${encodeURIComponent(props.denomination)}`;
                 html += `<p class="popup-detail"><strong>Denomination:</strong> <a href="${denomUrl}" class="popup-link" style="margin:0;display:inline;">${props.denomination}</a></p>`;
             }
             if (props.denomination_family) {
@@ -604,7 +607,7 @@
           // Show 2019 match
           if (props.matched_2019_title) {
             html += '<div class="finance-section">';
-            html += `<p class="popup-detail"><span style="display:inline-block;width:8px;height:8px;border:2px solid #4682b4;border-radius:50%;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 2019:</strong> ${props.matched_2019_title}</p>`;
+            html += `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:#f0f7ff;border-left:3px solid #4682b4;border-radius:0 4px 4px 0;font-size:0.8rem;color:#1e40af;">Still present in 2019: ${props.matched_2019_title}</div>`;
             html += '</div>';
           }
 
@@ -833,7 +836,7 @@
                 if (props.web_url) html += `<a href="https://${props.web_url}" class="popup-link" target="_blank">${props.web_url}</a>`;
                 if (props.matched_1926_title) {
                   html += '<div class="finance-section">';
-                  html += `<p class="popup-detail"><span class="legend-swatch" style="background:#0060b1;width:8px;height:8px;display:inline-block;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 1926:</strong> ${props.matched_1926_title}</p>`;
+                  html += `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:#f0f7ff;border-left:3px solid #0060b1;border-radius:0 4px 4px 0;font-size:0.8rem;color:#1e40af;">Present in 1926: ${props.matched_1926_title}</div>`;
                   html += '</div>';
                 }
                 detailsContent.innerHTML = html;
