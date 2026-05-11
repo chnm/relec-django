@@ -1,0 +1,882 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ display_title }} | American Religious Ecologies{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <style>
+      .viz-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+      }
+
+      .viz-header h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #1f2937;
+      }
+
+      .viz-subtitle {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+        font-size: 1rem;
+      }
+
+      /* Control bar */
+      .control-section {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .control-section-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .control-divider {
+        width: 1px;
+        height: 1.5rem;
+        background: #d1d5db;
+      }
+
+      /* Toggle switches */
+      .toggle-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding: 0.75rem 1rem;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+      }
+
+      .toggle-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: #374151;
+      }
+
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+      }
+
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .3s;
+        border-radius: 22px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: #0060b1;
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(18px);
+      }
+
+      .toggle-label {
+        font-weight: 500;
+        user-select: none;
+        cursor: pointer;
+      }
+
+      .radio-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .radio-label input[type="radio"] {
+        accent-color: #0060b1;
+      }
+
+      .bubble-metric-select {
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.8rem;
+        background: white;
+      }
+
+      #filter-count {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-bottom: 1rem;
+      }
+
+      /* Three-column layout */
+      .map-layout {
+        display: grid;
+        grid-template-columns: 260px 1fr 200px;
+        gap: 1rem;
+        align-items: start;
+      }
+
+      .panel-left, .panel-right {
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+      }
+
+      .panel-left {
+        min-width: 0;
+      }
+        #map {
+            height: 650px;
+            width: 100%;
+            border-radius: 8px;
+          border: 1px solid #e5e7eb;
+        }
+        .info-panel {
+            background: white;
+          padding: 1.25rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .popup-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .popup-detail {
+            font-size: 0.85rem;
+            color: #4b5563;
+            margin: 0.2rem 0;
+        }
+        .popup-link {
+            display: inline-block;
+            margin-top: 0.5rem;
+            color: #0060b1;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .popup-link:hover {
+            text-decoration: underline;
+        }
+
+      /* Legend */
+      .legend {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        color: #374151;
+        margin: 0.25rem 0;
+        cursor: pointer;
+      }
+
+      .legend-item:hover {
+        color: #111827;
+      }
+      .legend-sort-btn {
+        font-size: 0.7rem;
+        color: #6b7280;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.25rem;
+        padding: 0.15rem 0.4rem;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .legend-sort-btn:hover {
+        color: #374151;
+        background: #e5e7eb;
+      }
+
+      .legend-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+      }
+
+      /* Finance details */
+      .finance-section {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      .finance-section h4 {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.4rem;
+      }
+
+      .finance-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: #4b5563;
+        margin: 0.15rem 0;
+      }
+
+      .finance-row .value {
+        font-weight: 500;
+        color: #111827;
+      }
+
+      @media (max-width: 1024px) {
+        .map-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .map-layout .panel-center {
+          order: -1;
+        }
+
+        .panel-left, .panel-right {
+          position: static;
+          max-height: none;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .controls-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .toggle-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+      }
+    </style>
+{% endblock %}
+
+{% block content %}
+  <div class="viz-container">
+    <div class="viz-header">
+      <h1>{{ display_title }}</h1>
+    </div>
+
+    <!-- Controls above the map -->
+    <div class="toggle-row" id="control-bar">
+      {% if companion_geojson %}
+      <div class="control-section">
+        <span class="control-section-label">Show:</span>
+        <label class="radio-label">
+          <input type="radio" name="status-filter" value="all" checked>
+          All
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="status-filter" value="matched">
+          Both years ({{ matched_count }})
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="status-filter" value="1926">
+          {{ primary_year }} ({{ point_count }})
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="status-filter" value="2019">
+          {{ companion_year }} ({{ companion_count }})
+        </label>
+      </div>
+      <span class="control-divider"></span>
+      {% endif %}
+      <div class="control-section">
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-bubbles">
+          <span class="slider"></span>
+        </label>
+        <label class="toggle-label" for="toggle-bubbles">Size by value</label>
+        <select id="bubble-metric" class="bubble-metric-select" disabled>
+          <option value="edifice_value">Church property value</option>
+          <option value="total_expenditures">Total expenditures</option>
+          <option value="benevolences">Benevolences</option>
+          <option value="expenses">Expenses</option>
+        </select>
+      </div>
+      <span class="viz-subtitle" style="margin:0;" id="location-count">{{ point_count }} locations mapped</span>
+    </div>
+
+    <!-- Three-column layout: Details | Map | Legend -->
+    <div class="map-layout">
+      <!-- Left: Details panel -->
+      <div class="panel-left">
+            <div class="info-panel">
+                <h3 class="font-semibold text-gray-900 mb-3">Details</h3>
+                <div id="details-content">
+                    <p class="text-sm text-gray-500">Click a marker on the map to see details.</p>
+                </div>
+            </div>
+        </div>
+
+      <!-- Center: Map -->
+      <div class="panel-center">
+        <div id="map"></div>
+      </div>
+
+      <!-- Right: Legend -->
+      <div class="panel-right">
+        <div id="legend-panel" class="legend" style="display: none;">
+          <h3 class="font-semibold text-gray-900 mb-2" style="font-size: 0.9rem;">Denomination Families</h3>
+          <div style="margin-bottom:0.5rem;">
+            <button id="legend-sort" type="button" class="legend-sort-btn" title="Toggle sort">Sort A–Z</button>
+          </div>
+          <div id="legend-items"></div>
+          <button id="legend-clear" type="button" style="display:none;width:100%;margin-top:0.5rem;padding:0.35rem;font-size:0.75rem;color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:0.25rem;cursor:pointer;">Clear selection</button>
+        </div>
+      </div>
+    </div>
+
+    {% if content_html %}
+        <div class="mt-8 max-w-3xl prose prose-gray">
+            {{ content_html|safe }}
+        </div>
+    {% endif %}
+
+    {% if source_meta and source_meta.author %}
+        <div class="mt-8 max-w-3xl border-t border-gray-200 pt-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Suggested Citation</h3>
+            <p class="text-sm text-gray-700 leading-relaxed">
+                {{ source_meta.author }}, "{{ source_meta.title }},"
+                <em>American Religious Ecologies</em>,
+                Roy Rosenzweig Center for History and New Media, George Mason University
+                ({{ source_meta.published_date|date:"Y" }}){% if source_meta.doi %}: <a href="{{ source_meta.doi }}" class="text-religious-primary hover:underline">{{ source_meta.doi }}</a>{% endif %}.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script>
+        const geojsonData = {{ geojson_data|safe }};
+        const detailsContent = document.getElementById('details-content');
+
+        // Initialize map
+        const map = L.map('map');
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        }).addTo(map);
+
+        // --- DC boundary layer ---
+        fetch('https://data.chnm.org/ahcb/counties/1926-05-08/state-code/dc/')
+          .then(r => r.json())
+          .then(data => {
+            L.geoJSON(data, {
+              style: {
+                color: '#0060b1',
+                weight: 1.5,
+                fillColor: '#0060b1',
+                fillOpacity: 0.03,
+                dashArray: '4 4',
+              },
+              interactive: false,
+            }).addTo(map);
+          });
+
+        // --- Color palette ---
+        const FAMILY_COLORS = {
+          'Baptist': '#e6194b',
+          'Methodist': '#3cb44b',
+          'Catholic': '#ffe119',
+          'Episcopalian': '#4363d8',
+          'Presbyterian': '#f58231',
+          'Lutheran': '#911eb4',
+          'Jewish': '#ffd700',
+          'Congregational': '#000075',
+          'Restorationist': '#42d4f4',
+          'Holiness': '#f032e6',
+          'Orthodox': '#bfef45',
+          'Adventist': '#fabed4',
+          'Pentecostal': '#469990',
+          'Reformed': '#dcbeff',
+          'Anabaptist': '#9A6324',
+          'Friends': '#800000',
+          'Spiritualist': '#e6beff',
+          'Swedenborgian': '#808000',
+          'Christian Science': '#aaffc3',
+        };
+        const DEFAULT_COLOR = '#7f8c8d';
+
+        function familyColor(family) {
+          return FAMILY_COLORS[family] || DEFAULT_COLOR;
+        }
+
+        function darken(hex) {
+          const num = parseInt(hex.slice(1), 16);
+          const r = Math.max(0, (num >> 16) - 40);
+          const g = Math.max(0, ((num >> 8) & 0xff) - 40);
+          const b = Math.max(0, (num & 0xff) - 40);
+          return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+        }
+
+        // --- Bubble sizing ---
+        const BASE_RADIUS = 6;
+        const MIN_BUBBLE = 5;
+        const MAX_BUBBLE = 30;
+
+        // Pre-compute max values for scaling
+        const maxValues = {};
+        ['edifice_value', 'total_expenditures', 'benevolences', 'expenses'].forEach(metric => {
+          let max = 0;
+          geojsonData.features.forEach(f => {
+            const v = f.properties.finances && f.properties.finances[metric];
+            if (v != null && v > max) max = v;
+          });
+          maxValues[metric] = max;
+        });
+
+        function getRadius(props) {
+          const bubbleToggle = document.getElementById('toggle-bubbles');
+
+          if (bubbleToggle.checked) {
+            const metric = document.getElementById('bubble-metric').value;
+            const val = props.finances && props.finances[metric];
+            if (val != null && maxValues[metric] > 0) {
+              return MIN_BUBBLE + (val / maxValues[metric]) * (MAX_BUBBLE - MIN_BUBBLE);
+            }
+            return MIN_BUBBLE;
+          }
+
+          return BASE_RADIUS;
+        }
+
+        // --- Family filter state ---
+        const selectedFamilies = new Set(); // empty = show all
+
+        function isFamilyActive(family) {
+          return selectedFamilies.size === 0 || selectedFamilies.has(family || '');
+        }
+
+        function markerStyleFor(props) {
+          const family = props.denomination_family || '';
+          const active = isFamilyActive(family);
+          const fill = active ? familyColor(family) : '#d1d5db';
+          return {
+            radius: getRadius(props),
+            fillColor: fill,
+            color: active ? darken(familyColor(family)) : '#9ca3af',
+            weight: 1,
+            opacity: active ? 1 : 0.4,
+            fillOpacity: active ? 0.7 : 0.15,
+          };
+        }
+
+        function highlightStyleFor(props) {
+          const family = props.denomination_family || '';
+          const fill = familyColor(family);
+          return {
+            fillColor: fill,
+            color: '#111827',
+            weight: 3,
+            fillOpacity: 0.9,
+          };
+        }
+
+        let selectedMarker = null;
+        let selectedProps = null;
+
+        // --- Currency formatting ---
+        function fmtCurrency(val) {
+          if (val == null) return null;
+          return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+
+        // --- Details panel ---
+        function buildDetails(props) {
+            let html = `<div class="popup-title">${props.title}</div>`;
+
+          if (props.congregation_name && props.congregation_name !== props.title) {
+            html += `<p class="popup-detail" style="font-style: italic;">${props.congregation_name}</p>`;
+          }
+
+            if (props.address) {
+                html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
+            }
+            if (props.city) {
+                html += `<p class="popup-detail"><strong>City:</strong> ${props.city}</p>`;
+            }
+            if (props.zip_code) {
+                html += `<p class="popup-detail"><strong>Zip:</strong> ${props.zip_code}</p>`;
+            }
+
+            if (props.denomination) {
+                const denomUrl = `/census/browser/?denomination=${encodeURIComponent(props.denomination)}`;
+                html += `<p class="popup-detail"><strong>Denomination:</strong> <a href="${denomUrl}" class="popup-link" style="margin:0;display:inline;">${props.denomination}</a></p>`;
+            }
+            if (props.denomination_family) {
+              const color = familyColor(props.denomination_family);
+              const familyUrl = `/census/browser/?family=${encodeURIComponent(props.denomination_family)}`;
+              html += `<p class="popup-detail"><strong>Family:</strong> <a href="${familyUrl}" class="popup-link" style="margin:0;display:inline;"><span style="display:inline-flex;align-items:center;gap:4px;"><span class="legend-swatch" style="background:${color};width:10px;height:10px;"></span> ${props.denomination_family}</span></a></p>`;
+            }
+
+          // Financial data
+          if (props.finances) {
+            const fin = props.finances;
+            const hasAny = Object.values(fin).some(v => v != null);
+            if (hasAny) {
+              html += '<div class="finance-section">';
+              html += '<h4>Financial Data (1926)</h4>';
+
+              if (fin.edifice_value != null) {
+                html += `<div class="finance-row"><span>Church property</span><span class="value">${fmtCurrency(fin.edifice_value)}</span></div>`;
+              }
+              if (fin.edifice_debt != null) {
+                html += `<div class="finance-row"><span>Property debt</span><span class="value">${fmtCurrency(fin.edifice_debt)}</span></div>`;
+              }
+              if (fin.residence_value != null) {
+                html += `<div class="finance-row"><span>Parsonage value</span><span class="value">${fmtCurrency(fin.residence_value)}</span></div>`;
+              }
+              if (fin.expenses != null) {
+                html += `<div class="finance-row"><span>Expenses</span><span class="value">${fmtCurrency(fin.expenses)}</span></div>`;
+              }
+              if (fin.benevolences != null) {
+                html += `<div class="finance-row"><span>Benevolences</span><span class="value">${fmtCurrency(fin.benevolences)}</span></div>`;
+              }
+              if (fin.total_expenditures != null) {
+                html += `<div class="finance-row"><span>Total expenditures</span><span class="value">${fmtCurrency(fin.total_expenditures)}</span></div>`;
+              }
+              html += '</div>';
+            }
+          }
+
+          if (props.num_edifices != null) {
+            html += `<p class="popup-detail" style="margin-top:0.5rem;"><strong>Church buildings:</strong> ${props.num_edifices}</p>`;
+            }
+
+            if (props.schedule_resource_id) {
+                html += `<a href="/census/record/${props.schedule_resource_id}/" class="popup-link">View Census Record &rarr;</a>`;
+            }
+
+          // Show 2019 match
+          if (props.matched_2019_title) {
+            html += '<div class="finance-section">';
+            html += `<p class="popup-detail"><span style="display:inline-block;width:8px;height:8px;border:2px solid #4682b4;border-radius:50%;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 2019:</strong> ${props.matched_2019_title}</p>`;
+            html += '</div>';
+          }
+
+            return html;
+        }
+
+        // --- GeoJSON layer ---
+        const geojsonLayer = L.geoJSON(geojsonData, {
+            pointToLayer: function(feature, latlng) {
+              return L.circleMarker(latlng, markerStyleFor(feature.properties));
+            },
+            onEachFeature: function(feature, layer) {
+                layer.bindPopup(`<strong>${feature.properties.title}</strong>`);
+
+                layer.on('click', function() {
+                  // Restore previous selection
+                  if (selectedMarker && selectedProps) {
+                    selectedMarker.setStyle(markerStyleFor(selectedProps));
+                    }
+                  layer.setStyle({
+                    ...highlightStyleFor(feature.properties),
+                    radius: getRadius(feature.properties) + 2,
+                  });
+                    selectedMarker = layer;
+                  selectedProps = feature.properties;
+                    detailsContent.innerHTML = buildDetails(feature.properties);
+                });
+            }
+        }).addTo(map);
+
+        if (geojsonData.features.length > 0) {
+            map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30] });
+          map.zoomIn(3);
+        }
+
+        // --- Refresh all marker styles (after toggle/filter change) ---
+        function refreshMarkerStyles() {
+          // Two passes: faded markers first (behind), then active markers on top
+          const fadedLayers = [];
+          const activeLayers = [];
+
+          geojsonLayer.eachLayer(function (layer) {
+            const props = layer.feature.properties;
+            const active = isFamilyActive(props.denomination_family || '');
+            if (layer === selectedMarker) {
+              layer.setStyle({
+                ...highlightStyleFor(props),
+                radius: getRadius(props) + 2,
+              });
+              activeLayers.push(layer);
+            } else {
+              layer.setStyle(markerStyleFor(props));
+              if (active) {
+                activeLayers.push(layer);
+              } else {
+                fadedLayers.push(layer);
+              }
+            }
+          });
+
+          // Bring faded to back, active to front
+          fadedLayers.forEach(l => l.bringToBack());
+          activeLayers.forEach(l => l.bringToFront());
+          if (selectedMarker) selectedMarker.bringToFront();
+          updateLocationCount();
+        }
+
+        // --- Location count ---
+        const locationCount = document.getElementById('location-count');
+        function updateLocationCount() {
+          let count = 0;
+          geojsonLayer.eachLayer(function (layer) {
+            if (map.hasLayer(layer) && isFamilyActive(layer.feature.properties.denomination_family || '')) {
+              count++;
+            }
+          });
+          {% if companion_geojson %}
+          if (typeof companionLayer !== 'undefined') {
+            companionLayer.eachLayer(function (layer) {
+              if (map.hasLayer(layer)) count++;
+            });
+          }
+          {% endif %}
+          locationCount.textContent = count + ' locations mapped';
+        }
+
+        // --- Toggle event handlers ---
+        const bubbleToggle = document.getElementById('toggle-bubbles');
+        const bubbleMetric = document.getElementById('bubble-metric');
+
+        bubbleToggle.addEventListener('change', function () {
+          bubbleMetric.disabled = !this.checked;
+          refreshMarkerStyles();
+        });
+
+        bubbleMetric.addEventListener('change', refreshMarkerStyles);
+
+        // --- Legend ---
+        const legendPanel = document.getElementById('legend-panel');
+        const legendItems = document.getElementById('legend-items');
+        const legendSortBtn = document.getElementById('legend-sort');
+        const legendClear = document.getElementById('legend-clear');
+
+        const familyCounts = {};
+        geojsonData.features.forEach(f => {
+          const fam = f.properties.denomination_family || 'Unknown';
+          familyCounts[fam] = (familyCounts[fam] || 0) + 1;
+        });
+
+        // Sort modes: 'count' (default, descending) and 'alpha' (ascending)
+        let legendSortMode = 'count';
+
+        function getSortedFamilies() {
+          const entries = Object.entries(familyCounts);
+          if (legendSortMode === 'alpha') {
+            return entries.sort((a, b) => a[0].localeCompare(b[0]));
+          }
+          return entries.sort((a, b) => b[1] - a[1]);
+        }
+
+        function buildLegend() {
+          legendItems.innerHTML = '';
+          const sorted = getSortedFamilies();
+
+          if (sorted.length > 0 && sorted.some(([f]) => f !== 'Unknown')) {
+            legendPanel.style.display = '';
+            sorted.forEach(([family, count]) => {
+              const familyKey = family === 'Unknown' ? '' : family;
+              const color = familyColor(familyKey);
+              const item = document.createElement('div');
+              item.className = 'legend-item';
+              item.dataset.family = familyKey;
+              item.innerHTML = `<span class="legend-swatch" style="background:${color};"></span> ${family} (${count})`;
+              item.addEventListener('click', function () {
+                if (selectedFamilies.has(familyKey)) {
+                  selectedFamilies.delete(familyKey);
+                } else {
+                  selectedFamilies.add(familyKey);
+                }
+                updateLegendStyles();
+                refreshMarkerStyles();
+              });
+              legendItems.appendChild(item);
+            });
+            updateLegendStyles();
+          }
+        }
+
+        function updateLegendStyles() {
+          legendClear.style.display = selectedFamilies.size > 0 ? '' : 'none';
+          legendItems.querySelectorAll('.legend-item').forEach(item => {
+            const fam = item.dataset.family;
+            const active = isFamilyActive(fam);
+            item.style.opacity = active ? '1' : '0.35';
+            const swatch = item.querySelector('.legend-swatch');
+            if (swatch) {
+              swatch.style.background = active ? familyColor(fam) : '#d1d5db';
+            }
+          });
+        }
+
+        legendSortBtn.addEventListener('click', function () {
+          legendSortMode = legendSortMode === 'count' ? 'alpha' : 'count';
+          legendSortBtn.textContent = legendSortMode === 'count' ? 'Sort A–Z' : 'Sort by count';
+          buildLegend();
+        });
+
+        legendClear.addEventListener('click', function (e) {
+          e.preventDefault();
+          selectedFamilies.clear();
+          updateLegendStyles();
+          refreshMarkerStyles();
+        });
+
+        buildLegend();
+
+        // (filter panel is always visible now)
+
+        // --- Companion layer (e.g., 2019 data) ---
+        {% if companion_geojson %}
+          const companionData = {{ companion_geojson|safe }};
+
+          const companionStyle = {
+            radius: 5,
+            fillColor: 'transparent',
+            color: '#4682b4',
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0,
+          };
+
+          const companionHighlight = {
+            color: '#111827',
+            weight: 3,
+            fillColor: '#4682b4',
+            fillOpacity: 0.3,
+          };
+
+          const companionLayer = L.geoJSON(companionData, {
+            pointToLayer: function (feature, latlng) {
+              return L.circleMarker(latlng, companionStyle);
+            },
+            onEachFeature: function (feature, layer) {
+              const props = feature.properties;
+              layer.bindPopup(`<strong>${props.title}</strong>`);
+
+              layer.on('click', function () {
+                if (selectedMarker && selectedProps) {
+                  // Restore previous — could be either layer
+                  if (selectedMarker._companionLayer) {
+                    selectedMarker.setStyle(companionStyle);
+                  } else {
+                    selectedMarker.setStyle(markerStyleFor(selectedProps));
+                  }
+                }
+                layer.setStyle({...companionHighlight, radius: 7});
+                selectedMarker = layer;
+                selectedMarker._companionLayer = true;
+                selectedProps = props;
+
+                let html = `<div class="popup-title">${props.title}</div>`;
+                html += `<p class="popup-detail" style="color:#4682b4;font-weight:500;">{{ companion_year }} Data</p>`;
+                if (props.address) html += `<p class="popup-detail"><strong>Address:</strong> ${props.address}</p>`;
+                if (props.religion) html += `<p class="popup-detail"><strong>Religion:</strong> ${props.religion}</p>`;
+                if (props.place_type) html += `<p class="popup-detail"><strong>Type:</strong> ${props.place_type}</p>`;
+                if (props.web_url) html += `<a href="https://${props.web_url}" class="popup-link" target="_blank">${props.web_url}</a>`;
+                if (props.matched_1926_title) {
+                  html += '<div class="finance-section">';
+                  html += `<p class="popup-detail"><span class="legend-swatch" style="background:#0060b1;width:8px;height:8px;display:inline-block;vertical-align:middle;margin-right:4px;"></span> <strong>Also in 1926:</strong> ${props.matched_1926_title}</p>`;
+                  html += '</div>';
+                }
+                detailsContent.innerHTML = html;
+              });
+            }
+          }).addTo(map);
+
+          // Status radio handlers
+          const statusRadios = document.querySelectorAll('input[name="status-filter"]');
+
+          function applyStatusFilter() {
+            const selected = document.querySelector('input[name="status-filter"]:checked').value;
+
+            geojsonLayer.eachLayer(function (layer) {
+              const show = selected === 'all' ||
+                selected === '1926' ||
+                (selected === 'matched' && layer.feature.properties.match_status === 'matched');
+              if (show) {
+                layer.addTo(map);
+              } else {
+                map.removeLayer(layer);
+              }
+            });
+
+            companionLayer.eachLayer(function (layer) {
+              const show = selected === 'all' ||
+                selected === '2019' ||
+                (selected === 'matched' && layer.feature.properties.match_status === 'matched');
+              if (show) {
+                layer.addTo(map);
+              } else {
+                map.removeLayer(layer);
+              }
+            });
+            updateLocationCount();
+          }
+
+          statusRadios.forEach(r => r.addEventListener('change', applyStatusFilter));
+
+          // Re-fit bounds to include both layers
+          const allBounds = geojsonLayer.getBounds().extend(companionLayer.getBounds());
+          map.fitBounds(allBounds, {padding: [30, 30]});
+          map.zoomIn(3);
+        {% endif %}
+    </script>
+{% endblock %}
