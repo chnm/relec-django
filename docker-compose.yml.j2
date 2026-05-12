@@ -12,6 +12,8 @@ services:
   app:
     image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
     restart: unless-stopped
+    labels:
+      - autoheal=true
     {{ service | get_deploy_resources_by_service | indent(width=2) }}
     {% if service.environment is defined %}
 
@@ -68,6 +70,14 @@ services:
     - {{ vol.host_path if vol.host_path is defined else vol.name }}:{{ vol.container_path }}
 {% endfor %}
     {% endif %}
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+    volumes:
+      - {{ docker_sock_path | default('/run/user/' ~ ansible_user_uid ~ '/docker.sock' if (ansible_user_uid | int) > 0 else '/var/run/docker.sock') }}:/var/run/docker.sock
 
 volumes:
   {{ caddy_vols | indent(width=2, first=True ) }}

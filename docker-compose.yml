@@ -8,6 +8,8 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     image: "rrchnm/relec-django"
+    labels:
+      - autoheal=true
     ports:
       - 8000:8000
     volumes:
@@ -54,6 +56,14 @@ services:
       interval: 2s
       timeout: 5s
       retries: 3
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+    volumes:
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
 
 volumes:
   dj-data:
