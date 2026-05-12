@@ -61,10 +61,17 @@ def api_root(request, format=None):
                     "response_notes": {
                         "denominations": "Array of denomination names matched by the current query filters, included alongside pagination metadata",
                         "location_details": "Nested object with lat, lon, city_name, county_name, state_name, place_id, address, urban_rural_code",
-                        "membership_details": "Full membership breakdown including education program data",
+                        "membership_details": "Full membership breakdown including education program data; null values indicate blank fields (not zero)",
                         "finances": "Financial data (expenditures, benevolences, edifice/residence values and debts)",
+                        "pastors": "Array of clergy objects (principal pastor first, then assistants) with name, is_assistant, college, theological_seminary, num_other_churches_served, serving_congregation",
+                        "num_assistant_pastors": "Raw count of assistant pastors from form field 26 (integer or null)",
+                        "respondent": "Person who signed the form: name, title, po_address, date_signed (null if no data)",
+                        "processing": "Census Bureau intake metadata: date_received (ISO date), district_stamp, denomination_code_stamp (null if no data)",
+                        "marginalia": "Array of {page_location, marginalia_transcription} for handwritten marks on the form (null if none)",
+                        "ai_notes": "Free-form observations from the AI transcriber about anomalies or illegibility (null if none)",
                         "transcription_status": "Status of the census record transcription",
                         "schedule_id": "Census schedule identifier",
+                        "urls.image": "Direct URL to the original census schedule image in object storage (null if not yet fetched)",
                     },
                 },
                 "denomination_families": {
