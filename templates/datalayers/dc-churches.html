@@ -640,7 +640,6 @@
 
         if (geojsonData.features.length > 0) {
             map.fitBounds(geojsonLayer.getBounds(), { padding: [30, 30] });
-          map.zoomIn(3);
         }
 
         // --- Refresh all marker styles (after toggle/filter change) ---
@@ -879,7 +878,6 @@
           // Re-fit bounds to include both layers
           const allBounds = geojsonLayer.getBounds().extend(companionLayer.getBounds());
           map.fitBounds(allBounds, {padding: [30, 30]});
-          map.zoomIn(3);
         {% endif %}
     </script>
 {% endblock %}
