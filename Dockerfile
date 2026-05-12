@@ -52,4 +52,7 @@ RUN uv run manage.py collectstatic --no-input
 RUN rm -rf /root/.volta
 RUN rm -rf /app/node_modules
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/', timeout=4).status == 200 else 1)"
+
 CMD uv run manage.py runserver 0.0.0.0:8000
