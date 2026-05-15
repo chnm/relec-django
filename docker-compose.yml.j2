@@ -26,7 +26,7 @@ services:
     command: >
         sh -c "uv run manage.py migrate &&
                uv run manage.py runserver 0.0.0.0:8000"
-    {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
+    {% if service.volumes | default([]) | length > 0 %}
 
     volumes:
 {% for vol in service.volumes %}
@@ -63,7 +63,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    {% if service.volumes is defined and (service.volumes is iterable and service.volumes | length > 0) %}
+    {% if service.volumes | default([]) | length > 0 %}
 
     volumes:
 {% for vol in service.volumes %}
@@ -71,13 +71,25 @@ services:
 {% endfor %}
     {% endif %}
 
+  {% set service = (stack.services | selectattr('name', 'eq', 'autoheal') | first) %}
+
   autoheal:
-    image: willfarrell/autoheal:1.2.0
-    restart: unless-stopped
+    image: {{ service.image if service.image is defined else "willfarrell/autoheal:1.2.0" }}
+    restart: {{ service.restart }}
+    {% if service.environment is defined %}
+
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal
+{% for env in service.environment %}
+      - {{ env.key }}={{ env.value }}
+{% endfor %}
+    {% endif %}
+    {% if service.volumes | default([]) | length > 0 %}
+
     volumes:
-      - {{ docker_sock_path | default('/run/user/' ~ ansible_user_uid ~ '/docker.sock' if (ansible_user_uid | int) > 0 else '/var/run/docker.sock') }}:/var/run/docker.sock
+{% for vol in service.volumes %}
+    - {{ vol.host_path if vol.host_path is defined else vol.name }}:{{ vol.container_path }}
+{% endfor %}
+    {% endif %}
 
 volumes:
   {{ caddy_vols | indent(width=2, first=True ) }}
