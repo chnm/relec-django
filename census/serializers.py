@@ -107,6 +107,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
                 "city_name": pp.name if pp else None,
                 "map_name": pp.name if pp else None,
                 "place_id": pp.place_id if pp else None,
+                "county_ahcb": county.ahcb_id if county else None,
                 "county_name": county.name if county else None,
                 "state_name": county.state.code if county and county.state else None,
                 "address": obj.address,
