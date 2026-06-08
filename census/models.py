@@ -225,8 +225,15 @@ class CensusSchedule(models.Model):
     ai_transcription = models.JSONField(
         null=True,
         blank=True,
-        verbose_name="AI Transcription",
+        verbose_name="AI transcription",
         help_text="Raw JSON response from agentic transcription of the census schedule image",
+    )
+
+    human_transcription = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Original human transcription",
+        help_text="The raw JSON response from the human transcribers of the census schedule image, available for comparison against AI transcriptions.",
     )
 
     # Pastor count (form field 26)
