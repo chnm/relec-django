@@ -51,17 +51,9 @@ Setup for new deployments:
 
 ---
 
-## Daphne/ASGI Async Compatibility
+## Django Debug Toolbar
 
-### Issue
-Django 5.1 running via Daphne in async (ASGI) mode causes `SynchronousOnlyOperation` errors with django-debug-toolbar.
-
-### Solution
-**Disabled django-debug-toolbar:**
-- Commented out in `config/settings.py`: `INSTALLED_APPS += ["debug_toolbar"]` and the middleware line
-- `config/urls.py` conditionally includes toolbar only if it's in `INSTALLED_APPS`
-
-**To re-enable later:** Wait for django-debug-toolbar to release Daphne/ASGI-compatible version, then uncomment the lines in `settings.py`.
+Enabled conditionally when `DEBUG=True` in `config/settings.py`. The toolbar and its middleware are only added to `INSTALLED_APPS` and `MIDDLEWARE` in debug mode. URLs are registered at `__debug__/` in `config/urls.py`, also gated on `DEBUG`.
 
 ---
 

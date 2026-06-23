@@ -178,57 +178,60 @@
             text-decoration: underline;
         }
 
-        .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.85);
+        #reset-filters {
+            background-color: #0060b1;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+        }
+
+        #reset-filters:hover {
+            background-color: #004a8f;
+        }
+
+        .loading {
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
-            font-size: 1rem;
-            color: #4b5563;
-            border-radius: 8px;
-        }
-        .loading-overlay.hidden {
-            display: none;
-        }
-        .loading-spinner {
-            width: 36px;
-            height: 36px;
-            border: 3px solid #e5e7eb;
-            border-top-color: #0060b1;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-bottom: 0.75rem;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .no-data-message {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 999;
-            background: rgba(255, 255, 255, 0.85);
-            border-radius: 8px;
+            height: 600px;
+            font-size: 1.125rem;
             color: #6b7280;
         }
-        .no-data-message.hidden {
-            display: none;
+
+    /* Legend styling */
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            line-height: 1.5;
         }
-        .map-container {
-            position: relative;
+
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .legend-circle {
+            border-radius: 50%;
+            background-color: #F2AC29;
+            border: 1px solid #000;
+            margin-right: 10px;
+            flex-shrink: 0;
         }
 
         @media (max-width: 768px) {
@@ -294,6 +297,10 @@
             </div>
         </div>
 
+        <div style="margin-top: 1rem;">
+            <button id="reset-filters">Reset Filters</button>
+        </div>
+
     <!-- Map Title -->
         <h3 class="graphic-title">
             Map of <span class="denomination-title" id="title-denomination">denominations</span>
@@ -302,19 +309,7 @@
         </h3>
 
     <!-- Map -->
-        <div class="map-container">
-            <div id="loading-overlay" class="loading-overlay">
-                <div class="loading-spinner"></div>
-                <span>Loading map data...</span>
-            </div>
-            <div id="no-data-message" class="no-data-message hidden">
-                <svg class="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 20a8 8 0 100-16 8 8 0 000 16z"/>
-                </svg>
-                <span>No data found for this selection.</span>
-            </div>
-            <div id="map" style="height: 600px;"></div>
-        </div>
+        <div id="map" class="loading">Loading map data...</div>
 
     <!-- Content -->
         <div class="viz-content">
@@ -327,7 +322,7 @@
             <p>Some large denominations, such as the Protestant Episcopal Church, had a presence across urban areas in the United States throughout this period. Other denominations, such as the Southern Baptists, were largely confined to a single region. Nonetheless, this map demonstrates that even denominations often thought of as regionally specific had a significant presence in many other places. The Church of Jesus Christ of Latter-day Saints, for example, was concentrated in Salt Lake City, Utah, but had at least one congregation in dozens of other cities throughout the entire United States. There are many other such observations for scholars to make from the cities-level data we have transcribed and made available here.</p>
 
             <h3>Suggested citation</h3>
-            <p>Jason Heppler and Lincoln Mullen, "Urban American Congregations," in <em>American Religious Ecologies</em>, Roy Rosenzweig Center for History and New Media, 2022, https://religiousecologies.org/census/viz/urban-congregations/.</p>
+            <p>Jason Heppler and Lincoln Mullen, "Urban American Congregations," in <em>American Religious Ecologies</em>, Roy Rosenzweig Center for History and New Media, 2022, https://religiousecologies.org/visualizations/cities-map/.</p>
             <p>DOI: <a href="https://doi.org/10.31835/relec.citiesmap" target="_blank" rel="noopener">https://doi.org/10.31835/relec.citiesmap</a></p>
         </div>
 
@@ -366,6 +361,51 @@
         let denominations = [];
         let families = [];
 
+// Add legend control
+        let legend = L.control({ position: 'bottomright' });
+
+        legend.onAdd = function(map) {
+            let div = L.DomUtil.create('div', 'legend');
+            div.id = 'map-legend';
+            return div;
+        };
+
+        legend.addTo(map);
+
+// Function to update legend based on current metric and data
+        function updateLegend(metric, maxValue) {
+            const legendDiv = document.getElementById('map-legend');
+
+    // Calculate representative sizes
+            let sizes;
+            if (metric === 'Congregations') {
+                sizes = [
+                    { value: Math.ceil(maxValue), label: maxValue.toLocaleString(), radius: Math.sqrt(1) * 15 + 3 },
+                    { value: Math.ceil(maxValue * 0.5), label: Math.ceil(maxValue * 0.5).toLocaleString(), radius: Math.sqrt(0.5) * 15 + 3 },
+                    { value: Math.ceil(maxValue * 0.1), label: Math.ceil(maxValue * 0.1).toLocaleString(), radius: Math.sqrt(0.1) * 15 + 3 }
+                ];
+            } else {
+                sizes = [
+                    { value: Math.ceil(maxValue), label: maxValue.toLocaleString(), radius: Math.sqrt(1) * 25 + 2 },
+                    { value: Math.ceil(maxValue * 0.5), label: Math.ceil(maxValue * 0.5).toLocaleString(), radius: Math.sqrt(0.5) * 25 + 2 },
+                    { value: Math.ceil(maxValue * 0.1), label: Math.ceil(maxValue * 0.1).toLocaleString(), radius: Math.sqrt(0.1) * 25 + 2 }
+                ];
+            }
+
+            let html = `<h4>${metric}</h4>`;
+            sizes.forEach(size => {
+                const diameter = size.radius * 2;
+                html += `
+            <div class="legend-item">
+                <div class="legend-circle" style="width: ${diameter}px; height: ${diameter}px;"></div>
+                <span>${size.label}</span>
+            </div>
+        `;
+            });
+
+            legendDiv.innerHTML = html;
+        }
+
 // URL state management
         function updateURL(year, denomination, family, countSelection) {
             const url = new URL(window.location);
@@ -387,16 +427,14 @@
         }
 
 // Load data
-        const DATA_API_BASE = 'https://data.chnm.org/relcensus';
-
         async function loadData() {
             try {
-        // Load families from our local API
+        // Load families
                 const familiesResponse = await fetch('/census/api/religious-bodies/denomination_families/');
                 const familiesData = await familiesResponse.json();
                 families = familiesData.relec_families || [];
 
-        // Load denominations from our local API
+        // Load denominations
                 const denomsResponse = await fetch('/census/api/denominations/');
                 let denomsData = await denomsResponse.json();
                 denominations = denomsData.results || denomsData;
@@ -415,14 +453,13 @@
                 populateDenominationDropdown(initialState.family);
                 document.getElementById('denomination-select').value = initialState.denomination;
 
-        // Render map
+        // Render map (will fetch data for initial family)
                 await updateMap();
 
             } catch (error) {
                 console.error('Error loading data:', error);
-                document.getElementById('loading-overlay').classList.add('hidden');
-                document.getElementById('no-data-message').classList.remove('hidden');
-                document.getElementById('no-data-message').querySelector('span').textContent = 'Error loading data. Please try again.';
+                document.getElementById('map').innerHTML =
+                    '<div class="loading" style="color: #dc2626;">Error loading data. Please check the console.</div>';
             }
         }
 
@@ -481,38 +518,41 @@
             updateURL(year, selectedDenom, selectedFamily, metric);
 
     // Show loading indicator
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            document.getElementById('no-data-message').classList.add('hidden');
+            document.getElementById('map').classList.add('loading');
 
             try {
-        // Build URL for the old data API
-                let apiUrl = `${DATA_API_BASE}/city-membership?year=${year}`;
+        // Fetch from consolidated religious-bodies endpoint
+                let apiUrl = `/census/api/religious-bodies/?page_size=5000`;
 
                 if (selectedDenom !== 'All denominations') {
-                    apiUrl += `&denomination=${encodeURIComponent(selectedDenom)}`;
+                    apiUrl += `&search=${encodeURIComponent(selectedDenom)}`;
                 } else if (selectedFamily) {
-                    apiUrl += `&denominationFamily=${encodeURIComponent(selectedFamily)}`;
+                    apiUrl += `&family_relec=${encodeURIComponent(selectedFamily)}`;
                 }
 
-        // Fetch city-level data
+        // Fetch filtered data from API
                 const response = await fetch(apiUrl);
-                const results = await response.json();
+                let rawData = await response.json();
+                const results = rawData.results || rawData;
 
-                allCityData = results.map(d => ({
-                    city: d.city,
-                    state: d.state,
-                    lat: d.lat,
-                    lon: d.lon,
-                    congregations: d.churches || 0,
-                    total_members: d.members || 0,
-                    denominations: d.denominations || 0,
-                    population_1926: d.population_1926 || 0,
-                }));
+        // Transform nested response to flat congregation records
+                allCityData = results.map(b => {
+                    const loc = b.location_details || {};
+                    const denom = b.denomination_details || {};
+                    const mem = b.membership_details || {};
+                    return {
+                        id: b.id, name: b.name,
+                        lat: loc.lat, lon: loc.lon,
+                        city: loc.city_name, county: loc.county_name, state: loc.state_name,
+                        denomination: denom.name, family_census: denom.family_census, family_relec: denom.family_relec,
+                        congregations: 1,
+                        total_members: mem.total_members || 0,
+                    };
+                });
 
-                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('map').classList.remove('loading');
 
                 if (allCityData.length === 0) {
-                    document.getElementById('no-data-message').classList.remove('hidden');
                     return;
                 }
 
@@ -522,16 +562,33 @@
                 );
                 const maxValue = Math.max(...values, 1);
 
+        // Sort cities by value (descending) so larger circles render first (bottom layer)
+        // This ensures smaller circles appear on top and are always clickable
+                const sortedCities = [...allCityData].sort((a, b) => {
+                    const valueA = metric === 'Members' ? a.total_members : a.congregations;
+                    const valueB = metric === 'Members' ? b.total_members : b.congregations;
+                    return valueB - valueA;  // Descending order
+                });
+
         // Add markers - use yellow (#F2AC29) like original
-                allCityData.forEach(city => {
+                sortedCities.forEach(city => {
                     if (!city.lat || !city.lon) return;
 
                     const value = metric === 'Members' ? city.total_members : city.congregations;
 
-            // Adjusted scaling: smaller max size and better scaling for small values
-            // Use square root for proportional scaling, but with smaller multiplier
+            // Different scaling for congregations vs members
+            // Congregations: smaller range, more visible differences
+            // Members: larger range to show magnitude differences
                     const normalizedValue = value / maxValue;
-                    const radius = Math.sqrt(normalizedValue) * 20 + 2;  // Reduced from 35 to 20, min from 3 to 2
+                    let radius;
+
+                    if (metric === 'Congregations') {
+                // Congregations scale: tighter range for better visibility
+                        radius = Math.sqrt(normalizedValue) * 15 + 3;
+                    } else {
+                // Members scale: wider range to show larger differences
+                        radius = Math.sqrt(normalizedValue) * 25 + 2;
+                    }
 
                     const circle = L.circleMarker([city.lat, city.lon], {
                         radius: radius,
@@ -562,11 +619,13 @@
 
                     circle.addTo(markersLayer);
                 });
+
+        // Update legend with current metric and max value
+                updateLegend(metric, maxValue);
+
             } catch (error) {
                 console.error('Error fetching city data:', error);
-                document.getElementById('loading-overlay').classList.add('hidden');
-                document.getElementById('no-data-message').classList.remove('hidden');
-                document.getElementById('no-data-message').querySelector('span').textContent = 'Error loading data. Please try again.';
+                document.getElementById('map').classList.remove('loading');
             }
         }
 
@@ -582,6 +641,27 @@
             document.getElementById('denomination-select').addEventListener('change', updateMap);
             document.getElementById('count-select').addEventListener('change', updateMap);
             document.getElementById('year-select').addEventListener('change', updateMap);
+
+            // Reset filters button
+            document.getElementById('reset-filters').addEventListener('click', () => {
+                // Reset all dropdowns to default values
+                document.getElementById('year-select').value = '1926';
+                document.getElementById('count-select').value = 'Congregations';
+
+                // Reset family to first option (sorted alphabetically)
+                const familySelect = document.getElementById('family-select');
+                if (familySelect.options.length > 0) {
+                    familySelect.selectedIndex = 0;
+                }
+
+                // Reset denomination to "All denominations" and repopulate based on family
+                const selectedFamily = familySelect.value;
+                populateDenominationDropdown(selectedFamily);
+                document.getElementById('denomination-select').value = 'All denominations';
+
+                // Update the map with reset filters
+                updateMap();
+            });
 
     // Load data on page load
             loadData();

@@ -225,8 +225,73 @@ class CensusSchedule(models.Model):
     ai_transcription = models.JSONField(
         null=True,
         blank=True,
-        verbose_name="AI Transcription",
+        verbose_name="AI transcription",
         help_text="Raw JSON response from agentic transcription of the census schedule image",
+    )
+
+    human_transcription = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Original human transcription",
+        help_text="The raw JSON response from the human transcribers of the census schedule image, available for comparison against AI transcriptions.",
+    )
+
+    # Pastor count (form field 26)
+    num_assistant_pastors = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Number of assistant pastors",
+        help_text="Number of ordained ministers employed as assistant pastors (field 26)",
+    )
+
+    # Respondent (person who signed the bottom of the form)
+    respondent_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Signature of person furnishing information",
+    )
+    respondent_title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Official title of person furnishing information (e.g., Pastor, Clerk)",
+    )
+    respondent_po_address = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="P.O. address of person furnishing information",
+    )
+    respondent_date_signed = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text="Date signed (YYYY-MM-DD or YYYY if partial)",
+    )
+
+    # Census Bureau processing metadata
+    date_received = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the Census Bureau received this schedule (from receipt stamp)",
+    )
+    district_stamp = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Census Bureau district stamp (e.g., 'Denver, D')",
+    )
+    denomination_code_stamp = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Full denomination code stamp in cursive (e.g., '0-1-3')",
+    )
+
+    # Marginalia and transcriber notes
+    marginalia = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Array of {page_location, marginalia_transcription} for handwritten marks not captured elsewhere",
+    )
+    ai_notes = models.TextField(
+        blank=True,
+        help_text="Free-form observations from the AI transcriber about anomalies, illegibility, or decisions",
     )
 
     # Record keeping

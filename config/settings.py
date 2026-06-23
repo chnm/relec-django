@@ -86,9 +86,12 @@ INSTALLED_APPS = [
     "location",
     "pages",
     "analytics",
+    "datalayers",
+    "visualizations",
 ]
 
 MIDDLEWARE = [
+    "religious_ecologies.middleware.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -106,13 +109,18 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 # ------------------------------------------------------------------------------
 # django-debug-toolbar
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#prerequisites
-# Temporarily disabled due to Django 6.0 async compatibility issues
-# INSTALLED_APPS += ["debug_toolbar"]  # noqa: F405
-# https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#middleware
-# MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]  # noqa: F405
+if DEBUG:
+    INSTALLED_APPS += ["debug_toolbar"]
+    # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#middleware
+    MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 # https://django-debug-toolbar.readthedocs.io/en/latest/configuration.html#debug-toolbar-config
 DEBUG_TOOLBAR_CONFIG = {
-    "DISABLE_PANELS": ["debug_toolbar.panels.redirects.RedirectsPanel"],
+    "DISABLE_PANELS": [
+        "debug_toolbar.panels.redirects.RedirectsPanel",
+        # Templates panel triggers SynchronousOnlyOperation under Daphne/ASGI
+        # when it tries to repr() querysets in template context
+        "debug_toolbar.panels.templates.TemplatesPanel",
+    ],
     "SHOW_TEMPLATE_CONTEXT": True,
 }
 
@@ -150,6 +158,8 @@ DATABASES = {
         "NAME": env("DB_NAME", default="religious_ecologies"),
         "USER": env("DB_USER", default="religious_ecologies"),
         "PASSWORD": env("DB_PASS", default="password"),
+        "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECK": True,
     }
 }
 
@@ -370,7 +380,12 @@ UNFOLD = {
                     {
                         "title": "Visualizations",
                         "icon": "article",
-                        "link": lambda request: "/admin/pages/visualization/",
+                        "link": lambda request: "/admin/visualizations/visualization/",
+                    },
+                    {
+                        "title": "Data Layer Points",
+                        "icon": "layers",
+                        "link": lambda request: "/admin/datalayers/datalayer/",
                     },
                 ],
             },

@@ -39,8 +39,9 @@ urlpatterns = [
         name="django.contrib.sitemaps.views.sitemap",
     ),
     path("census/", include("census.urls")),
+    path("visualizations/", include("visualizations.urls")),
+    path("datalayers/", include("datalayers.urls")),
     path("analytics/", include("analytics.urls")),
-    path("", include("pages.urls")),
     # pages - keep this last so it doesn't interfere with other URL patterns
     path("", include("pages.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
@@ -48,3 +49,6 @@ urlpatterns = [
 if settings.DEBUG:
     # Serve static files in development
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+    # django-debug-toolbar
+    urlpatterns = [path("__debug__/", include("debug_toolbar.urls"))] + urlpatterns
