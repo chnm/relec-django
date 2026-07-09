@@ -6,7 +6,8 @@ import yaml
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 
-from pages.models import BlogPost, Visualization
+from pages.models import BlogPost
+from visualizations.models import Visualization
 
 
 class Command(BaseCommand):
