@@ -319,6 +319,26 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/",
                     },
                     {
+                        "title": "Review Queue",
+                        "icon": "rate_review",
+                        "link": lambda request: "/admin/census/censusschedule/?workflow_view=review_queue",
+                    },
+                    {
+                        "title": "Imported - Needs Review",
+                        "icon": "fact_check",
+                        "link": lambda request: "/admin/census/censusschedule/?workflow_view=needs_review",
+                    },
+                    {
+                        "title": "Student Work - Ready",
+                        "icon": "assignment_turned_in",
+                        "link": lambda request: "/admin/census/censusschedule/?workflow_view=completed",
+                    },
+                    {
+                        "title": "Assigned to Me",
+                        "icon": "assignment_ind",
+                        "link": lambda request: "/admin/census/censusschedule/?workflow_view=assigned_to_me",
+                    },
+                    {
                         "title": "Religious Bodies",
                         "icon": "account_balance",
                         "link": lambda request: "/admin/census/religiousbody/",
@@ -337,6 +357,11 @@ UNFOLD = {
                         "title": "Clergy Information",
                         "icon": "person",
                         "link": lambda request: "/admin/census/clergy/",
+                    },
+                    {
+                        "title": "Missing Location",
+                        "icon": "wrong_location",
+                        "link": lambda request: "/admin/census/censusschedule/?schedule_location_status=missing_location",
                     },
                 ],
             },
