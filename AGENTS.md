@@ -65,13 +65,12 @@ Python 3.12+ Django application with PostgreSQL, served via Daphne ASGI server. 
 ### Backend
 
 - **Runtime**: Python 3.12+
-- **Framework**: Django 5.1.4 (async via Daphne 4.1.2+)
+- **Framework**: Django 6.0.5 (async via Daphne 4.1.2+)
 - **Key libraries**:
   - `djangorestframework` — REST API
   - `django-filter` — Queryset filtering
   - `django-unfold` — Admin UI customization
   - `django-simple-history` — Model change tracking (all major models have `HistoricalRecords`)
-  - `django-allauth` — Authentication with GitHub OAuth support
   - `django-import-export` — CSV/Excel import/export in admin
   - `django-tables2` — Table rendering
   - `django-cors-headers` — CORS support
@@ -141,8 +140,6 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 
 Optional environment variables:
 ```
-GITHUB_CLIENT_ID=...        # GitHub OAuth
-GITHUB_SECRET=...
 OBJ_STORAGE=s3              # Enable S3 media storage
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
@@ -174,7 +171,7 @@ uv run python manage.py runserver
 Access at `http://localhost:8000`. Admin at `http://localhost:8000/admin/`.
 
 ### Common Setup Issues
-- **`SynchronousOnlyOperation`**: Django 6.0 ASGI mode; django-debug-toolbar is disabled — don't re-enable it until it supports async
+- **`SynchronousOnlyOperation`**: The debug toolbar's template panel is disabled under Daphne/ASGI because it can evaluate querysets synchronously
 - **Missing static files**: Run `uv run python manage.py collectstatic`
 - **Thumbnail errors**: Ensure `mediafiles/` directory exists and is writable
 
@@ -291,8 +288,8 @@ graph TD
     Storage -->|Dev| LocalFS[Local Filesystem\nmediafiles/]
     Storage -->|Prod| S3[AWS S3\nOptional]
 
-    DjangoAdmin -->|Auth| Allauth[django-allauth\nDjango Auth + GitHub OAuth]
-    Allauth --> PostgreSQL
+    DjangoAdmin -->|Auth| DjangoAuth[Django session authentication]
+    DjangoAuth --> PostgreSQL
 ```
 
 ### Database Schema Diagram
@@ -478,9 +475,8 @@ GET /census/api/denominations/<id>/
 
 ### User Auth
 
-- **Strategy**: Django session-based authentication + `django-allauth`
-- **Providers**: Username/password (default Django) and GitHub OAuth
-- **Login URL**: `/accounts/login/`
+- **Strategy**: Django session-based authentication
+- **Providers**: Username/password via Django auth
 - **Admin login**: `/admin/login/` (redirects to `/admin/`)
 - **Sessions**: Database-backed (default Django session engine)
 - **Password hashing**: Django default (PBKDF2)
@@ -534,7 +530,7 @@ Best practices:
 
 ### Debugging & Logging
 
-- **django-debug-toolbar**: Disabled (Django 6.0 async incompatibility). Do not re-enable until the toolbar releases Django 6.0 support.
+- **django-debug-toolbar**: Enabled when `DEBUG=True`; the template panel is disabled for ASGI compatibility.
 - **Django shell**: `uv run python manage.py shell` or `make shell`
 - **Logging**: Django's default logging to console; check `LOGGING` in `settings.py`
 - **Log levels**: `DEBUG` in development, `INFO`/`WARNING` in production
@@ -654,7 +650,7 @@ docker-compose up
 
 **Critical Context:**
 - `ReligiousBody.location` FK **does not exist** — it was removed in migration 0016. Never add it back.
-- `django-debug-toolbar` is disabled intentionally — do not re-enable or add debug toolbar middleware
+- The debug toolbar template panel is disabled intentionally for ASGI compatibility
 - The `Location` model in `location/models.py` is deprecated — use `State`, `County`, `PopulatedPlace`
 - Observable Plot visualizations use wrapper scripts with hardcoded div IDs; do not reintroduce the `@params` import system
 
@@ -672,7 +668,7 @@ docker-compose up
 **What to Avoid:**
 - Do not use synchronous ORM operations in async views (use `sync_to_async` or `aaync` ORM methods)
 - Do not add `ReligiousBody.location` or any reference to the deprecated flat `Location` model
-- Do not install `django-debug-toolbar` or add it to `INSTALLED_APPS`
+- Do not re-enable the debug toolbar template panel without verifying ASGI compatibility
 - Do not create new standalone JavaScript frameworks/bundlers — the project intentionally avoids bundlers
 - Do not add rate limiting without first checking if it affects the public-read API requirements
 - Do not bypass `robots.txt` AI crawler blocks — they are intentional to prevent ASGI timeouts from aggressive crawlers
@@ -687,9 +683,8 @@ docker-compose up
 - Forgetting `select_related` on `census_record__populated_place__county__state` causes many N+1 queries in list views
 - The `census_record` FK on `ReligiousBody` is `CASCADE`; deleting a `CensusSchedule` deletes all its `ReligiousBody`, `Membership`, and `Clergy` records
 - `PopulatedPlace.place_id` is nullable (not all places have Apiary IDs); use `pk` for URL routing and internal references
-- GitHub OAuth requires `GITHUB_CLIENT_ID` and `GITHUB_SECRET` env vars; without them, social login is unavailable but regular auth still works
 
 ---
 
-*Last Updated: 2026-04-16*
+*Last Updated: 2026-07-09*
 *This document is maintained for AI agent context and onboarding.*
