@@ -9,8 +9,8 @@ const API_BASE = window.RELEC_API_BASE || "/census/api/";
 // Load the data from local Django endpoints
 const urls = [
   `${API_BASE}denominations/`,
-  `${API_BASE}religious-bodies/?search=Protestant+Episcopal+Church&page_size=5000`,
-  `${API_BASE}religious-bodies/?page_size=5000`,
+  `${API_BASE}religious-bodies/?search=Protestant+Episcopal+Church&page_size=5000&view=map`,
+  `${API_BASE}religious-bodies/?page_size=5000&view=map`,
   `${API_BASE}religious-bodies/denomination_families/`,
   "https://data.chnm.org/ne/globe?location=North+America",  // Keep external (Natural Earth data)
   "https://data.chnm.org/ahcb/states/1926-07-04/",  // Keep external (AHCB state boundaries)

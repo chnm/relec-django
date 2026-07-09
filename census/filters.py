@@ -1,4 +1,5 @@
 import django_filters
+from django.db.models import Q
 
 from .models import ReligiousBody
 
@@ -25,27 +26,28 @@ class ReligiousBodyFilter(django_filters.FilterSet):
 
     def filter_family_census(self, queryset, name, value):
         """Filter by family_census via direct denomination or schedule denomination."""
-        direct_filter = queryset.filter(denomination__family_census=value)
-        if direct_filter.exists():
-            return direct_filter
         return queryset.filter(
-            census_record__schedule_denomination__family_census=value
-        )
+            Q(denomination__family_census=value)
+            | Q(census_record__schedule_denomination__family_census=value)
+        ).distinct()
 
     def filter_family_relec(self, queryset, name, value):
         """Filter by family_relec via direct denomination or schedule denomination."""
-        direct_filter = queryset.filter(denomination__family_relec=value)
-        if direct_filter.exists():
-            return direct_filter
         return queryset.filter(
-            census_record__schedule_denomination__family_relec=value
-        )
+            Q(denomination__family_relec=value)
+            | Q(census_record__schedule_denomination__family_relec=value)
+        ).distinct()
 
     def filter_exclude_families(self, queryset, name, value):
         """Exclude specific denomination families (comma-separated)."""
         families = [f.strip() for f in value.split(",") if f.strip()]
         if families:
-            queryset = queryset.exclude(denomination__family_census__in=families)
+            queryset = queryset.exclude(
+                Q(denomination__family_census__in=families)
+                | Q(
+                    census_record__schedule_denomination__family_census__in=families
+                )
+            )
         return queryset
 
     def filter_urban_rural(self, queryset, name, value):

@@ -532,9 +532,14 @@
                                 <td>Search name, address, or census code</td>
                             </tr>
                             <tr>
-                                <td><span class="param-name">limit</span></td>
+                                <td><span class="param-name">page_size</span></td>
                                 <td><span class="param-type">integer</span></td>
-                                <td>Limit number of results per page</td>
+                                <td>Number of results per page (maximum 5,000)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">view</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Use "map" for a smaller high-volume response</td>
                             </tr>
                         </tbody>
                     </table>
@@ -608,15 +613,16 @@
 
                     <div class="example-links">
                         <h5>Examples</h5>
-                        <a href="{{ api_base_url }}religious-bodies/?limit=10" target="_blank" class="example-link">First 10 records</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?family_relec=Adventist&limit=10" target="_blank" class="example-link">Adventist congregations (RelEc family)</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?family_census=Adventist+bodies&limit=10" target="_blank" class="example-link">Adventist bodies (census family)</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?denomination=2&limit=10" target="_blank" class="example-link">Seventh-day Adventist (denomination ID)</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?search=Seventh-day&limit=10" target="_blank" class="example-link">Search "Seventh-day"</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?transcription_status=approved&limit=10" target="_blank" class="example-link">Approved records only</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?bounds=38,-78,40,-75&limit=100" target="_blank" class="example-link">Mid-Atlantic bounding box</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?urban_rural=urban&limit=10" target="_blank" class="example-link">Urban congregations</a><br>
-                        <a href="{{ api_base_url }}religious-bodies/?exclude_families=Baptist+bodies,Methodist+bodies&limit=100" target="_blank" class="example-link">Exclude Baptist and Methodist</a>
+                        <a href="{{ api_base_url }}religious-bodies/?page_size=10" target="_blank" class="example-link">First 10 records</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?family_relec=Adventist&page_size=10" target="_blank" class="example-link">Adventist congregations (RelEc family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?family_census=Adventist+bodies&page_size=10" target="_blank" class="example-link">Adventist bodies (census family)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?denomination=2&page_size=10" target="_blank" class="example-link">Seventh-day Adventist (denomination ID)</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?search=Seventh-day&page_size=10" target="_blank" class="example-link">Search "Seventh-day"</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?transcription_status=approved&page_size=10" target="_blank" class="example-link">Approved records only</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?bounds=38,-78,40,-75&page_size=100" target="_blank" class="example-link">Mid-Atlantic bounding box</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?urban_rural=urban&page_size=10" target="_blank" class="example-link">Urban congregations</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?exclude_families=Baptist+bodies,Methodist+bodies&page_size=100" target="_blank" class="example-link">Exclude Baptist and Methodist</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?page_size=5000&view=map" target="_blank" class="example-link">Lightweight map data</a>
                     </div>
                 </div>
             </div>
@@ -683,7 +689,7 @@
                     <h4 class="font-semibold mb-3">Best Practices</h4>
                     <ul class="list-disc list-inside text-content-secondary space-y-2">
                         <li><strong>Always use filters</strong> to limit results and improve response times</li>
-                        <li>Add <code>?limit=10</code> to test queries before running full requests</li>
+                        <li>Add <code>?page_size=10</code> to test queries before running full requests</li>
                         <li>Use <code>bounds</code> filter for geographic queries</li>
                         <li>Use <code>transcription_status=approved</code> for verified data only</li>
                         <li>Use <code>exclude_families</code> to remove large denomination families from results</li>

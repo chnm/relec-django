@@ -159,7 +159,7 @@
                 }
 
         // Load congregation data and transform to flat format
-                const citiesResponse = await fetch('/census/api/religious-bodies/?page_size=5000');
+                const citiesResponse = await fetch('/census/api/religious-bodies/?page_size=5000&view=map');
                 const citiesJson = await citiesResponse.json();
                 const citiesResults = citiesJson.results || citiesJson;
                 allData = citiesResults.map(b => {

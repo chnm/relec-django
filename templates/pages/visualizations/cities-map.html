@@ -522,7 +522,7 @@
 
             try {
         // Fetch from consolidated religious-bodies endpoint
-                let apiUrl = `/census/api/religious-bodies/?page_size=5000`;
+                let apiUrl = `/census/api/religious-bodies/?page_size=5000&view=map`;
 
                 if (selectedDenom !== 'All denominations') {
                     apiUrl += `&search=${encodeURIComponent(selectedDenom)}`;

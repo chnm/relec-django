@@ -39,7 +39,7 @@ def api_root(request, format=None):
                     "filters": ["family_census", "family_relec", "search"],
                 },
                 "religious_bodies": {
-                    "list": f"{base_url}religious-bodies/?limit=10",
+                    "list": f"{base_url}religious-bodies/?page_size=10",
                     "detail": f"{base_url}religious-bodies/{{id}}/",
                     "description": "Individual congregation records with location, denomination, membership, finances, pastors, and transcription status",
                     "filters": [
@@ -51,12 +51,15 @@ def api_root(request, format=None):
                         "urban_rural (string, 'urban' or 'rural')",
                         "bounds (string, 'south,west,north,east' bounding box)",
                         "search (string, name/address/census code)",
+                        "page_size (integer, maximum 5000)",
+                        "view ('map' for a reduced high-volume response)",
                     ],
                     "examples": {
-                        "by_family": f"{base_url}religious-bodies/?family_relec=Adventist&limit=5",
-                        "approved_only": f"{base_url}religious-bodies/?transcription_status=approved&limit=10",
-                        "bounding_box": f"{base_url}religious-bodies/?bounds=38,-78,40,-75&limit=100",
-                        "urban_only": f"{base_url}religious-bodies/?urban_rural=urban&limit=10",
+                        "by_family": f"{base_url}religious-bodies/?family_relec=Adventist&page_size=5",
+                        "approved_only": f"{base_url}religious-bodies/?transcription_status=approved&page_size=10",
+                        "bounding_box": f"{base_url}religious-bodies/?bounds=38,-78,40,-75&page_size=100",
+                        "urban_only": f"{base_url}religious-bodies/?urban_rural=urban&page_size=10",
+                        "map_data": f"{base_url}religious-bodies/?page_size=5000&view=map",
                     },
                     "response_notes": {
                         "denominations": "Array of denomination names matched by the current query filters, included alongside pagination metadata",
@@ -82,7 +85,7 @@ def api_root(request, format=None):
             },
             "usage_tips": [
                 "Always use filters to limit results",
-                "Add ?limit=10 to test queries before running full requests",
+                "Add ?page_size=10 to test queries before running full requests",
                 "Use bounds filter for geographic queries",
                 "Use transcription_status=approved for verified data only",
             ],

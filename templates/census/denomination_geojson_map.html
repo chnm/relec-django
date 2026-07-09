@@ -374,6 +374,7 @@
 
                 // Use high page size to get all results
                 params.set('page_size', '5000');
+                params.set('view', 'map');
 
                 const url = `/census/api/religious-bodies/?${params.toString()}`;
 

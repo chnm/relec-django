@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Denomination, Membership, ReligiousBody
+from .models import Clergy, Denomination, Membership, ReligiousBody
 
 
 class DenominationSerializer(serializers.ModelSerializer):
@@ -10,15 +10,20 @@ class DenominationSerializer(serializers.ModelSerializer):
 
 
 class MembershipSerializer(serializers.ModelSerializer):
+    total_members = serializers.IntegerField(
+        source="total_members_by_sex", read_only=True
+    )
+    total_by_age = serializers.IntegerField(source="total_members_by_age", read_only=True)
+
     class Meta:
         model = Membership
         fields = [
             "male_members",
             "female_members",
-            "total_members_by_sex",
+            "total_members",
             "members_under_13",
             "members_13_and_older",
-            "total_members_by_age",
+            "total_by_age",
             "sunday_school_num_officers_teachers",
             "sunday_school_num_scholars",
             "vbs_num_officers_teachers",
@@ -30,6 +35,19 @@ class MembershipSerializer(serializers.ModelSerializer):
             "parochial_num_secondary_teachers",
             "parochial_num_elementary_scholars",
             "parochial_num_secondary_scholars",
+        ]
+
+
+class ClergySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Clergy
+        fields = [
+            "name",
+            "is_assistant",
+            "college",
+            "theological_seminary",
+            "num_other_churches_served",
+            "serving_congregation",
         ]
 
 
@@ -116,36 +134,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         return None
 
     def get_membership_details(self, obj):
-        try:
-            # Use prefetched membership to avoid N+1 queries
-            membership = obj.membership.first() if hasattr(obj, 'membership') else None
-            if membership:
-                return {
-                    "male_members": membership.male_members,
-                    "female_members": membership.female_members,
-                    "total_members": membership.total_members_by_sex,
-                    "members_under_13": membership.members_under_13,
-                    "members_13_and_older": membership.members_13_and_older,
-                    "total_by_age": membership.total_members_by_age,
-                    "sunday_school_num_officers_teachers": membership.sunday_school_num_officers_teachers,
-                    "sunday_school_num_scholars": membership.sunday_school_num_scholars,
-                    "vbs_num_officers_teachers": membership.vbs_num_officers_teachers,
-                    "vbs_num_scholars": membership.vbs_num_scholars,
-                    "weekday_num_officers_teachers": membership.weekday_num_officers_teachers,
-                    "weekday_num_scholars": membership.weekday_num_scholars,
-                    "parochial_num_administrators": membership.parochial_num_administrators,
-                    "parochial_num_elementary_teachers": membership.parochial_num_elementary_teachers,
-                    "parochial_num_secondary_teachers": membership.parochial_num_secondary_teachers,
-                    "parochial_num_elementary_scholars": membership.parochial_num_elementary_scholars,
-                    "parochial_num_secondary_scholars": membership.parochial_num_secondary_scholars,
-                }
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error getting membership details for {obj}: {e}")
+        memberships = getattr(obj, "_api_memberships", [])
+        if not memberships:
             return None
-        return None
+        return MembershipSerializer(memberships[0]).data
 
     def get_finances(self, obj):
         return {
@@ -198,25 +190,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         }
 
     def get_pastors(self, obj):
-        try:
-            clergy_qs = obj.census_record.clergy.all().order_by("is_assistant", "pk")
-            return [
-                {
-                    "name": c.name,
-                    "is_assistant": c.is_assistant,
-                    "college": c.college,
-                    "theological_seminary": c.theological_seminary,
-                    "num_other_churches_served": c.num_other_churches_served,
-                    "serving_congregation": c.serving_congregation,
-                }
-                for c in clergy_qs
-            ] or None
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error getting pastors for {obj}: {e}")
+        clergy = getattr(obj.census_record, "_api_clergy", [])
+        if not clergy:
             return None
+        return ClergySerializer(clergy, many=True).data
 
     def get_num_assistant_pastors(self, obj):
         if obj.census_record:
@@ -257,3 +234,25 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         if obj.census_record:
             return obj.census_record.ai_notes or None
         return None
+
+
+class ReligiousBodyMapSerializer(ReligiousBodySerializer):
+    """Reduced religious-body representation for high-volume map requests."""
+
+    class Meta(ReligiousBodySerializer.Meta):
+        fields = [
+            "id",
+            "name",
+            "census_code",
+            "division",
+            "transcription_status",
+            "schedule_id",
+            "has_location",
+            "location_details",
+            "denomination_details",
+            "membership_details",
+            "num_edifices",
+            "has_pastors_residence",
+            "finances",
+            "urls",
+        ]
