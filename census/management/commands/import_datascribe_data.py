@@ -82,19 +82,11 @@ def map_workflow_status(reviewed, is_approved):
         str: Django status value
     """
     # Clean the values first
-    reviewed_clean = clean_value(reviewed)
     approved_clean = clean_value(is_approved)
 
     if approved_clean == "1":
         return "approved"
-    elif reviewed_clean == "1" and approved_clean == "0":
-        return "completed"  # reviewed but not approved
-    elif reviewed_clean == "1" and approved_clean is None:
-        return "needs_review"  # reviewed, approval status unknown
-    elif reviewed_clean == "0":
-        return "in_progress"  # explicitly marked as not reviewed
-    else:  # reviewed is None or empty
-        return "unassigned"  # no workflow status set
+    return "needs_review"
 
 
 class Command(BaseCommand):

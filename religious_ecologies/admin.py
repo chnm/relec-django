@@ -68,7 +68,10 @@ def _get_dashboard_data_sync():
     return {
         "total_records": total_records,
         "transcribed_count": transcribed_count,
-        "needs_review_count": status_counts_complete["needs_review"],
+        "needs_review_count": (
+            status_counts_complete["needs_review"]
+            + status_counts_complete["completed"]
+        ),
         "unassigned_count": status_counts_complete["unassigned"],
         "assigned_count": status_counts_complete["assigned"],
         "completion_percentage": completion_percentage,
