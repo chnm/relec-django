@@ -69,7 +69,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def by_family(self, request):
-        """Return denominations grouped by family - only those with location data"""
+        """Return denominations filtered by RelEc family and with location data."""
         family = request.query_params.get("family_relec", None)
 
         # Base filter for location data - use new location hierarchy through census_record
@@ -143,8 +143,11 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         - exclude_families: Comma-separated census families to exclude
         - urban_rural: Filter by 'urban' or 'rural'
         - bounds: Geographic bounding box as 'south,west,north,east'
+        - has_location: Filter by the presence of a populated place
         - search: Search by name, address, or census code
+        - page: Page number (default page size 100)
         - page_size: Number of records per page (maximum 5000)
+        - ordering: Order by name or census_record__schedule_id
         - view: Use "map" for a reduced high-volume response
     """
 

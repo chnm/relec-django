@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Clergy, Denomination, Membership, ReligiousBody
+from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
 
 
 class DenominationSerializer(serializers.ModelSerializer):
@@ -51,14 +51,36 @@ class ClergySerializer(serializers.ModelSerializer):
         ]
 
 
+class TranscriptionSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="transcription_status", read_only=True)
+    ai = serializers.JSONField(source="ai_transcription", read_only=True)
+    human = serializers.JSONField(source="human_transcription", read_only=True)
+    ai_notes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CensusSchedule
+        fields = ["status", "ai", "human", "ai_notes"]
+
+    def get_ai_notes(self, obj):
+        return obj.ai_notes or None
+
+
+class TranscriptionMapSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="transcription_status", read_only=True)
+
+    class Meta:
+        model = CensusSchedule
+        fields = ["status"]
+
+
 class ReligiousBodySerializer(serializers.ModelSerializer):
+    transcription = TranscriptionSerializer(source="census_record", read_only=True)
     location_details = serializers.SerializerMethodField()
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
     pastors = serializers.SerializerMethodField()
     finances = serializers.SerializerMethodField()
     urls = serializers.SerializerMethodField()
-    transcription_status = serializers.SerializerMethodField()
     schedule_id = serializers.SerializerMethodField()
     has_location = serializers.SerializerMethodField()
 
@@ -66,7 +88,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     respondent = serializers.SerializerMethodField()
     processing = serializers.SerializerMethodField()
     marginalia = serializers.SerializerMethodField()
-    ai_notes = serializers.SerializerMethodField()
 
     class Meta:
         model = ReligiousBody
@@ -75,8 +96,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "name",
             "census_code",
             "division",
-            "transcription_status",
             "schedule_id",
+            "transcription",
             "has_location",
             "location_details",
             "denomination_details",
@@ -89,7 +110,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "respondent",
             "processing",
             "marginalia",
-            "ai_notes",
             "urls",
         ]
 
@@ -104,11 +124,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             obj.census_record is not None
             and obj.census_record.populated_place is not None
         )
-
-    def get_transcription_status(self, obj):
-        if obj.census_record:
-            return obj.census_record.transcription_status
-        return None
 
     def get_schedule_id(self, obj):
         if obj.census_record:
@@ -230,14 +245,11 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             return obj.census_record.marginalia or None
         return None
 
-    def get_ai_notes(self, obj):
-        if obj.census_record:
-            return obj.census_record.ai_notes or None
-        return None
-
 
 class ReligiousBodyMapSerializer(ReligiousBodySerializer):
     """Reduced religious-body representation for high-volume map requests."""
+
+    transcription = TranscriptionMapSerializer(source="census_record", read_only=True)
 
     class Meta(ReligiousBodySerializer.Meta):
         fields = [
@@ -245,8 +257,8 @@ class ReligiousBodyMapSerializer(ReligiousBodySerializer):
             "name",
             "census_code",
             "division",
-            "transcription_status",
             "schedule_id",
+            "transcription",
             "has_location",
             "location_details",
             "denomination_details",

@@ -321,7 +321,7 @@
                         <code>{{ api_base_url }}</code>
                     </div>
                     <p class="endpoint-description">
-                        Responses are returned in JSON format. For large datasets, always use filters to limit results.
+                        Responses are returned in JSON format. List endpoints use page-number pagination with 100 results per page by default. For large datasets, always use filters to limit results.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">API Root</h4>
@@ -354,6 +354,7 @@
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Returns a paginated list of all denominations with their family classifications.
+                        Retrieve one denomination with <code>GET /census/api/denominations/{id}/</code>.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -380,6 +381,11 @@
                                 <td><span class="param-name">search</span></td>
                                 <td><span class="param-type">string</span></td>
                                 <td>Search denomination names</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">page</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Page number (100 results per page)</td>
                             </tr>
                         </tbody>
                     </table>
@@ -412,7 +418,10 @@
                                 {"name": "Baptist bodies", "count": 24},
                                 {"name": "Methodist bodies", "count": 18}
                                 ],
-                                "relec_families": ["Baptist", "Methodist", "Catholic"]
+                                "relec_families": [
+                                {"name": "Baptist", "count": 24},
+                                {"name": "Methodist", "count": 18}
+                                ]
                                 }</code>
                         </div>
                     </div>
@@ -432,7 +441,7 @@
                 </div>
                 <div class="endpoint-body">
                     <p class="endpoint-description">
-                        Returns denominations grouped by family. Only includes denominations with location data.
+                        Returns a flat array of denominations, optionally filtered by Religious Ecologies family. Only denominations associated with congregations that have populated-place data are included.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -446,17 +455,17 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><span class="param-name">family_census</span></td>
+                                <td><span class="param-name">family_relec</span></td>
                                 <td><span class="param-type">string</span></td>
-                                <td>Filter to specific census family</td>
+                                <td>Filter to a specific Religious Ecologies family</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <div class="example-links">
                         <h5>Examples</h5>
-                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Baptist+bodies" target="_blank" class="example-link">Baptist bodies</a><br>
-                        <a href="{{ api_base_url }}denominations/by_family/?family_census=Methodist+bodies" target="_blank" class="example-link">Methodist bodies</a>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_relec=Baptist" target="_blank" class="example-link">Baptist denominations</a><br>
+                        <a href="{{ api_base_url }}denominations/by_family/?family_relec=Methodist" target="_blank" class="example-link">Methodist denominations</a>
                     </div>
                 </div>
             </div>
@@ -478,7 +487,7 @@
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Returns detailed congregation records including location, denomination, membership,
-                        finances, pastors, transcription status, and schedule IDs. Use filters to limit results.
+                        finances, pastors, transcription status, and schedule IDs. Family filters match either the congregation's denomination or its schedule-level denomination. Retrieve one congregation with <code>GET /census/api/religious-bodies/{id}/</code>.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -527,14 +536,29 @@
                                 <td>Geographic bounding box as "south,west,north,east"</td>
                             </tr>
                             <tr>
+                                <td><span class="param-name">has_location</span></td>
+                                <td><span class="param-type">boolean</span></td>
+                                <td>Filter by the presence of a populated place (<code>true</code> or <code>false</code>)</td>
+                            </tr>
+                            <tr>
                                 <td><span class="param-name">search</span></td>
                                 <td><span class="param-type">string</span></td>
                                 <td>Search name, address, or census code</td>
                             </tr>
                             <tr>
+                                <td><span class="param-name">page</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Page number (100 results per page by default)</td>
+                            </tr>
+                            <tr>
                                 <td><span class="param-name">page_size</span></td>
                                 <td><span class="param-type">integer</span></td>
                                 <td>Number of results per page (maximum 5,000)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">ordering</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Order by <code>name</code> or <code>census_record__schedule_id</code>; prefix with <code>-</code> for descending order</td>
                             </tr>
                             <tr>
                                 <td><span class="param-name">view</span></td>
@@ -547,16 +571,21 @@
                     <h4 class="font-semibold mt-4 mb-2">Response Structure</h4>
                     <p class="text-content-secondary text-sm mb-2">The response envelope includes <code>count</code>, <code>next</code>, <code>previous</code> (pagination), <code>denominations</code> (array of denomination names matched by your query), and <code>results</code> (array of records).</p>
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
-                        <li><code>transcription_status</code> - Status of the census record transcription</li>
-                        <li><code>schedule_id</code> - Census schedule identifier</li>
-                        <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>county_name</code>, <code>state_name</code>, <code>place_id</code>, <code>address</code>, <code>urban_rural_code</code></li>
-                        <li><code>denomination_details</code> - Nested object with denomination info and family classifications</li>
+                        <li><code>transcription</code> - Nested object containing <code>status</code>, raw <code>ai</code> JSON, frozen <code>human</code> JSON, and <code>ai_notes</code></li>
+                        <li><code>schedule_id</code> - Census schedule identifier (string)</li>
+                        <li><code>has_location</code> - Whether the schedule has a populated place</li>
+                        <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>map_name</code>, <code>place_id</code>, <code>county_ahcb</code>, <code>county_name</code>, <code>state_name</code>, <code>address</code>, and <code>urban_rural_code</code></li>
+                        <li><code>denomination_details</code> - Nested object with <code>id</code>, <code>denomination_id</code>, name, and family classifications</li>
                         <li><code>membership_details</code> - Full membership breakdown: sex/age demographics, Sunday school, VBS, weekday school, and parochial school data</li>
                         <li><code>finances</code> - Financial data: <code>expenditures</code>, <code>benevolences</code>, <code>total_expenditures</code>, <code>edifice_value</code>, <code>edifice_debt</code>, <code>residence_value</code>, <code>residence_debt</code></li>
-                        <li><code>pastors</code> - Pastor info including education</li>
-                        <li><code>urls</code> - Links to schedule detail and filtered data table views</li>
+                        <li><code>pastors</code> - Array of clergy records, or <code>null</code>; principal pastors precede assistants</li>
+                        <li><code>num_edifices</code>, <code>has_pastors_residence</code>, and <code>num_assistant_pastors</code> - Property and staffing fields from the schedule</li>
+                        <li><code>respondent</code> and <code>processing</code> - Signature and Census Bureau intake metadata, or <code>null</code></li>
+                        <li><code>marginalia</code> - Transcribed annotations found on the historical schedule, or <code>null</code></li>
+                        <li><code>urls</code> - Schedule detail, image, and filtered data-table links</li>
                         <li><code>denominations</code> (pagination envelope) - Array of distinct denomination names in the filtered results</li>
                     </ul>
+                    <p class="text-content-secondary text-sm mt-3"><code>view=map</code> returns only <code>transcription.status</code> from the transcription object and omits <code>pastors</code>, <code>num_assistant_pastors</code>, <code>respondent</code>, <code>processing</code>, and <code>marginalia</code>.</p>
 
                     <div class="response-example">
                         <h5>Example Response (single record)</h5>
@@ -566,17 +595,23 @@
   "name": "Seventh-day Adventist Church",
   "census_code": "003",
   "division": null,
-  "transcription_status": "approved",
-  "schedule_id": 1234,
+  "schedule_id": "1234",
+  "transcription": {
+    "status": "approved",
+    "ai": {"schedule_fields": {}, "religious_bodies": [], "clergy": []},
+    "human": {"schedule_fields": {}, "religious_bodies": [], "clergy": []},
+    "ai_notes": null
+  },
+  "has_location": true,
   "location_details": {
     "lat": 38.9072, "lon": -77.0369,
-    "city_name": "Washington", "county_name": "District of Columbia",
-    "state_name": "DC", "place_id": 567,
+    "city_name": "Washington", "map_name": "Washington", "place_id": 567,
+    "county_ahcb": "dc001", "county_name": "District of Columbia", "state_name": "DC",
     "address": "123 Main St",
-    "urban_rural_code": "U"
+    "urban_rural_code": "Urban"
   },
   "denomination_details": {
-    "id": 5, "name": "Seventh-day Adventists",
+    "id": 5, "denomination_id": "003", "name": "Seventh-day Adventists",
     "family_census": "Adventist bodies", "family_relec": "Adventist"
   },
   "membership_details": {
@@ -598,14 +633,22 @@
     "edifice_debt": null, "residence_value": 5000.00,
     "residence_debt": null
   },
+  "num_edifices": 1,
+  "has_pastors_residence": true,
+  "pastors": [{
+    "name": "Elder James White", "is_assistant": false,
+    "college": "Battle Creek College", "theological_seminary": null,
+    "num_other_churches_served": 0, "serving_congregation": null
+  }],
+  "num_assistant_pastors": 0,
+  "respondent": {"name": "John Smith", "title": "Clerk", "po_address": "Washington, DC", "date_signed": "1926-05-01"},
+  "processing": {"date_received": "1926-05-10", "district_stamp": "1", "denomination_code_stamp": "003"},
+  "marginalia": null,
   "urls": {
     "self": "https://religiousecologies.org/census/record/1234/",
+    "image": "https://example.org/census-images/1234.jpg",
     "family_census": "https://religiousecologies.org/census/browser/?family=Adventist+bodies",
     "family_relec": "https://religiousecologies.org/census/browser/?family=Adventist&denomination=2"
-  },
-  "pastors": {
-    "name": "Elder James White", "is_assistant": false,
-    "college": "Battle Creek College", "theological_seminary": null
   }
 }</code>
                         </div>
@@ -620,6 +663,7 @@
                         <a href="{{ api_base_url }}religious-bodies/?search=Seventh-day&page_size=10" target="_blank" class="example-link">Search "Seventh-day"</a><br>
                         <a href="{{ api_base_url }}religious-bodies/?transcription_status=approved&page_size=10" target="_blank" class="example-link">Approved records only</a><br>
                         <a href="{{ api_base_url }}religious-bodies/?bounds=38,-78,40,-75&page_size=100" target="_blank" class="example-link">Mid-Atlantic bounding box</a><br>
+                        <a href="{{ api_base_url }}religious-bodies/?has_location=true&page_size=10" target="_blank" class="example-link">Records with populated-place data</a><br>
                         <a href="{{ api_base_url }}religious-bodies/?urban_rural=urban&page_size=10" target="_blank" class="example-link">Urban congregations</a><br>
                         <a href="{{ api_base_url }}religious-bodies/?exclude_families=Baptist+bodies,Methodist+bodies&page_size=100" target="_blank" class="example-link">Exclude Baptist and Methodist</a><br>
                         <a href="{{ api_base_url }}religious-bodies/?page_size=5000&view=map" target="_blank" class="example-link">Lightweight map data</a>
@@ -644,7 +688,7 @@
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Returns comprehensive list of denomination families with counts of denominations
-                        and congregations in each family. Includes both census families and Religious Ecologies families.
+                        and congregations in each family. Includes both census families and Religious Ecologies families. <code>congregations</code> counts records with populated-place data; <code>total_congregations</code> counts all records.
                     </p>
 
                     <div class="response-example">
@@ -665,6 +709,7 @@
                                 "name": "Baptist",
                                 "denominations": 24,
                                 "congregations": 1500,
+                                "total_congregations": 2000,
                                 "has_location_data": true
                                 }
                                 ]
