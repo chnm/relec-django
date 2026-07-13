@@ -8,7 +8,7 @@
                 {% for column in table.columns %}
                     <th {{ column.attrs.th.as_html }}>
                         {% if column.orderable %}
-                            <a href="{% querystring table.prefixed_order_by_field=column.order_by_alias.next %}">
+                            <a href="{% querystring_replace table.prefixed_order_by_field=column.order_by_alias.next %}">
                                 {{ column.header }}
                                 {% if column.is_ordered %}
                                     <span class="ml-1">
@@ -49,7 +49,7 @@
     {% if table.page %}
         <nav class="pagination" aria-label="Table pagination">
             {% if table.page.has_previous %}
-                <a href="{% querystring table.prefixed_page_field=table.page.previous_page_number %}" class="previous">
+                <a href="{% querystring_replace table.prefixed_page_field=table.page.previous_page_number %}" class="previous">
                     ← Previous
                 </a>
             {% endif %}
@@ -59,7 +59,7 @@
             </span>
 
             {% if table.page.has_next %}
-                <a href="{% querystring table.prefixed_page_field=table.page.next_page_number %}" class="next">
+                <a href="{% querystring_replace table.prefixed_page_field=table.page.next_page_number %}" class="next">
                     Next →
                 </a>
             {% endif %}

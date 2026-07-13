@@ -30,6 +30,13 @@ from .models import (
     ReligiousBody,
 )
 from .resources import CensusScheduleResource, DenominationResource
+from .workflow import (
+    LOCKED_FOR_TRANSCRIBERS,
+    TRANSCRIBER_ACTIONS,
+    is_reviewer,
+    is_transcriber_only,
+    schedules_with_religious_bodies,
+)
 
 
 class HasLocationFilter(admin.SimpleListFilter):
@@ -105,9 +112,10 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
         return (
             ("unassigned", "Unassigned Records"),
             ("assigned_to_me", "Assigned to Me"),
-            ("needs_review", "Needs Review"),
+            ("review_queue", "Review Queue"),
+            ("needs_review", "Imported - Needs Review"),
             ("in_progress", "In Progress"),
-            ("completed", "Completed"),
+            ("completed", "Student Work - Ready for Review"),
             ("approved", "Approved"),
         )
 
@@ -116,6 +124,10 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
             return queryset.filter(transcription_status="unassigned")
         elif self.value() == "assigned_to_me":
             return queryset.filter(assigned_transcriber=request.user)
+        elif self.value() == "review_queue":
+            return queryset.filter(
+                transcription_status__in=["needs_review", "completed"]
+            )
         elif self.value() == "needs_review":
             return queryset.filter(transcription_status="needs_review")
         elif self.value() == "in_progress":
@@ -406,21 +418,37 @@ mark_in_progress.short_description = "Mark as in progress"
 
 
 def mark_needs_review(modeladmin, request, queryset):
-    """Admin action to mark records as needing review"""
-    count = queryset.update(transcription_status="needs_review")
+    """Mark imported or untriaged records as needing review."""
+    eligible = schedules_with_religious_bodies(queryset)
+    count = eligible.update(transcription_status="needs_review")
+    skipped = queryset.count() - count
     modeladmin.message_user(request, f"{count} records marked as needing review.")
+    if skipped:
+        modeladmin.message_user(
+            request,
+            f"{skipped} records skipped because they have no religious body.",
+            level=messages.WARNING,
+        )
 
 
-mark_needs_review.short_description = "Mark as needs review"
+mark_needs_review.short_description = "Mark imported records as needs review"
 
 
 def mark_completed(modeladmin, request, queryset):
-    """Mark records as transcribed/completed"""
-    count = queryset.update(transcription_status="completed")
-    modeladmin.message_user(request, f"{count} records marked as transcribed.")
+    """Submit completed student transcriptions for PI review."""
+    eligible = schedules_with_religious_bodies(queryset)
+    count = eligible.update(transcription_status="completed")
+    skipped = queryset.count() - count
+    modeladmin.message_user(request, f"{count} records marked as ready for review.")
+    if skipped:
+        modeladmin.message_user(
+            request,
+            f"{skipped} records skipped because they have no religious body.",
+            level=messages.WARNING,
+        )
 
 
-mark_completed.short_description = "Mark as transcribed"
+mark_completed.short_description = "Mark as ready for review"
 
 
 def mark_approved(modeladmin, request, queryset):
@@ -435,17 +463,14 @@ mark_approved.short_description = "Mark as approved"
 # Assignment actions
 def assign_to_me(modeladmin, request, queryset):
     """Admin action to assign records to current user"""
-    if request.user.groups.filter(name="Transcribers").exists():
+    if is_transcriber_only(request.user):
         count = queryset.update(
             assigned_transcriber=request.user, transcription_status="assigned"
         )
         modeladmin.message_user(
             request, f"{count} records assigned to you for transcription."
         )
-    elif (
-        request.user.groups.filter(name="Reviewers").exists()
-        or request.user.is_superuser
-    ):
+    elif is_reviewer(request.user):
         count = queryset.update(assigned_reviewer=request.user)
         modeladmin.message_user(request, f"{count} records assigned to you for review.")
     else:
@@ -602,6 +627,28 @@ class CensusScheduleAdmin(ModelAdmin):
 
     class Media:
         js = ["js/admin_cascade_populated_place.js"]
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if is_transcriber_only(request.user):
+            actions = {
+                name: action
+                for name, action in actions.items()
+                if name in TRANSCRIBER_ACTIONS
+            }
+        return actions
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = list(super().get_readonly_fields(request, obj))
+        if is_transcriber_only(request.user):
+            readonly_fields.extend(
+                [
+                    "transcription_status",
+                    "assigned_transcriber",
+                    "assigned_reviewer",
+                ]
+            )
+        return readonly_fields
 
     def get_urls(self):
         """Add custom URLs for data analysis"""
@@ -919,10 +966,7 @@ class CensusScheduleAdmin(ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         """Restrict Project Management fields for transcribers."""
         fieldsets = super().get_fieldsets(request, obj)
-        if (
-            request.user.groups.filter(name="Transcribers").exists()
-            and not request.user.is_superuser
-        ):
+        if is_transcriber_only(request.user):
             return [
                 (name, opts) if name != "Project Management"
                 else (
@@ -1033,11 +1077,11 @@ class CensusScheduleAdmin(ModelAdmin):
         return render(request, "admin/census/location_export.html", context)
 
     def transcription_status_display(self, obj):
-        """Display status with color coding"""
-        color = obj.get_status_display_color()
+        """Display status with consistent admin badge styling."""
+        status_class = obj.transcription_status.replace("_", "-")
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
+            '<span class="status-badge status-{}">{}</span>',
+            status_class,
             obj.get_transcription_status_display(),
         )
 
@@ -1078,13 +1122,7 @@ class CensusScheduleAdmin(ModelAdmin):
 
         # If user is ONLY in Transcribers group (student transcriber), only show their assigned records
         # Superusers and users in multiple groups (like admins) see all records
-        user_groups = list(request.user.groups.values_list("name", flat=True))
-
-        if (
-            request.user.groups.filter(name="Transcribers").exists()
-            and not request.user.is_superuser
-            and user_groups == ["Transcribers"]
-        ):  # Only in Transcribers group
+        if is_transcriber_only(request.user):
             return qs.filter(assigned_transcriber=request.user)
 
         return qs
@@ -1097,17 +1135,23 @@ class CensusScheduleAdmin(ModelAdmin):
             return False
         return super().has_delete_permission(request, obj)
 
+    def has_change_permission(self, request, obj=None):
+        if (
+            obj is not None
+            and is_transcriber_only(request.user)
+            and obj.transcription_status in LOCKED_FOR_TRANSCRIBERS
+        ):
+            return False
+        return super().has_change_permission(request, obj)
+
     def save_model(self, request, obj, form, change):
         """Auto-set status when students save their work"""
-        if request.user.groups.filter(name="Transcribers").exists():
-            # If student is saving and there are related objects, mark as needs review
-            # Use count() instead of exists() to utilize prefetched data
-            if change and (
-                obj.church_details.count() > 0
-                or obj.membership_details.count() > 0
-                or obj.clergy.count() > 0
-            ):
-                obj.transcription_status = "needs_review"
+        if (
+            is_transcriber_only(request.user)
+            and change
+            and obj.transcription_status == "assigned"
+        ):
+            obj.transcription_status = "in_progress"
 
         super().save_model(request, obj, form, change)
 

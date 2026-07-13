@@ -370,7 +370,7 @@ export default class DenominationsMap extends Visualization {
       this.denomination === this.allDenominations &&
       this.family !== this.allFamilies
     ) {
-      const url = `/census/api/religious-bodies/?family_relec=${encodeURIComponent(family)}&page_size=5000`;
+      const url = `/census/api/religious-bodies/?family_relec=${encodeURIComponent(family)}&page_size=5000&view=map`;
       const denomfamily = fetch(url)
         .then((response) => response.json())
         .then((data) => {
@@ -399,7 +399,7 @@ export default class DenominationsMap extends Visualization {
       return denomfamily;
     }
 
-    const url = `/census/api/religious-bodies/?search=${encodeURIComponent(denomination)}&page_size=5000`;
+    const url = `/census/api/religious-bodies/?search=${encodeURIComponent(denomination)}&page_size=5000&view=map`;
     const dataResponse = fetch(url)
       .then((response) => response.json())
       .then((data) => {

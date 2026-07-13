@@ -687,6 +687,7 @@
 
                 // Fetch data from our new demographics API endpoint
                 queryParams.set('page_size', '5000');
+                queryParams.set('view', 'map');
                 fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
                         if (!response.ok) {

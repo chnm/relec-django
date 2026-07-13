@@ -43,12 +43,16 @@ dev = [
     "pylint-django>=2.6.1",
     "factory-boy>=3.3.0",
     "django-debug-toolbar>=6.3.0",
+    "pytest-playwright>=0.8.0",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "e2e: local Playwright browser tests",
+]
 
 [build-system]
 requires = ["hatchling"]

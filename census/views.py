@@ -419,14 +419,7 @@ def api_documentation_view(request):
     Provides comprehensive documentation for internal and external users
     who want to access the 1926 Census of Religious Bodies data.
     """
-    from .models import ReligiousBody
-
-    # Get some live stats for the documentation
     context = {
-        "total_denominations": Denomination.objects.count(),
-        "total_congregations": ReligiousBody.objects.count(),
-        "total_states": State.objects.count(),
-        "total_counties": County.objects.count(),
         "api_base_url": request.build_absolute_uri("/census/api/"),
     }
 

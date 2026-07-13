@@ -374,6 +374,7 @@
 
                 // Use high page size to get all results
                 params.set('page_size', '5000');
+                params.set('view', 'map');
 
                 const url = `/census/api/religious-bodies/?${params.toString()}`;
 
@@ -419,7 +420,7 @@
                             num_edifices: body.num_edifices,
                             edifice_value: body.finances ? body.finances.edifice_value : null,
                             schedule_url: body.urls ? body.urls.self : null,
-                            transcription_status: body.transcription_status,
+                            transcription_status: body.transcription ? body.transcription.status : null,
                         });
                         if (denom.name) places[key].denominations.add(denom.name);
                     });

@@ -16,6 +16,23 @@ check:
 shell:
 	uv run python manage.py shell
 
+# Install local test dependencies and Chromium
+test-setup:
+	uv sync --group dev
+	uv run playwright install chromium
+
+# Run the complete suite, including local browser tests
+test:
+	uv run python -m pytest
+
+# Run API, model, and server-rendered tests without launching a browser
+test-fast:
+	uv run python -m pytest -m "not e2e"
+
+# Run only local Playwright browser tests
+test-e2e:
+	uv run python -m pytest -m e2e --browser chromium
+
 # Database Management
 # ==================
 
@@ -160,6 +177,10 @@ help:
 	@echo "  preview          - Start Django development server"
 	@echo "  check           - Check Django configuration"
 	@echo "  shell           - Open Django shell"
+	@echo "  test-setup      - Install test dependencies and Chromium"
+	@echo "  test            - Run the complete test suite"
+	@echo "  test-fast       - Run tests without Playwright"
+	@echo "  test-e2e        - Run local Playwright browser tests"
 	@echo ""
 	@echo "Database:"
 	@echo "  mm              - Make migrations"
@@ -193,4 +214,4 @@ help:
 	@echo "  clear-cache     - Clear the Memcached cache"
 	@echo "  help            - Show this help message"
 
-.PHONY: preview check shell mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic clear-cache help
+.PHONY: preview check shell test-setup test test-fast test-e2e mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic clear-cache help

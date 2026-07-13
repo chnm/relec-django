@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from simple_history.admin import SimpleHistoryAdmin
 from unfold.admin import ModelAdmin
 
-from .models import BlogPost, Page, Visualization
+from .models import BlogPost, Page
 
 
 @admin.register(Page)
@@ -133,60 +133,6 @@ class BlogPostAdmin(ModelAdmin):
             },
         ),
         ("Publishing", {"fields": ("is_draft",)}),
-        (
-            "Timestamps",
-            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
-        ),
-    )
-
-    def thumbnail_preview(self, obj):
-        """Show thumbnail preview in admin"""
-        url = obj.get_thumbnail_url()
-        if url:
-            return format_html(
-                '<img src="{}" style="max-height: 100px; max-width: 200px;" />', url
-            )
-        return "No image"
-
-    thumbnail_preview.short_description = "Preview"
-
-
-@admin.register(Visualization)
-class VisualizationAdmin(ModelAdmin):
-    list_display = (
-        "title",
-        "author",
-        "published_date",
-        "updated_date",
-        "doi",
-        "thumbnail_preview",
-    )
-    list_filter = ("published_date", "author")
-    search_fields = ("title", "author", "content", "abstract")
-    prepopulated_fields = {"slug": ("title",)}
-    date_hierarchy = "published_date"
-    ordering = ("-published_date",)
-    readonly_fields = ("thumbnail_preview", "created_at", "updated_at")
-
-    fieldsets = (
-        (
-            "Basic Information",
-            {"fields": ("title", "slug", "author", "published_date", "updated_date")},
-        ),
-        ("Content", {"fields": ("abstract", "content")}),
-        (
-            "Thumbnail Image",
-            {
-                "fields": (
-                    "thumbnail_image",
-                    "thumbnail_preview",
-                    "thumbnail_description",
-                ),
-                "description": "Upload a thumbnail image for visualization listings",
-            },
-        ),
-        ("Visualization Assets", {"fields": ("script_file", "style_file")}),
-        ("Metadata", {"fields": ("doi",), "classes": ("collapse",)}),
         (
             "Timestamps",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},

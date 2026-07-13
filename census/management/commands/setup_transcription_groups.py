@@ -4,7 +4,8 @@ from django.core.management.base import BaseCommand
 
 from census.models import CensusSchedule, Clergy, Membership, ReligiousBody
 from location.models import County, PopulatedPlace, State
-from pages.models import BlogPost, Page, Visualization
+from pages.models import BlogPost, Page
+from visualizations.models import Visualization
 
 
 class Command(BaseCommand):

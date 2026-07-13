@@ -135,12 +135,14 @@ IT/infrastructure administrators with full Django admin access.
 
 ### Transcription Workflow
 
-- A census schedule progresses through exactly these statuses in order:
-  `unassigned → assigned → in_progress → needs_review → completed → approved`
-- Status can be set backward by Reviewers (e.g., returning a `needs_review` record to `in_progress`)
+- Student transcription follows:
+  `unassigned → assigned → in_progress → completed → approved`
+- Imported records default to `needs_review`; already approved imports remain `approved`
+- Both `needs_review` and `completed` appear in the PI/editor review queue
+- Status can be set backward by Reviewers (e.g., returning a record to `in_progress`)
 - A schedule is **automatically** moved from `unassigned` to `assigned` when a transcriber is assigned
-- Transcribers cannot change status beyond `needs_review`; only Reviewers can set `completed` or `approved`
-- A schedule must have at least one `ReligiousBody` record before it can be marked `needs_review`
+- Transcribers submit finished work as `completed`; only Reviewers can set `approved`
+- A schedule must have at least one `ReligiousBody` record before it can be marked `completed` or `needs_review`
 
 ### Location Hierarchy
 
@@ -201,8 +203,8 @@ Provides a professional, organized interface for managing the transcription proj
 
 **User Interactions:**
 - Admin user logs in → sees dashboard with progress metrics
-- Transcriber selects a record → edits fields inline → marks as "needs review"
-- Reviewer filters by "needs review" → opens record → approves or returns with notes
+- Transcriber selects a record → edits fields inline → marks it "ready for review"
+- Reviewer opens the review queue → approves or returns records with notes
 - PI views dashboard → monitors team progress
 
 **Success Criteria:**
@@ -412,11 +414,11 @@ Enables the team to answer research questions about the dataset without writing 
 4. Record detail page opens, showing the original census schedule image
 5. Transcriber fills in `ReligiousBody` inline form: name, denomination, address, membership counts, property values, clergy information
 6. Saves record → status auto-transitions to `in_progress` (if still `assigned`)
-7. When finished, transcriber clicks "Mark as Needs Review" bulk action (or changes status field)
-8. Record status becomes `needs_review`; transcriber can no longer edit it
+7. When finished, transcriber clicks "Mark as Ready for Review"
+8. Record status becomes `completed`; transcriber can no longer edit it
 
 **Success Outcome:**
-Record has `transcription_status = needs_review` and at least one complete `ReligiousBody` with membership data.
+Record has `transcription_status = completed` and at least one complete `ReligiousBody` with membership data.
 
 **Error Paths:**
 - Transcriber can't see any records: They are not assigned any; contact PI
@@ -432,8 +434,8 @@ Record has `transcription_status = needs_review` and at least one complete `Reli
 **Starting Point:** Reviewer logs into `/admin/`
 
 **Steps:**
-1. Dashboard shows count of records in `needs_review` status
-2. Reviewer navigates to Census Schedules → filters by status "Needs Review"
+1. Dashboard shows the combined review queue count
+2. Reviewer navigates to Census Schedules → filters by "Review Queue"
 3. Opens a record → compares transcribed data against the original schedule image
 4. If correct: Changes status to `approved` → saves
 5. If needs correction: Changes status back to `in_progress` → adds note in `transcription_notes` → saves
@@ -486,7 +488,7 @@ User finds and reads the complete data for a specific congregation in under 60 s
 
 **Error Paths:**
 - Place selected but no records: "No records found for this location" message with suggestion to broaden search
-- Record partially transcribed (status not yet `approved`): Only fully approved records shown in public view
+- Record partially transcribed or awaiting review: It remains visible with its transcription status
 
 ---
 
@@ -520,12 +522,6 @@ User finds and reads the complete data for a specific congregation in under 60 s
 ## Open Questions
 
 ### Data Questions
-
-- **Q:** Should public-facing views show only `approved` records, or also `completed`?
-  - **Context:** `completed` records have been transcribed but not yet reviewed; they may contain errors. Showing them would increase coverage but risk data quality.
-  - **Options:** `approved` only (high quality, lower coverage), `completed` + `approved` (broader but less verified)
-  - **Owner:** PI
-  - **Status:** Open
 
 - **Q:** What is the intended handling of schedules that have no corresponding congregation data (e.g., blank or damaged images)?
   - **Context:** Some schedule images may be unusable. We need a status for "skip this record."

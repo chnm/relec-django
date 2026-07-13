@@ -98,6 +98,28 @@ class TestCensusDetail:
         content = response.content.decode()
         assert census_schedule.schedule_title in content
 
+    def test_detail_shows_incomplete_schedule(self, census_schedule, client):
+        assert census_schedule.transcription_status == "unassigned"
+
+        response = client.get(
+            reverse("census_detail", kwargs={"resource_id": census_schedule.resource_id})
+        )
+
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestReligiousBodyAPI:
+    def test_list_includes_body_from_incomplete_schedule(self, religious_body, client):
+        assert religious_body.census_record.transcription_status == "unassigned"
+
+        response = client.get(reverse("religiousbody-list"))
+
+        assert response.status_code == 200
+        assert religious_body.id in {
+            result["id"] for result in response.json()["results"]
+        }
+
 
 @pytest.mark.django_db
 class TestDenominationsBrowse:

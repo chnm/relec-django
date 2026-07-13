@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 
-from pages.models import BlogPost, Visualization
+from pages.models import BlogPost
+from visualizations.models import Visualization
 
 
 class Command(BaseCommand):

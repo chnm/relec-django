@@ -323,9 +323,12 @@ Records follow this workflow through transcription:
 1. `unassigned` → Available for assignment
 2. `assigned` → Assigned to a transcriber
 3. `in_progress` → Transcriber is actively working
-4. `needs_review` → Ready for reviewer attention
-5. `completed` → Transcription finished
-6. `approved` → Final approval by reviewer
+4. `completed` → Student work is ready for PI/editor review
+5. `approved` → Final approval by reviewer
+
+Imported records enter at `needs_review` unless they were already approved. The
+review queue combines imported `needs_review` records and student `completed`
+records.
 
 #### Assignment System
 - **assigned_transcriber**: Links record to student doing transcription work
@@ -335,7 +338,7 @@ Records follow this workflow through transcription:
 #### Admin Interface Features
 
 **Enhanced Filtering**: Multiple filter panels for efficient record management
-- **Transcription Workflow**: Unassigned, Assigned to Me, Needs Review, In Progress, Completed, Approved
+- **Transcription Workflow**: Unassigned, Assigned to Me, Review Queue, Imported - Needs Review, In Progress, Student Work - Ready for Review, Approved
 - **Assignment Status**: Has/No Transcriber, Has/No Reviewer, Fully Assigned, Completely Unassigned
 - **Location Status**: Has County, Missing County, Missing Location
 

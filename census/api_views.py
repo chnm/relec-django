@@ -1,5 +1,5 @@
 # census/api_views.py
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
@@ -12,9 +12,10 @@ from rest_framework.response import Response
 API_CACHE_TTL = 60 * 60
 
 from .filters import ReligiousBodyFilter
-from .models import Denomination, ReligiousBody
+from .models import Clergy, Denomination, Membership, ReligiousBody
 from .serializers import (
     DenominationSerializer,
+    ReligiousBodyMapSerializer,
     ReligiousBodySerializer,
 )
 
@@ -68,7 +69,7 @@ class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def by_family(self, request):
-        """Return denominations grouped by family - only those with location data"""
+        """Return denominations filtered by RelEc family and with location data."""
         family = request.query_params.get("family_relec", None)
 
         # Base filter for location data - use new location hierarchy through census_record
@@ -142,8 +143,12 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         - exclude_families: Comma-separated census families to exclude
         - urban_rural: Filter by 'urban' or 'rural'
         - bounds: Geographic bounding box as 'south,west,north,east'
+        - has_location: Filter by the presence of a populated place
         - search: Search by name, address, or census code
-        - limit: Page size (use page_size query param)
+        - page: Page number (default page size 100)
+        - page_size: Number of records per page (maximum 5000)
+        - ordering: Order by name or census_record__schedule_id
+        - view: Use "map" for a reduced high-volume response
     """
 
     queryset = (
@@ -154,7 +159,6 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             "census_record__county__state",
             "census_record__populated_place",
         )
-        .prefetch_related("membership", "census_record__clergy")
         .order_by("census_record__schedule_id")
     )
     serializer_class = ReligiousBodySerializer
@@ -164,6 +168,29 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ["name", "address", "census_code"]
     ordering_fields = ["census_record__schedule_id", "name"]
     ordering = ["census_record__schedule_id"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().prefetch_related(
+            Prefetch(
+                "membership",
+                queryset=Membership.objects.order_by("pk"),
+                to_attr="_api_memberships",
+            )
+        )
+        if self.request.query_params.get("view") != "map":
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "census_record__clergy",
+                    queryset=Clergy.objects.order_by("is_assistant", "pk"),
+                    to_attr="_api_clergy",
+                )
+            )
+        return queryset
+
+    def get_serializer_class(self):
+        if self.request.query_params.get("view") == "map":
+            return ReligiousBodyMapSerializer
+        return super().get_serializer_class()
 
     @action(detail=False, methods=["get"])
     def denomination_families(self, request):

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Denomination, Membership, ReligiousBody
+from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
 
 
 class DenominationSerializer(serializers.ModelSerializer):
@@ -10,15 +10,20 @@ class DenominationSerializer(serializers.ModelSerializer):
 
 
 class MembershipSerializer(serializers.ModelSerializer):
+    total_members = serializers.IntegerField(
+        source="total_members_by_sex", read_only=True
+    )
+    total_by_age = serializers.IntegerField(source="total_members_by_age", read_only=True)
+
     class Meta:
         model = Membership
         fields = [
             "male_members",
             "female_members",
-            "total_members_by_sex",
+            "total_members",
             "members_under_13",
             "members_13_and_older",
-            "total_members_by_age",
+            "total_by_age",
             "sunday_school_num_officers_teachers",
             "sunday_school_num_scholars",
             "vbs_num_officers_teachers",
@@ -33,14 +38,49 @@ class MembershipSerializer(serializers.ModelSerializer):
         ]
 
 
+class ClergySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Clergy
+        fields = [
+            "name",
+            "is_assistant",
+            "college",
+            "theological_seminary",
+            "num_other_churches_served",
+            "serving_congregation",
+        ]
+
+
+class TranscriptionSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="transcription_status", read_only=True)
+    ai = serializers.JSONField(source="ai_transcription", read_only=True)
+    human = serializers.JSONField(source="human_transcription", read_only=True)
+    ai_notes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CensusSchedule
+        fields = ["status", "ai", "human", "ai_notes"]
+
+    def get_ai_notes(self, obj):
+        return obj.ai_notes or None
+
+
+class TranscriptionMapSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="transcription_status", read_only=True)
+
+    class Meta:
+        model = CensusSchedule
+        fields = ["status"]
+
+
 class ReligiousBodySerializer(serializers.ModelSerializer):
+    transcription = TranscriptionSerializer(source="census_record", read_only=True)
     location_details = serializers.SerializerMethodField()
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
     pastors = serializers.SerializerMethodField()
     finances = serializers.SerializerMethodField()
     urls = serializers.SerializerMethodField()
-    transcription_status = serializers.SerializerMethodField()
     schedule_id = serializers.SerializerMethodField()
     has_location = serializers.SerializerMethodField()
 
@@ -48,7 +88,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     respondent = serializers.SerializerMethodField()
     processing = serializers.SerializerMethodField()
     marginalia = serializers.SerializerMethodField()
-    ai_notes = serializers.SerializerMethodField()
 
     class Meta:
         model = ReligiousBody
@@ -57,8 +96,8 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "name",
             "census_code",
             "division",
-            "transcription_status",
             "schedule_id",
+            "transcription",
             "has_location",
             "location_details",
             "denomination_details",
@@ -71,7 +110,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "respondent",
             "processing",
             "marginalia",
-            "ai_notes",
             "urls",
         ]
 
@@ -86,11 +124,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             obj.census_record is not None
             and obj.census_record.populated_place is not None
         )
-
-    def get_transcription_status(self, obj):
-        if obj.census_record:
-            return obj.census_record.transcription_status
-        return None
 
     def get_schedule_id(self, obj):
         if obj.census_record:
@@ -116,36 +149,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         return None
 
     def get_membership_details(self, obj):
-        try:
-            # Use prefetched membership to avoid N+1 queries
-            membership = obj.membership.first() if hasattr(obj, 'membership') else None
-            if membership:
-                return {
-                    "male_members": membership.male_members,
-                    "female_members": membership.female_members,
-                    "total_members": membership.total_members_by_sex,
-                    "members_under_13": membership.members_under_13,
-                    "members_13_and_older": membership.members_13_and_older,
-                    "total_by_age": membership.total_members_by_age,
-                    "sunday_school_num_officers_teachers": membership.sunday_school_num_officers_teachers,
-                    "sunday_school_num_scholars": membership.sunday_school_num_scholars,
-                    "vbs_num_officers_teachers": membership.vbs_num_officers_teachers,
-                    "vbs_num_scholars": membership.vbs_num_scholars,
-                    "weekday_num_officers_teachers": membership.weekday_num_officers_teachers,
-                    "weekday_num_scholars": membership.weekday_num_scholars,
-                    "parochial_num_administrators": membership.parochial_num_administrators,
-                    "parochial_num_elementary_teachers": membership.parochial_num_elementary_teachers,
-                    "parochial_num_secondary_teachers": membership.parochial_num_secondary_teachers,
-                    "parochial_num_elementary_scholars": membership.parochial_num_elementary_scholars,
-                    "parochial_num_secondary_scholars": membership.parochial_num_secondary_scholars,
-                }
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error getting membership details for {obj}: {e}")
+        memberships = getattr(obj, "_api_memberships", [])
+        if not memberships:
             return None
-        return None
+        return MembershipSerializer(memberships[0]).data
 
     def get_finances(self, obj):
         return {
@@ -198,25 +205,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         }
 
     def get_pastors(self, obj):
-        try:
-            clergy_qs = obj.census_record.clergy.all().order_by("is_assistant", "pk")
-            return [
-                {
-                    "name": c.name,
-                    "is_assistant": c.is_assistant,
-                    "college": c.college,
-                    "theological_seminary": c.theological_seminary,
-                    "num_other_churches_served": c.num_other_churches_served,
-                    "serving_congregation": c.serving_congregation,
-                }
-                for c in clergy_qs
-            ] or None
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error getting pastors for {obj}: {e}")
+        clergy = getattr(obj.census_record, "_api_clergy", [])
+        if not clergy:
             return None
+        return ClergySerializer(clergy, many=True).data
 
     def get_num_assistant_pastors(self, obj):
         if obj.census_record:
@@ -253,7 +245,26 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             return obj.census_record.marginalia or None
         return None
 
-    def get_ai_notes(self, obj):
-        if obj.census_record:
-            return obj.census_record.ai_notes or None
-        return None
+
+class ReligiousBodyMapSerializer(ReligiousBodySerializer):
+    """Reduced religious-body representation for high-volume map requests."""
+
+    transcription = TranscriptionMapSerializer(source="census_record", read_only=True)
+
+    class Meta(ReligiousBodySerializer.Meta):
+        fields = [
+            "id",
+            "name",
+            "census_code",
+            "division",
+            "schedule_id",
+            "transcription",
+            "has_location",
+            "location_details",
+            "denomination_details",
+            "membership_details",
+            "num_edifices",
+            "has_pastors_residence",
+            "finances",
+            "urls",
+        ]

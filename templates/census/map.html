@@ -438,6 +438,7 @@
                 queryParams.append('_', Date.now());
 
                 queryParams.set('page_size', '5000');
+                queryParams.set('view', 'map');
                 fetch(`/census/api/religious-bodies/?${queryParams.toString()}`)
                     .then(response => {
 

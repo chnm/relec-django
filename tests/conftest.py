@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from django.core.cache import cache as django_cache
 
@@ -10,6 +12,11 @@ from .factories import (
     ReligiousBodyFactory,
     StateFactory,
 )
+
+
+# pytest-playwright owns an event loop while pytest-django creates and accesses
+# the synchronous test database. This opt-in is confined to the test process.
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 
 @pytest.fixture(autouse=True)
