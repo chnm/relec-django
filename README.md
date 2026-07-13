@@ -33,6 +33,22 @@ make fresh-start
 3. Import data: `make import-all` (after manual Apiary imports)
 4. Add users to groups via Django admin
 
+## Local Testing
+
+Install the development dependencies and Playwright's local Chromium binary once:
+
+```bash
+make test-setup
+```
+
+Run the complete suite, including browser tests against Django's isolated live test server:
+
+```bash
+make test
+```
+
+For a faster backend-only run, use `make test-fast`. To run only the Playwright tests, use `make test-e2e`. Browser tests are local and headless by default; no hosted testing service is required.
+
 ## Documentation
 
 - **`DEVNOTES.md`**: Complete technical documentation and development workflow
