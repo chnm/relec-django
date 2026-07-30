@@ -298,3 +298,6 @@ pyvenv.cfg
 .venv
 pip-selfcheck.json
 relec-website/
+
+# Data fixture dumps live in object storage, not the repo (LFS budget)
+census/fixtures/*.json

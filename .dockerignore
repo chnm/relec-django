@@ -15,3 +15,5 @@ compose.yml
 compose.yaml
 compose.yml.j2
 compose.yaml.j2
+
+census/fixtures/
