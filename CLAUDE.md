@@ -42,12 +42,22 @@ uv run python manage.py migrate
 uv run python manage.py makemigrations census
 uv run python manage.py setup_transcription_groups
 uv run python manage.py check
+uv run python manage.py generate_thumbnails   # Backfill thumbnail aliases (idempotent)
 ```
 
 Setup for new deployments:
 1. Run migrations
 2. Run `setup_transcription_groups`
 3. Add users to "Transcribers" and "Reviewers" groups via Django admin
+4. Run `generate_thumbnails` to backfill image thumbnails (new uploads are covered automatically by the `saved_file` signal)
+
+## Thumbnails
+
+Thumbnails are **never generated during a request**. Public templates use the
+`{% existing_thumbnail_url %}` tag (`census/templatetags/census_thumbnails.py`),
+which only looks up already-generated thumbnails via easy-thumbnails' cache
+tables. Generation happens at upload time (`saved_file` signal connected in
+`census/apps.py`) and in bulk via `manage.py generate_thumbnails`.
 
 ---
 

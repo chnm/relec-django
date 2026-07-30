@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static thumbnail humanize %}
+{% load static census_thumbnails humanize %}
 
 {% block title %}Census Records Browser{% endblock %}
 
@@ -550,9 +550,10 @@
                             <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                             <!-- Image Column -->
                                 <div class="lg:col-span-1">
-                                    {% if record.original_image %}
+                                    {% existing_thumbnail_url record.original_image 'medium' as thumb_url %}
+                                    {% if thumb_url %}
                                         <div class="aspect-[4/3] rounded-lg overflow-hidden">
-                                            <img src="{% thumbnail record.original_image 'medium' %}"
+                                            <img src="{{ thumb_url }}"
                                                  alt="Archival image of census schedule {{ record.resource_id }}. See the transcription for the contents of this document."
                                                  class="w-full h-full object-cover">
                                         </div>
