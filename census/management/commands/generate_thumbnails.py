@@ -3,11 +3,17 @@
 Thumbnails must never be generated during a request (each miss means
 downloading the original scan from object storage, resizing it, and
 uploading the result — see census/templatetags/census_thumbnails.py).
-New uploads are covered by the ``saved_file`` signal in ``census.apps``;
-this command backfills everything uploaded before that signal existed.
+Uploads through the admin or a form are covered by the ``saved_file``
+signal in ``census.apps``. Run this command ad-hoc, not on deploys:
+once as the initial backfill, and again after any bulk import that
+attaches images without passing a file through Django's upload
+machinery (e.g. writing object-storage paths straight into the DB —
+the signal does not fire for those).
 
-Run it once at deploy time (idempotent — already-generated thumbnails
-are skipped via easy-thumbnails' cache tables):
+It is idempotent: already-generated thumbnails are skipped via
+easy-thumbnails' cache tables without touching storage. Missing ones
+require downloading the original from storage, so run it close to the
+object store and use --limit to chunk large backfills.
 
     uv run python manage.py generate_thumbnails
 """
