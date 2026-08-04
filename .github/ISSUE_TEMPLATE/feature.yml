@@ -1,0 +1,51 @@
+name: Feature or outcome
+description: Propose a new capability, improvement, or project outcome.
+labels:
+  - outcome
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the need and the result we want before prescribing implementation details.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem or motivation
+      description: What need, limitation, or opportunity should this work address?
+      placeholder: Explain why this matters and who benefits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be possible or observably different when this is complete?
+      placeholder: Describe the result from a user, research, or project perspective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Completion criteria
+      description: List the conditions that would make this issue complete.
+      placeholder: |
+        - [ ] First verifiable result
+        - [ ] Second verifiable result
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Note adjacent work that should not be included in this issue.
+
+  - type: input
+    id: related
+    attributes:
+      label: Related issues or resources
+      description: Link related issues, documents, datasets, designs, or prior discussion.
+      placeholder: "#123, https://…"

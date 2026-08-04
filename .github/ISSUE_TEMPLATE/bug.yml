@@ -1,0 +1,59 @@
+name: Bug report
+description: Report behavior that is broken, incorrect, or unexpectedly different.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include enough detail for someone else to reproduce and verify the problem.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Problem
+      description: What is broken, and where did you encounter it?
+      placeholder: Describe the problem clearly and concisely.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest reliable sequence that demonstrates the problem.
+      placeholder: |
+        1. Go to …
+        2. Select …
+        3. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include exact error text when available.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the site, browser, device, deployment, or commit when relevant.
+      placeholder: Production or development URL, browser/version, operating system, commit SHA…
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add screenshots, logs, affected records, or related issues.
