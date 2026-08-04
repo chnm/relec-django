@@ -29,6 +29,10 @@ test:
 test-fast:
 	uv run python -m pytest -m "not e2e"
 
+# Run backend tests with branch coverage and create a local HTML report
+test-coverage:
+	uv run python -m pytest -m "not e2e" --cov --cov-report=term-missing --cov-report=html
+
 # Run only local Playwright browser tests
 test-e2e:
 	uv run python -m pytest -m e2e --browser chromium
@@ -180,6 +184,7 @@ help:
 	@echo "  test-setup      - Install test dependencies and Chromium"
 	@echo "  test            - Run the complete test suite"
 	@echo "  test-fast       - Run tests without Playwright"
+	@echo "  test-coverage   - Run backend tests with coverage reporting"
 	@echo "  test-e2e        - Run local Playwright browser tests"
 	@echo ""
 	@echo "Database:"
@@ -214,4 +219,4 @@ help:
 	@echo "  clear-cache     - Clear the Memcached cache"
 	@echo "  help            - Show this help message"
 
-.PHONY: preview check shell test-setup test test-fast test-e2e mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic clear-cache help
+.PHONY: preview check shell test-setup test test-fast test-coverage test-e2e mm migrate show-migrations backup-db restore-db clean-db reset-db setup-fresh-db import-omeka import-images fetch-images import-denom-pdfs setup-groups import-all fresh-start build-css watch-css superuser collectstatic clear-cache help
