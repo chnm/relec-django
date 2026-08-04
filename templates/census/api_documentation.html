@@ -487,7 +487,7 @@
                 <div class="endpoint-body">
                     <p class="endpoint-description">
                         Returns detailed congregation records including location, denomination, membership,
-                        finances, pastors, transcription status, and schedule IDs. Family filters match either the congregation's denomination or its schedule-level denomination. Retrieve one congregation with <code>GET /census/api/religious-bodies/{id}/</code>.
+                        finances, pastors, candidate transcription runs, and schedule IDs. Family filters match either the congregation's denomination or its schedule-level denomination. Retrieve one congregation with <code>GET /census/api/religious-bodies/{id}/</code>.
                     </p>
 
                     <h4 class="font-semibold mt-4 mb-2">Query Parameters</h4>
@@ -571,7 +571,7 @@
                     <h4 class="font-semibold mt-4 mb-2">Response Structure</h4>
                     <p class="text-content-secondary text-sm mb-2">The response envelope includes <code>count</code>, <code>next</code>, <code>previous</code> (pagination), <code>denominations</code> (array of denomination names matched by your query), and <code>results</code> (array of records).</p>
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
-                        <li><code>transcription</code> - Nested object containing <code>status</code>, raw <code>ai</code> JSON, frozen <code>human</code> JSON, and <code>ai_notes</code></li>
+                        <li><code>transcriptions</code> - Array of immutable candidate outputs containing a run <code>key</code>, a <code>kind</code>, and raw JSON <code>data</code>; agent notes are stored inside <code>data</code></li>
                         <li><code>schedule_id</code> - Census schedule identifier (string)</li>
                         <li><code>has_location</code> - Whether the schedule has a populated place</li>
                         <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>map_name</code>, <code>place_id</code>, <code>county_ahcb</code>, <code>county_name</code>, <code>state_name</code>, <code>address</code>, and <code>urban_rural_code</code></li>
@@ -585,7 +585,7 @@
                         <li><code>urls</code> - Schedule detail, image, and filtered data-table links</li>
                         <li><code>denominations</code> (pagination envelope) - Array of distinct denomination names in the filtered results</li>
                     </ul>
-                    <p class="text-content-secondary text-sm mt-3"><code>view=map</code> returns only <code>transcription.status</code> from the transcription object and omits <code>pastors</code>, <code>num_assistant_pastors</code>, <code>respondent</code>, <code>processing</code>, and <code>marginalia</code>.</p>
+                    <p class="text-content-secondary text-sm mt-3"><code>view=map</code> omits <code>transcriptions</code>, <code>pastors</code>, <code>num_assistant_pastors</code>, <code>respondent</code>, <code>processing</code>, and <code>marginalia</code>.</p>
 
                     <div class="response-example">
                         <h5>Example Response (single record)</h5>
@@ -596,12 +596,21 @@
   "census_code": "003",
   "division": null,
   "schedule_id": "1234",
-  "transcription": {
-    "status": "approved",
-    "ai": {"schedule_fields": {}, "religious_bodies": [], "clergy": []},
-    "human": {"schedule_fields": {}, "religious_bodies": [], "clergy": []},
-    "ai_notes": null
-  },
+  "transcriptions": [
+    {
+      "key": "human-snapshot",
+      "kind": "human_snapshot",
+      "data": {"schedule_fields": {}, "religious_bodies": [], "clergy": []}
+    },
+    {
+      "key": "walter-gemini-2026-08-26",
+      "kind": "agent",
+      "data": {
+        "schedule_fields": {}, "religious_bodies": [], "clergy": [],
+        "ai_notes": "Handwriting in field 12 is uncertain."
+      }
+    }
+  ],
   "has_location": true,
   "location_details": {
     "lat": 38.9072, "lon": -77.0369,

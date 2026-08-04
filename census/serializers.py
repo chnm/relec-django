@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+from .models import (
+    Clergy,
+    Denomination,
+    Membership,
+    ReligiousBody,
+    ScheduleTranscription,
+)
 
 
 class DenominationSerializer(serializers.ModelSerializer):
@@ -13,7 +19,9 @@ class MembershipSerializer(serializers.ModelSerializer):
     total_members = serializers.IntegerField(
         source="total_members_by_sex", read_only=True
     )
-    total_by_age = serializers.IntegerField(source="total_members_by_age", read_only=True)
+    total_by_age = serializers.IntegerField(
+        source="total_members_by_age", read_only=True
+    )
 
     class Meta:
         model = Membership
@@ -51,30 +59,17 @@ class ClergySerializer(serializers.ModelSerializer):
         ]
 
 
-class TranscriptionSerializer(serializers.ModelSerializer):
-    status = serializers.CharField(source="transcription_status", read_only=True)
-    ai = serializers.JSONField(source="ai_transcription", read_only=True)
-    human = serializers.JSONField(source="human_transcription", read_only=True)
-    ai_notes = serializers.SerializerMethodField()
+class ScheduleTranscriptionSerializer(serializers.ModelSerializer):
+    key = serializers.CharField(source="run.key", read_only=True)
+    kind = serializers.CharField(source="run.kind", read_only=True)
 
     class Meta:
-        model = CensusSchedule
-        fields = ["status", "ai", "human", "ai_notes"]
-
-    def get_ai_notes(self, obj):
-        return obj.ai_notes or None
-
-
-class TranscriptionMapSerializer(serializers.ModelSerializer):
-    status = serializers.CharField(source="transcription_status", read_only=True)
-
-    class Meta:
-        model = CensusSchedule
-        fields = ["status"]
+        model = ScheduleTranscription
+        fields = ["key", "kind", "data"]
 
 
 class ReligiousBodySerializer(serializers.ModelSerializer):
-    transcription = TranscriptionSerializer(source="census_record", read_only=True)
+    transcriptions = serializers.SerializerMethodField()
     location_details = serializers.SerializerMethodField()
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
@@ -97,7 +92,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "census_code",
             "division",
             "schedule_id",
-            "transcription",
+            "transcriptions",
             "has_location",
             "location_details",
             "denomination_details",
@@ -124,6 +119,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             obj.census_record is not None
             and obj.census_record.populated_place is not None
         )
+
+    def get_transcriptions(self, obj):
+        transcriptions = getattr(obj.census_record, "_api_transcriptions", [])
+        return ScheduleTranscriptionSerializer(transcriptions, many=True).data
 
     def get_schedule_id(self, obj):
         if obj.census_record:
@@ -219,7 +218,14 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
         if not obj.census_record:
             return None
         cs = obj.census_record
-        if not any([cs.respondent_name, cs.respondent_title, cs.respondent_po_address, cs.respondent_date_signed]):
+        if not any(
+            [
+                cs.respondent_name,
+                cs.respondent_title,
+                cs.respondent_po_address,
+                cs.respondent_date_signed,
+            ]
+        ):
             return None
         return {
             "name": cs.respondent_name or None,
@@ -249,8 +255,6 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
 class ReligiousBodyMapSerializer(ReligiousBodySerializer):
     """Reduced religious-body representation for high-volume map requests."""
 
-    transcription = TranscriptionMapSerializer(source="census_record", read_only=True)
-
     class Meta(ReligiousBodySerializer.Meta):
         fields = [
             "id",
@@ -258,7 +262,6 @@ class ReligiousBodyMapSerializer(ReligiousBodySerializer):
             "census_code",
             "division",
             "schedule_id",
-            "transcription",
             "has_location",
             "location_details",
             "denomination_details",

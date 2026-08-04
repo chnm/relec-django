@@ -12,9 +12,9 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
+from import_export.admin import ImportExportModelAdmin
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
-from import_export.admin import ImportExportModelAdmin
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from urllib3.util.retry import Retry
@@ -28,6 +28,8 @@ from .models import (
     DenominationCensusReport,
     Membership,
     ReligiousBody,
+    ScheduleTranscription,
+    TranscriptionRun,
 )
 from .resources import CensusScheduleResource, DenominationResource
 from .workflow import (
@@ -273,6 +275,38 @@ class ReligiousBodyInline(StackedInline):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
+class ScheduleTranscriptionInline(StackedInline):
+    model = ScheduleTranscription
+    extra = 0
+    tab = True
+    fields = ["run", "data", "created_at"]
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("run")
+
+
+@admin.register(TranscriptionRun)
+class TranscriptionRunAdmin(ModelAdmin):
+    list_display = ["key", "kind", "created_at"]
+    list_filter = ["kind"]
+    search_fields = ["key"]
+    readonly_fields = ["created_at"]
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = list(super().get_readonly_fields(request, obj))
+        if obj:
+            readonly_fields.extend(["key", "kind"])
+        return readonly_fields
+
+
 @admin.action(description="Fetch denominations from Apiary")
 def sync_denominations(modeladmin, request, queryset):
     """Custom admin action to sync denominations from the API."""
@@ -367,7 +401,13 @@ class DenominationAdmin(ImportExportModelAdmin, ModelAdmin):
         "family_census",
         "published_churches_count",
     ]
-    search_fields = ["name", "short_name", "denomination_id", "family_relec", "family_census"]
+    search_fields = [
+        "name",
+        "short_name",
+        "denomination_id",
+        "family_relec",
+        "family_census",
+    ]
     ordering = ["name"]
     list_filter = ["family_relec", "family_census"]
     actions = [sync_denominations]
@@ -961,14 +1001,20 @@ class CensusScheduleAdmin(ModelAdmin):
         ),
     ]
     autocomplete_fields = ["county", "populated_place", "schedule_denomination"]
-    inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
+    inlines = [
+        ReligiousBodyInline,
+        MembershipInline,
+        ClergyInline,
+        ScheduleTranscriptionInline,
+    ]
 
     def get_fieldsets(self, request, obj=None):
         """Restrict Project Management fields for transcribers."""
         fieldsets = super().get_fieldsets(request, obj)
         if is_transcriber_only(request.user):
             return [
-                (name, opts) if name != "Project Management"
+                (name, opts)
+                if name != "Project Management"
                 else (
                     name,
                     {**opts, "fields": ["transcription_status", "transcription_notes"]},
@@ -1040,9 +1086,7 @@ class CensusScheduleAdmin(ModelAdmin):
                 if place.county and place.county.state
                 else "Unknown"
             )
-            location_str = f"{place.name}_{county_name}_{state_code}".replace(
-                " ", "_"
-            )
+            location_str = f"{place.name}_{county_name}_{state_code}".replace(" ", "_")
             filename = f"census_schedules_{location_str}"
 
             # Return appropriate response based on format

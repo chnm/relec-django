@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
 from simple_history.models import HistoricalRecords
 
@@ -221,14 +222,14 @@ class CensusSchedule(models.Model):
         help_text="The denomination associated with this census schedule",
     )
 
-    # Agentic transcription
+    # Legacy transcription storage retained temporarily as rollback evidence while
+    # the run-based model is validated. New code must use ScheduleTranscription.
     ai_transcription = models.JSONField(
         null=True,
         blank=True,
         verbose_name="AI transcription",
         help_text="Raw JSON response from agentic transcription of the census schedule image",
     )
-
     human_transcription = models.JSONField(
         null=True,
         blank=True,
@@ -293,7 +294,6 @@ class CensusSchedule(models.Model):
         blank=True,
         help_text="Free-form observations from the AI transcriber about anomalies, illegibility, or decisions",
     )
-
     # Record keeping
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -341,6 +341,90 @@ class CensusSchedule(models.Model):
             "approved": "dark-green",
         }
         return status_colors.get(self.transcription_status, "gray")
+
+
+class TranscriptionRun(models.Model):
+    """A named batch of human or agentic transcription work."""
+
+    KIND_CHOICES = [
+        ("human_snapshot", "Human snapshot"),
+        ("agent", "Agent"),
+    ]
+
+    key = models.SlugField(
+        max_length=120,
+        unique=True,
+        help_text="Stable identifier for this run, such as walter-gemini-2026-08-26.",
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Optional run-level provenance such as model, prompt, or code versions.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-created_at", "key"]
+
+    def __str__(self):
+        return self.key
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            original = (
+                type(self).objects.filter(pk=self.pk).values("key", "kind").first()
+            )
+            if original and (
+                self.key != original["key"] or self.kind != original["kind"]
+            ):
+                raise ValidationError(
+                    "A transcription run's key and kind are immutable."
+                )
+        super().save(*args, **kwargs)
+
+
+class ScheduleTranscription(models.Model):
+    """Immutable transcription output for one schedule in one run."""
+
+    census_schedule = models.ForeignKey(
+        CensusSchedule,
+        on_delete=models.CASCADE,
+        related_name="transcriptions",
+    )
+    run = models.ForeignKey(
+        TranscriptionRun,
+        on_delete=models.PROTECT,
+        related_name="schedule_transcriptions",
+    )
+    data = models.JSONField(
+        help_text="Raw transcription JSON. Agent notes belong inside this object.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["census_schedule", "run"],
+                name="unique_schedule_transcription_run",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                "Schedule transcription outputs are immutable; create a new run instead."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Schedule transcription outputs are immutable.")
+
+    def __str__(self):
+        return f"{self.census_schedule} / {self.run.key}"
 
 
 class ReligiousBody(models.Model):
