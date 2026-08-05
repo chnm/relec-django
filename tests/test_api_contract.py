@@ -12,7 +12,9 @@ from tests.factories import (
     MembershipFactory,
     PopulatedPlaceFactory,
     ReligiousBodyFactory,
+    ScheduleTranscriptionFactory,
     StateFactory,
+    TranscriptionRunFactory,
 )
 
 
@@ -33,7 +35,10 @@ def test_religious_body_detail_returns_complete_contract(client):
         family_census="Baptist bodies",
         family_relec="Baptist",
     )
-    ai = {"schedule_fields": {"schedule_id": "CT-7"}}
+    ai = {
+        "schedule_fields": {"schedule_id": "CT-7"},
+        "ai_notes": "Verified against the image.",
+    }
     human = {"schedule_fields": {"schedule_id": "CT-7-H"}}
     schedule = CensusScheduleFactory(
         schedule_id="CT-7",
@@ -42,9 +47,6 @@ def test_religious_body_detail_returns_complete_contract(client):
         populated_place=place,
         schedule_denomination=denomination,
         transcription_status="approved",
-        ai_transcription=ai,
-        human_transcription=human,
-        ai_notes="Verified against the image.",
         num_assistant_pastors=1,
         respondent_name="Jane Doe",
         respondent_title="Clerk",
@@ -54,6 +56,22 @@ def test_religious_body_detail_returns_complete_contract(client):
         district_stamp="7",
         denomination_code_stamp="B-12",
         marginalia=[{"page_location": "top", "marginalia_transcription": "Copy"}],
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(
+            key="human-snapshot",
+            kind="human_snapshot",
+        ),
+        data=human,
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(
+            key="sonnet-high-2026-08-26",
+            kind="agent",
+        ),
+        data=ai,
     )
     body = ReligiousBodyFactory(
         census_record=schedule,
@@ -112,12 +130,18 @@ def test_religious_body_detail_returns_complete_contract(client):
         "census_code": "B-12",
         "division": "Northern",
         "schedule_id": "CT-7",
-        "transcription": {
-            "status": "approved",
-            "ai": ai,
-            "human": human,
-            "ai_notes": "Verified against the image.",
-        },
+        "transcriptions": [
+            {
+                "key": "human-snapshot",
+                "kind": "human_snapshot",
+                "data": human,
+            },
+            {
+                "key": "sonnet-high-2026-08-26",
+                "kind": "agent",
+                "data": ai,
+            },
+        ],
         "has_location": True,
         "location_details": {
             "lat": 41.7658,
@@ -190,9 +214,7 @@ def test_religious_body_detail_returns_complete_contract(client):
             "district_stamp": "7",
             "denomination_code_stamp": "B-12",
         },
-        "marginalia": [
-            {"page_location": "top", "marginalia_transcription": "Copy"}
-        ],
+        "marginalia": [{"page_location": "top", "marginalia_transcription": "Copy"}],
         "urls": {
             "self": "http://testserver/census/record/7007/",
             "image": None,
@@ -321,7 +343,6 @@ def test_religious_body_pagination_ordering_and_map_contract(client):
         "census_code",
         "division",
         "schedule_id",
-        "transcription",
         "has_location",
         "location_details",
         "denomination_details",

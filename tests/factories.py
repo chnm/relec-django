@@ -1,7 +1,15 @@
 import factory
 from factory.django import DjangoModelFactory
 
-from census.models import CensusSchedule, Clergy, Denomination, Membership, ReligiousBody
+from census.models import (
+    CensusSchedule,
+    Clergy,
+    Denomination,
+    Membership,
+    ReligiousBody,
+    ScheduleTranscription,
+    TranscriptionRun,
+)
 from location.models import County, PopulatedPlace, State
 
 
@@ -50,6 +58,23 @@ class CensusScheduleFactory(DjangoModelFactory):
     county = factory.SubFactory(CountyFactory)
     populated_place = factory.SubFactory(PopulatedPlaceFactory)
     schedule_denomination = factory.SubFactory(DenominationFactory)
+
+
+class TranscriptionRunFactory(DjangoModelFactory):
+    class Meta:
+        model = TranscriptionRun
+
+    key = factory.Sequence(lambda n: f"transcription-run-{n}")
+    kind = "agent"
+
+
+class ScheduleTranscriptionFactory(DjangoModelFactory):
+    class Meta:
+        model = ScheduleTranscription
+
+    census_schedule = factory.SubFactory(CensusScheduleFactory)
+    run = factory.SubFactory(TranscriptionRunFactory)
+    data = factory.LazyFunction(dict)
 
 
 class ReligiousBodyFactory(DjangoModelFactory):

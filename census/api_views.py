@@ -12,7 +12,13 @@ from rest_framework.response import Response
 API_CACHE_TTL = 60 * 60
 
 from .filters import ReligiousBodyFilter
-from .models import Clergy, Denomination, Membership, ReligiousBody
+from .models import (
+    Clergy,
+    Denomination,
+    Membership,
+    ReligiousBody,
+    ScheduleTranscription,
+)
 from .serializers import (
     DenominationSerializer,
     ReligiousBodyMapSerializer,
@@ -133,7 +139,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     Consolidated congregation-level endpoint.
 
     Returns all congregation data including location, denomination, membership,
-    finances, pastors, transcription status, and schedule IDs.
+    finances, pastors, candidate transcriptions, and schedule IDs.
 
     Query Parameters:
         - denomination: Filter by denomination ID (integer)
@@ -163,18 +169,26 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     )
     serializer_class = ReligiousBodySerializer
     pagination_class = ReligiousBodyPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
     filterset_class = ReligiousBodyFilter
     search_fields = ["name", "address", "census_code"]
     ordering_fields = ["census_record__schedule_id", "name"]
     ordering = ["census_record__schedule_id"]
 
     def get_queryset(self):
-        queryset = super().get_queryset().prefetch_related(
-            Prefetch(
-                "membership",
-                queryset=Membership.objects.order_by("pk"),
-                to_attr="_api_memberships",
+        queryset = (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                Prefetch(
+                    "membership",
+                    queryset=Membership.objects.order_by("pk"),
+                    to_attr="_api_memberships",
+                )
             )
         )
         if self.request.query_params.get("view") != "map":
@@ -183,7 +197,14 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                     "census_record__clergy",
                     queryset=Clergy.objects.order_by("is_assistant", "pk"),
                     to_attr="_api_clergy",
-                )
+                ),
+                Prefetch(
+                    "census_record__transcriptions",
+                    queryset=ScheduleTranscription.objects.select_related(
+                        "run"
+                    ).order_by("created_at", "pk"),
+                    to_attr="_api_transcriptions",
+                ),
             )
         return queryset
 
@@ -213,7 +234,9 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 congregation_count_with_location=Count(
                     "religiousbody",
                     distinct=True,
-                    filter=Q(religiousbody__census_record__populated_place__isnull=False),
+                    filter=Q(
+                        religiousbody__census_record__populated_place__isnull=False
+                    ),
                 ),
             )
             .order_by("family_census")
@@ -230,7 +253,9 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                 congregation_count_with_location=Count(
                     "religiousbody",
                     distinct=True,
-                    filter=Q(religiousbody__census_record__populated_place__isnull=False),
+                    filter=Q(
+                        religiousbody__census_record__populated_place__isnull=False
+                    ),
                 ),
             )
             .order_by("family_relec")
