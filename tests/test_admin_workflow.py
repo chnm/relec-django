@@ -6,11 +6,13 @@ from django.test import RequestFactory
 
 from census.admin import (
     CensusScheduleAdmin,
+    TranscriptionRunAdmin,
     assign_to_me,
     mark_completed,
     mark_needs_review,
+    queue_claude_transcription,
 )
-from census.models import CensusSchedule
+from census.models import CensusSchedule, TranscriptionRun
 from tests.factories import CensusScheduleFactory, ReligiousBodyFactory
 
 
@@ -32,6 +34,14 @@ def reviewer(db):
 
 def admin_request(user):
     request = RequestFactory().get("/admin/census/censusschedule/")
+    request.user = user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    return request
+
+
+def admin_post_request(user, data):
+    request = RequestFactory().post("/admin/census/censusschedule/", data=data)
     request.user = user
     request.session = {}
     request._messages = FallbackStorage(request)
@@ -64,6 +74,35 @@ def test_reviewer_can_access_approval_action(reviewer):
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
     assert "mark_approved" in model_admin.get_actions(admin_request(reviewer))
+
+
+@pytest.mark.django_db
+def test_reviewer_can_view_read_only_transcription_runs(reviewer):
+    model_admin = TranscriptionRunAdmin(TranscriptionRun, admin.site)
+
+    assert model_admin.has_module_permission(admin_request(reviewer))
+    assert model_admin.has_view_permission(admin_request(reviewer))
+    assert not model_admin.has_change_permission(admin_request(reviewer))
+
+
+@pytest.mark.django_db
+def test_claude_action_confirmation_uses_initial_values(reviewer):
+    schedule = CensusScheduleFactory()
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {"_selected_action": [schedule.pk], "action": "queue_claude_transcription"},
+    )
+
+    response = queue_claude_transcription(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk=schedule.pk),
+    )
+
+    assert response.status_code == 200
+    assert b"This field is required" not in response.content
+    assert b"claude-" in response.content
 
 
 @pytest.mark.django_db
@@ -181,6 +220,4 @@ def test_transcriber_cannot_edit_submitted_schedule(transcriber):
         transcription_status="needs_review",
     )
 
-    assert not model_admin.has_change_permission(
-        admin_request(transcriber), schedule
-    )
+    assert not model_admin.has_change_permission(admin_request(transcriber), schedule)

@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -8,6 +9,38 @@ from simple_history.models import HistoricalRecords
 from location.models import County, PopulatedPlace
 
 logger = logging.getLogger(__name__)
+
+
+class ImmutableQuerySet(models.QuerySet):
+    """Block bulk writes that would bypass a model's immutability checks."""
+
+    def update(self, **kwargs):
+        raise ValidationError("Immutable records cannot be updated in bulk.")
+
+    def delete(self):
+        raise ValidationError("Immutable records cannot be deleted.")
+
+
+class ProtectedTranscriptionJobQuerySet(models.QuerySet):
+    """Keep raw provider evidence immutable while allowing workflow updates."""
+
+    IMMUTABLE_FIELDS = {
+        "raw_result",
+        "usage",
+        "provider_message_id",
+        "stop_reason",
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    }
+
+    def update(self, **kwargs):
+        protected = self.IMMUTABLE_FIELDS.intersection(kwargs)
+        if protected:
+            fields = ", ".join(sorted(protected))
+            raise ValidationError(f"Immutable job fields cannot be updated: {fields}.")
+        return super().update(**kwargs)
 
 
 def to_numeric(value, default=0):
@@ -362,6 +395,7 @@ class TranscriptionRun(models.Model):
         blank=True,
         help_text="Optional run-level provenance such as model, prompt, or code versions.",
     )
+    objects = ImmutableQuerySet.as_manager()
     created_at = models.DateTimeField(auto_now_add=True)
     history = HistoricalRecords()
 
@@ -372,17 +406,33 @@ class TranscriptionRun(models.Model):
         return self.key
 
     def save(self, *args, **kwargs):
-        if self.pk:
-            original = (
-                type(self).objects.filter(pk=self.pk).values("key", "kind").first()
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                "Transcription run provenance is immutable; create a new run instead."
             )
-            if original and (
-                self.key != original["key"] or self.kind != original["kind"]
-            ):
-                raise ValidationError(
-                    "A transcription run's key and kind are immutable."
-                )
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Transcription runs are immutable.")
+
+    @property
+    def token_usage(self):
+        """Aggregate provider-reported token usage across this run's jobs."""
+        usage = self.transcription_jobs.aggregate(
+            input_tokens=models.Sum("input_tokens"),
+            output_tokens=models.Sum("output_tokens"),
+            cache_creation_input_tokens=models.Sum("cache_creation_input_tokens"),
+            cache_read_input_tokens=models.Sum("cache_read_input_tokens"),
+        )
+        usage["total_input_tokens"] = sum(
+            usage[field] or 0
+            for field in (
+                "input_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+            )
+        )
+        return usage
 
 
 class ScheduleTranscription(models.Model):
@@ -390,7 +440,7 @@ class ScheduleTranscription(models.Model):
 
     census_schedule = models.ForeignKey(
         CensusSchedule,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="transcriptions",
     )
     run = models.ForeignKey(
@@ -401,6 +451,7 @@ class ScheduleTranscription(models.Model):
     data = models.JSONField(
         help_text="Raw transcription JSON. Agent notes belong inside this object.",
     )
+    objects = ImmutableQuerySet.as_manager()
     created_at = models.DateTimeField(auto_now_add=True)
     history = HistoricalRecords()
 
@@ -425,6 +476,193 @@ class ScheduleTranscription(models.Model):
 
     def __str__(self):
         return f"{self.census_schedule} / {self.run.key}"
+
+
+class TranscriptionBatch(models.Model):
+    """A durable submission to a provider's asynchronous batch API."""
+
+    class State(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        SUBMITTING = "submitting", "Submitting"
+        IN_PROGRESS = "in_progress", "In progress"
+        COLLECTING = "collecting", "Collecting"
+        ENDED = "ended", "Ended"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
+        NEEDS_RECOVERY = "needs_recovery", "Needs manual recovery"
+
+    run = models.ForeignKey(
+        TranscriptionRun,
+        on_delete=models.PROTECT,
+        related_name="transcription_batches",
+    )
+    provider = models.CharField(max_length=30, default="anthropic")
+    state = models.CharField(
+        max_length=30,
+        choices=State.choices,
+        default=State.QUEUED,
+        db_index=True,
+    )
+    provider_batch_id = models.CharField(
+        max_length=120,
+        null=True,
+        blank=True,
+        unique=True,
+    )
+    request_count = models.PositiveIntegerField(default=0)
+    encoded_size_bytes = models.PositiveBigIntegerField(default=0)
+    request_counts = models.JSONField(default=dict, blank=True)
+    provider_snapshot = models.JSONField(null=True, blank=True)
+    error = models.JSONField(null=True, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    provider_expires_at = models.DateTimeField(null=True, blank=True)
+    provider_ended_at = models.DateTimeField(null=True, blank=True)
+    collected_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        indexes = [
+            models.Index(fields=["state", "lease_expires_at"]),
+            models.Index(fields=["run", "state"]),
+        ]
+
+    def __str__(self):
+        return self.provider_batch_id or f"Local batch {self.pk or 'unsaved'}"
+
+
+def transcription_job_custom_id():
+    return f"job_{uuid.uuid4().hex}"
+
+
+class TranscriptionJob(models.Model):
+    """One schedule attempt and its immutable raw provider result."""
+
+    class State(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        PREPARING = "preparing", "Preparing"
+        SUBMITTED = "submitted", "Submitted"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+        CANCELED = "canceled", "Canceled"
+        INVALID = "invalid", "Invalid response"
+        NEEDS_RECOVERY = "needs_recovery", "Needs manual recovery"
+
+    census_schedule = models.ForeignKey(
+        CensusSchedule,
+        on_delete=models.PROTECT,
+        related_name="transcription_jobs",
+    )
+    run = models.ForeignKey(
+        TranscriptionRun,
+        on_delete=models.PROTECT,
+        related_name="transcription_jobs",
+    )
+    batch = models.ForeignKey(
+        TranscriptionBatch,
+        on_delete=models.PROTECT,
+        related_name="jobs",
+        null=True,
+        blank=True,
+    )
+    custom_id = models.CharField(
+        max_length=64,
+        unique=True,
+        default=transcription_job_custom_id,
+        editable=False,
+    )
+    attempt = models.PositiveIntegerField(default=1)
+    state = models.CharField(
+        max_length=30,
+        choices=State.choices,
+        default=State.QUEUED,
+        db_index=True,
+    )
+    raw_result = models.JSONField(null=True, blank=True)
+    provider_message_id = models.CharField(max_length=120, null=True, blank=True)
+    stop_reason = models.CharField(max_length=60, null=True, blank=True)
+    usage = models.JSONField(null=True, blank=True)
+    input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveIntegerField(null=True, blank=True)
+    cache_creation_input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    cache_read_input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    error_type = models.CharField(max_length=100, blank=True)
+    error_message = models.TextField(blank=True)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    objects = ProtectedTranscriptionJobQuerySet.as_manager()
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["queued_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["census_schedule", "run", "attempt"],
+                name="unique_schedule_run_attempt",
+            ),
+            models.UniqueConstraint(
+                fields=["census_schedule", "run"],
+                condition=models.Q(
+                    state__in=[
+                        "queued",
+                        "preparing",
+                        "submitted",
+                        "succeeded",
+                        "needs_recovery",
+                    ]
+                ),
+                name="unique_active_schedule_run_job",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["state", "queued_at"]),
+            models.Index(fields=["run", "state"]),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.batch_id and self.run_id and self.batch.run_id != self.run_id:
+            raise ValidationError({"batch": "The batch must belong to the same run."})
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            evidence_fields = tuple(ProtectedTranscriptionJobQuerySet.IMMUTABLE_FIELDS)
+            original = (
+                type(self).objects.filter(pk=self.pk).values(*evidence_fields).first()
+            )
+            if original:
+                evidence_recorded = original["raw_result"] is not None
+                for field in evidence_fields:
+                    previous = original[field]
+                    current = getattr(self, field)
+                    if evidence_recorded and current != previous:
+                        raise ValidationError(
+                            f"A transcription job's provider evidence is immutable "
+                            f"once recorded ({field})."
+                        )
+        self.full_clean(exclude=None)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.custom_id}: {self.census_schedule}"
+
+    @property
+    def total_input_tokens(self):
+        return sum(
+            value or 0
+            for value in (
+                self.input_tokens,
+                self.cache_creation_input_tokens,
+                self.cache_read_input_tokens,
+            )
+        )
 
 
 class ReligiousBody(models.Model):

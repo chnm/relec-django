@@ -39,6 +39,39 @@ services:
         condition: service_healthy
       memcached:
         condition: service_started
+  transcription-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      no_cache: true
+    image: "rrchnm/relec-django"
+    restart: unless-stopped
+    profiles: ["transcription"]
+    volumes:
+      - dj-data:/app
+    environment:
+      - DEBUG=True
+      - DJANGO_SECRET_KEY=thisisnotasecretkey
+      - DJANGO_ALLOWED_HOSTS=localhost
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=religious_ecologies
+      - DB_USER=religious_ecologies
+      - DB_PASSWORD=password
+      - OBJ_STORAGE=True
+      - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
+      - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
+      - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
+      - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+      - MEMCACHED_URL=memcached:11211
+      - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: uv run manage.py run_transcription_worker --idle-when-disabled
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
   memcached:
     image: memcached:1-alpine
     restart: unless-stopped

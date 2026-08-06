@@ -1,0 +1,25 @@
+{% if source %}
+  <div class="comparison-source-heading">
+    <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+      {{ source.run.key }}
+    </div>
+    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      {{ source.run.get_kind_display }} · {{ source.object.created_at|date:"M j, Y H:i" }}
+    </div>
+    {% if source.model %}
+      <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {{ source.model }}{% if source.contract_version %} · {{ source.contract_version }}{% endif %}
+      </div>
+    {% endif %}
+    {% if source.job %}
+      <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {{ source.job.total_input_tokens|default:0 }} input ·
+        {{ source.job.output_tokens|default:0 }} output tokens
+      </div>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="comparison-source-heading text-sm text-gray-500 dark:text-gray-400">
+    {{ fallback }}
+  </div>
+{% endif %}

@@ -5,12 +5,17 @@ from collections import defaultdict
 
 import requests
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
+from django.contrib.admin import helpers
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError, models
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from import_export.admin import ImportExportModelAdmin
 from requests.adapters import HTTPAdapter
@@ -29,9 +34,13 @@ from .models import (
     Membership,
     ReligiousBody,
     ScheduleTranscription,
+    TranscriptionBatch,
+    TranscriptionJob,
     TranscriptionRun,
 )
 from .resources import CensusScheduleResource, DenominationResource
+from .transcription.comparison import build_comparison, source_raw_json
+from .transcription.services import LaunchError, launch_transcription_run
 from .workflow import (
     LOCKED_FOR_TRANSCRIBERS,
     TRANSCRIBER_ACTIONS,
@@ -293,18 +302,108 @@ class ScheduleTranscriptionInline(StackedInline):
         return super().get_queryset(request).select_related("run")
 
 
+class ReviewerReadOnlyModelAdmin(ModelAdmin):
+    """Expose orchestration evidence to reviewers without mutation rights."""
+
+    def has_module_permission(self, request):
+        return is_reviewer(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return is_reviewer(request.user)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(TranscriptionRun)
-class TranscriptionRunAdmin(ModelAdmin):
-    list_display = ["key", "kind", "created_at"]
+class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = ["key", "kind", "job_summary", "token_summary", "created_at"]
     list_filter = ["kind"]
     search_fields = ["key"]
-    readonly_fields = ["created_at"]
+    readonly_fields = ["key", "kind", "metadata", "created_at", "token_usage"]
 
-    def get_readonly_fields(self, request, obj=None):
-        readonly_fields = list(super().get_readonly_fields(request, obj))
-        if obj:
-            readonly_fields.extend(["key", "kind"])
-        return readonly_fields
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                job_count=models.Count("transcription_jobs"),
+                aggregate_input_tokens=models.Sum("transcription_jobs__input_tokens"),
+                aggregate_cache_creation_tokens=models.Sum(
+                    "transcription_jobs__cache_creation_input_tokens"
+                ),
+                aggregate_cache_read_tokens=models.Sum(
+                    "transcription_jobs__cache_read_input_tokens"
+                ),
+                aggregate_output_tokens=models.Sum("transcription_jobs__output_tokens"),
+            )
+        )
+
+    @admin.display(description="Jobs")
+    def job_summary(self, obj):
+        return obj.job_count
+
+    @admin.display(description="Tokens")
+    def token_summary(self, obj):
+        total_input = sum(
+            value or 0
+            for value in (
+                obj.aggregate_input_tokens,
+                obj.aggregate_cache_creation_tokens,
+                obj.aggregate_cache_read_tokens,
+            )
+        )
+        return f"in {total_input:,} / " f"out {obj.aggregate_output_tokens or 0:,}"
+
+
+@admin.register(TranscriptionBatch)
+class TranscriptionBatchAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = [
+        "id",
+        "run",
+        "state",
+        "provider_batch_id",
+        "request_count",
+        "submitted_at",
+        "collected_at",
+    ]
+    list_filter = ["state", "provider"]
+    search_fields = ["provider_batch_id", "run__key"]
+    readonly_fields = [field.name for field in TranscriptionBatch._meta.fields]
+
+
+@admin.register(TranscriptionJob)
+class TranscriptionJobAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = [
+        "custom_id",
+        "census_schedule",
+        "run",
+        "state",
+        "total_input_tokens_display",
+        "output_tokens",
+        "completed_at",
+    ]
+    list_filter = ["state", "run"]
+    search_fields = [
+        "custom_id",
+        "census_schedule__schedule_id",
+        "census_schedule__schedule_title",
+        "run__key",
+    ]
+    readonly_fields = [field.name for field in TranscriptionJob._meta.fields]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("census_schedule", "run")
+
+    @admin.display(description="Input tokens")
+    def total_input_tokens_display(self, obj):
+        return obj.total_input_tokens
 
 
 @admin.action(description="Fetch denominations from Apiary")
@@ -610,8 +709,87 @@ def bulk_assign_users(modeladmin, request, queryset):
 bulk_assign_users.short_description = "Bulk assign users/status to selected records"
 
 
+class ClaudeTranscriptionRunForm(forms.Form):
+    run_key = forms.SlugField(
+        max_length=120,
+        help_text="A permanent provenance key; it cannot be renamed later.",
+    )
+    model = forms.ChoiceField()
+    limit = forms.IntegerField(min_value=1)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["model"].choices = [
+            (model, model) for model in settings.CLAUDE_TRANSCRIPTION_MODELS
+        ]
+        self.fields["limit"].max_value = settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT
+        self.fields["limit"].initial = settings.CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT
+
+
+@admin.action(description="Queue selected schedules for Claude transcription")
+def queue_claude_transcription(modeladmin, request, queryset):
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can launch paid transcription runs.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(reverse("admin:census_censusschedule_changelist"))
+
+    initial = {
+        "run_key": timezone.now().strftime("claude-%Y%m%d-%H%M%S"),
+        "model": settings.CLAUDE_TRANSCRIPTION_MODELS[0],
+        "limit": settings.CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT,
+    }
+    form = ClaudeTranscriptionRunForm(
+        request.POST if request.POST.get("apply") else None,
+        initial=initial,
+    )
+    if request.POST.get("apply") and form.is_valid():
+        try:
+            run = launch_transcription_run(
+                queryset=queryset,
+                key=form.cleaned_data["run_key"],
+                model=form.cleaned_data["model"],
+                limit=form.cleaned_data["limit"],
+                user=request.user,
+            )
+        except (LaunchError, ValidationError, IntegrityError) as exc:
+            form.add_error(None, str(exc))
+        else:
+            modeladmin.message_user(
+                request,
+                f"Queued {run.metadata['schedule_count']} schedules in run {run.key}.",
+            )
+            return HttpResponseRedirect(
+                reverse("admin:census_transcriptionrun_change", args=[run.pk])
+            )
+
+    selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+    eligible_count = (
+        queryset.exclude(original_image="").exclude(original_image__isnull=True).count()
+    )
+    return render(
+        request,
+        "admin/census/queue-claude-transcription.html",
+        {
+            "form": form,
+            "objects": queryset[:100],
+            "selected": selected,
+            "selected_count": queryset.count(),
+            "eligible_count": eligible_count,
+            "opts": modeladmin.model._meta,
+            "title": "Queue Claude transcription run",
+            "api_configured": bool(settings.ANTHROPIC_API_KEY),
+            "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,
+            "prompt_version": "relec-1926-v1",
+        },
+    )
+
+
 @admin.register(CensusSchedule)
 class CensusScheduleAdmin(ModelAdmin):
+    change_form_template = "admin/census/censusschedule/change_form.html"
     list_display = [
         "schedule_title",
         "schedule_id",
@@ -662,6 +840,7 @@ class CensusScheduleAdmin(ModelAdmin):
         unassign_transcriber,
         unassign_reviewer,
         bulk_assign_users,
+        queue_claude_transcription,
     ]
     ordering = ["schedule_title"]
 
@@ -709,8 +888,122 @@ class CensusScheduleAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.location_export_view),
                 name="census_schedule_location_export",
             ),
+            path(
+                "<path:object_id>/compare-transcriptions/",
+                self.admin_site.admin_view(self.compare_transcriptions_view),
+                name="census_censusschedule_compare_transcriptions",
+            ),
         ]
         return custom_urls + urls
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["show_transcription_comparison"] = bool(
+            object_id
+            and is_reviewer(request.user)
+            and ScheduleTranscription.objects.filter(
+                census_schedule_id=object_id
+            ).exists()
+        )
+        return super().changeform_view(
+            request,
+            object_id=object_id,
+            form_url=form_url,
+            extra_context=extra_context,
+        )
+
+    def compare_transcriptions_view(self, request, object_id):
+        """Compare immutable human and agent outputs without changing either."""
+        if not is_reviewer(request.user):
+            raise PermissionDenied
+
+        schedule = get_object_or_404(
+            CensusSchedule.objects.select_related(
+                "county__state",
+                "populated_place__county__state",
+                "schedule_denomination",
+            ),
+            pk=object_id,
+        )
+        transcriptions = list(
+            schedule.transcriptions.select_related("run").order_by(
+                "-created_at", "-pk"
+            )
+        )
+        human_sources = [
+            source for source in transcriptions if source.run.kind == "human_snapshot"
+        ]
+        agent_sources = [
+            source for source in transcriptions if source.run.kind == "agent"
+        ]
+        human_source = self._comparison_source(
+            human_sources, request.GET.get("human")
+        )
+        agent_source = self._comparison_source(
+            agent_sources, request.GET.get("agent")
+        )
+
+        jobs = {
+            job.run_id: job
+            for job in schedule.transcription_jobs.filter(
+                state=TranscriptionJob.State.SUCCEEDED
+            ).select_related("run")
+        }
+        comparison = build_comparison(
+            human_source.data if human_source else None,
+            agent_source.data if agent_source else None,
+        )
+        try:
+            image_url = schedule.original_image.url if schedule.original_image else ""
+        except ValueError:
+            image_url = ""
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Compare transcriptions: {schedule}",
+            "opts": self.model._meta,
+            "schedule": schedule,
+            "image_url": image_url,
+            "human_sources": human_sources,
+            "agent_sources": agent_sources,
+            "human_source": self._comparison_source_details(
+                human_source, jobs.get(human_source.run_id) if human_source else None
+            ),
+            "agent_source": self._comparison_source_details(
+                agent_source, jobs.get(agent_source.run_id) if agent_source else None
+            ),
+            "comparison": comparison,
+        }
+        return render(
+            request,
+            "admin/census/censusschedule/compare-transcriptions.html",
+            context,
+        )
+
+    @staticmethod
+    def _comparison_source(sources, requested_id):
+        if requested_id:
+            selected = next(
+                (source for source in sources if str(source.pk) == requested_id),
+                None,
+            )
+            if selected:
+                return selected
+        return sources[0] if sources else None
+
+    @staticmethod
+    def _comparison_source_details(source, job):
+        if source is None:
+            return None
+        metadata = source.run.metadata
+        return {
+            "object": source,
+            "run": source.run,
+            "model": metadata.get("model", ""),
+            "contract_version": metadata.get("contract_version", ""),
+            "job": job,
+            "raw_json": source_raw_json(source),
+        }
 
     def schedule_gap_analysis_view(self, request):
         """View to analyze gaps in schedule IDs by denomination"""
@@ -736,9 +1029,9 @@ class CensusScheduleAdmin(ModelAdmin):
             for religious_body in schedule.church_details.all():
                 if religious_body.denomination:
                     denom_id = religious_body.denomination.id
-                    denomination_gaps[denom_id]["denomination_name"] = (
-                        religious_body.denomination.name
-                    )
+                    denomination_gaps[denom_id][
+                        "denomination_name"
+                    ] = religious_body.denomination.name
                     denomination_gaps[denom_id]["schedules"].append(
                         {
                             "schedule_id": schedule.schedule_id,
@@ -917,11 +1210,11 @@ class CensusScheduleAdmin(ModelAdmin):
             "total_missing_county": total_missing_county,
             "total_blank_county": total_blank_county,
             "total_issues": total_issues,
-            "completion_percentage": round(
-                (total_with_county / total_schedules) * 100, 1
-            )
-            if total_schedules > 0
-            else 0,
+            "completion_percentage": (
+                round((total_with_county / total_schedules) * 100, 1)
+                if total_schedules > 0
+                else 0
+            ),
             "state_summary": state_summary,
             "schedules_missing_location": schedules_missing_location[
                 :50
@@ -1013,11 +1306,16 @@ class CensusScheduleAdmin(ModelAdmin):
         fieldsets = super().get_fieldsets(request, obj)
         if is_transcriber_only(request.user):
             return [
-                (name, opts)
-                if name != "Project Management"
-                else (
-                    name,
-                    {**opts, "fields": ["transcription_status", "transcription_notes"]},
+                (
+                    (name, opts)
+                    if name != "Project Management"
+                    else (
+                        name,
+                        {
+                            **opts,
+                            "fields": ["transcription_status", "transcription_notes"],
+                        },
+                    )
                 )
                 for name, opts in fieldsets
             ]

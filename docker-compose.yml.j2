@@ -40,6 +40,32 @@ services:
       memcached:
         condition: service_started
 
+  transcription-worker:
+    image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
+    restart: unless-stopped
+    {% if service.environment is defined %}
+
+    environment:
+{% for env in service.environment %}
+      - {{ env.key }}={{ env.value }}
+{% endfor %}
+    {% endif %}
+
+    command: uv run manage.py run_transcription_worker --idle-when-disabled
+    healthcheck:
+      disable: true
+    {% if service.volumes | default([]) | length > 0 %}
+
+    volumes:
+{% for vol in service.volumes %}
+    - {{ vol.host_path if vol.host_path is defined else vol.name }}:{{ vol.container_path }}
+{% endfor %}
+    {% endif %}
+
+    depends_on:
+      app:
+        condition: service_healthy
+
   memcached:
     image: memcached:1-alpine
     restart: unless-stopped
