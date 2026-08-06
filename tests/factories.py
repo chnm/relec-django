@@ -8,6 +8,8 @@ from census.models import (
     Membership,
     ReligiousBody,
     ScheduleTranscription,
+    TranscriptionBatch,
+    TranscriptionJob,
     TranscriptionRun,
 )
 from location.models import County, PopulatedPlace, State
@@ -75,6 +77,21 @@ class ScheduleTranscriptionFactory(DjangoModelFactory):
     census_schedule = factory.SubFactory(CensusScheduleFactory)
     run = factory.SubFactory(TranscriptionRunFactory)
     data = factory.LazyFunction(dict)
+
+
+class TranscriptionBatchFactory(DjangoModelFactory):
+    class Meta:
+        model = TranscriptionBatch
+
+    run = factory.SubFactory(TranscriptionRunFactory)
+
+
+class TranscriptionJobFactory(DjangoModelFactory):
+    class Meta:
+        model = TranscriptionJob
+
+    census_schedule = factory.SubFactory(CensusScheduleFactory)
+    run = factory.SubFactory(TranscriptionRunFactory)
 
 
 class ReligiousBodyFactory(DjangoModelFactory):

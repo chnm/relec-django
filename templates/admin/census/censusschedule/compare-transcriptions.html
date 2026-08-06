@@ -1,0 +1,415 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="comparison-page flex flex-col flex-1 p-6">
+    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <a href="{% url 'admin:census_censusschedule_change' schedule.pk %}"
+           class="text-sm font-medium text-primary-600 hover:underline">
+          ← Back to {{ schedule }}
+        </a>
+        <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-gray-100">
+          Compare transcriptions
+        </h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {{ schedule.schedule_title }} · Record {{ schedule.resource_id }} ·
+          Schedule {{ schedule.schedule_id }}
+        </p>
+      </div>
+      <div class="px-3 py-2 text-xs text-gray-600 border border-gray-200 rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-300">
+        Read-only · No canonical fields will be changed
+      </div>
+    </div>
+
+    <form method="get" class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
+      <div class="comparison-source-form">
+        <div>
+          <label for="human-source" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Human transcription
+          </label>
+          <select id="human-source" name="human" class="comparison-select">
+            {% for source in human_sources %}
+              <option value="{{ source.pk }}"
+                      {% if human_source and source.pk == human_source.object.pk %}selected{% endif %}>
+                {{ source.run.key }} · {{ source.created_at|date:"M j, Y H:i" }}
+              </option>
+            {% empty %}
+              <option value="">No human transcription available</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="agent-source" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Agent transcription
+          </label>
+          <select id="agent-source" name="agent" class="comparison-select">
+            {% for source in agent_sources %}
+              <option value="{{ source.pk }}"
+                      {% if agent_source and source.pk == agent_source.object.pk %}selected{% endif %}>
+                {{ source.run.key }} · {{ source.run.metadata.model|default:"Agent" }} ·
+                {{ source.created_at|date:"M j, Y H:i" }}
+              </option>
+            {% empty %}
+              <option value="">No agent transcription available</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="comparison-button comparison-button-primary">
+          Compare selected
+        </button>
+      </div>
+    </form>
+
+    <div class="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-5">
+      <div class="comparison-stat comparison-stat-same">
+        <span>{{ comparison.counts.same }}</span> same
+      </div>
+      <div class="comparison-stat comparison-stat-equivalent">
+        <span>{{ comparison.counts.equivalent }}</span> equivalent format
+      </div>
+      <div class="comparison-stat comparison-stat-different">
+        <span>{{ comparison.counts.different }}</span> different
+      </div>
+      <div class="comparison-stat comparison-stat-missing">
+        <span>{{ comparison.counts.one_missing }}</span> one source only
+      </div>
+      <div class="comparison-stat comparison-stat-blank-zero">
+        <span>{{ comparison.counts.blank_zero }}</span> blank vs zero
+      </div>
+    </div>
+
+    <div class="comparison-layout">
+      <aside class="comparison-image-column">
+        <div class="comparison-card comparison-image-card">
+          <div class="flex flex-wrap items-center justify-between gap-2 p-4 border-b border-gray-200 dark:border-gray-700">
+            <div>
+              <h2 class="font-semibold text-gray-800 dark:text-gray-100">Schedule image</h2>
+              <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400">100%</div>
+            </div>
+            {% if image_url %}
+              <a href="{{ image_url }}" target="_blank" rel="noopener"
+                 class="text-xs font-medium text-primary-600 hover:underline">
+                Open original ↗
+              </a>
+            {% endif %}
+          </div>
+          {% if image_url %}
+            <div class="flex gap-2 p-3 border-b border-gray-200 dark:border-gray-700">
+              <button id="zoom-out" type="button" class="comparison-button" aria-label="Zoom out">−</button>
+              <button id="zoom-reset" type="button" class="comparison-button">Reset</button>
+              <button id="zoom-in" type="button" class="comparison-button" aria-label="Zoom in">+</button>
+            </div>
+            <div id="image-viewport" class="comparison-image-viewport">
+              <img id="schedule-image" src="{{ image_url }}"
+                   alt="Original image for {{ schedule }}">
+            </div>
+          {% else %}
+            <div class="p-8 text-sm text-center text-gray-500 dark:text-gray-400">
+              No schedule image is linked.
+            </div>
+          {% endif %}
+        </div>
+      </aside>
+
+      <main class="min-w-0 space-y-5">
+        <div class="comparison-source-headings">
+          <div></div>
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=human_source fallback="Human transcription unavailable" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=agent_source fallback="Agent transcription unavailable" %}
+        </div>
+
+        {% for section in comparison.sections %}
+          <section class="comparison-card overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+              <h2 class="font-semibold text-gray-800 dark:text-gray-100">{{ section.title }}</h2>
+              {% if section.note %}
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ section.note }}</p>
+              {% endif %}
+            </div>
+            <div class="comparison-table-scroll">
+              <div class="comparison-table">
+                {% for row in section.rows %}
+                  <div class="comparison-row comparison-row-{{ row.status }}">
+                    <div class="comparison-label">
+                      <span>{{ row.label }}</span>
+                      {% if row.status != "same" %}
+                        <small>{{ row.status_label }}</small>
+                      {% endif %}
+                    </div>
+                    {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left %}
+                    {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          </section>
+        {% empty %}
+          <div class="comparison-card p-8 text-sm text-center text-gray-500 dark:text-gray-400">
+            There are not yet two transcription sources to compare.
+          </div>
+        {% endfor %}
+
+        <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {% include "admin/census/censusschedule/includes/raw-source.html" with source=human_source title="Human raw JSON" %}
+          {% include "admin/census/censusschedule/includes/raw-source.html" with source=agent_source title="Agent raw JSON" %}
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <style>
+    .comparison-layout {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: minmax(320px, 38%) minmax(0, 62%);
+    }
+
+    .comparison-source-form {
+      align-items: end;
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    }
+
+    .comparison-image-column {
+      min-width: 0;
+    }
+
+    .comparison-image-card {
+      position: sticky;
+      top: 1rem;
+    }
+
+    .comparison-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: .5rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+    }
+
+    .comparison-select {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: .375rem;
+      color: #374151;
+      min-height: 42px;
+      padding: .55rem .75rem;
+      width: 100%;
+    }
+
+    .comparison-select:focus {
+      border-color: #0060b1;
+      box-shadow: 0 0 0 3px rgba(0, 96, 177, .12);
+      outline: none;
+    }
+
+    .comparison-button {
+      align-items: center;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: .375rem;
+      color: #374151;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: .875rem;
+      font-weight: 600;
+      justify-content: center;
+      min-height: 38px;
+      padding: .5rem .8rem;
+    }
+
+    .comparison-button:hover {
+      background: #f3f4f6;
+    }
+
+    .comparison-button-primary {
+      background: #0060b1;
+      border-color: #0060b1;
+      color: #fff;
+      min-height: 42px;
+    }
+
+    .comparison-button-primary:hover {
+      background: #00529a;
+    }
+
+    .comparison-stat {
+      border: 1px solid;
+      border-radius: .5rem;
+      font-size: .75rem;
+      padding: .75rem;
+    }
+
+    .comparison-stat span {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .comparison-stat-same { background: #f9fafb; border-color: #e5e7eb; color: #4b5563; }
+    .comparison-stat-equivalent { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .comparison-stat-different { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .comparison-stat-missing { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+    .comparison-stat-blank-zero { background: #faf5ff; border-color: #e9d5ff; color: #6b21a8; }
+
+    .comparison-image-viewport {
+      align-items: flex-start;
+      background: #f3f4f6;
+      display: flex;
+      height: calc(100vh - 18rem);
+      justify-content: flex-start;
+      min-height: 420px;
+      overflow: auto;
+      padding: 1rem;
+    }
+
+    .comparison-image-viewport img {
+      display: block;
+      height: auto;
+      max-width: none;
+      transition: width .12s ease;
+      width: 100%;
+    }
+
+    .comparison-source-headings,
+    .comparison-row {
+      display: grid;
+      grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) minmax(190px, 1fr);
+    }
+
+    .comparison-source-headings {
+      gap: 1rem;
+    }
+
+    .comparison-source-heading {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: .5rem;
+      padding: .9rem;
+    }
+
+    .comparison-table-scroll {
+      overflow-x: auto;
+    }
+
+    .comparison-table {
+      min-width: 680px;
+    }
+
+    .comparison-row {
+      border-bottom: 1px solid #e5e7eb;
+      position: relative;
+    }
+
+    .comparison-row:last-child {
+      border-bottom: 0;
+    }
+
+    .comparison-row-different { border-left: 4px solid #f59e0b; }
+    .comparison-row-equivalent { border-left: 4px solid #10b981; }
+    .comparison-row-one_missing { border-left: 4px solid #3b82f6; }
+    .comparison-row-blank_zero { border-left: 4px solid #a855f7; }
+
+    .comparison-label,
+    .comparison-value {
+      min-width: 0;
+      padding: .75rem;
+    }
+
+    .comparison-label {
+      color: #374151;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+
+    .comparison-label small {
+      color: #6b7280;
+      display: block;
+      font-size: .65rem;
+      font-weight: 500;
+      margin-top: .2rem;
+      text-transform: uppercase;
+    }
+
+    .comparison-value {
+      border-left: 1px solid #e5e7eb;
+      color: #111827;
+      font-size: .85rem;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .comparison-value-blank,
+    .comparison-value-missing {
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .comparison-value-structured {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: .75rem;
+    }
+
+    .comparison-raw pre {
+      background: #111827;
+      color: #e5e7eb;
+      font-size: .72rem;
+      max-height: 28rem;
+      overflow: auto;
+      padding: 1rem;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 1100px) {
+      .comparison-layout { grid-template-columns: 1fr; }
+      .comparison-image-card { position: static; }
+      .comparison-image-viewport { height: 65vh; }
+    }
+
+    @media (max-width: 900px) {
+      .comparison-source-form { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .comparison-card,
+      .comparison-source-heading { background: #111827; border-color: #374151; }
+      .comparison-select,
+      .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
+      .comparison-label,
+      .comparison-value { color: #e5e7eb; }
+      .comparison-row,
+      .comparison-value { border-color: #374151; }
+      .comparison-image-viewport { background: #030712; }
+    }
+  </style>
+
+  {% if image_url %}
+    <script>
+      (() => {
+        const image = document.getElementById("schedule-image");
+        const level = document.getElementById("zoom-level");
+        let zoom = 1;
+
+        const render = () => {
+          image.style.width = `${zoom * 100}%`;
+          level.textContent = `${Math.round(zoom * 100)}%`;
+        };
+
+        document.getElementById("zoom-in").addEventListener("click", () => {
+          zoom = Math.min(zoom + .25, 4);
+          render();
+        });
+        document.getElementById("zoom-out").addEventListener("click", () => {
+          zoom = Math.max(zoom - .25, .5);
+          render();
+        });
+        document.getElementById("zoom-reset").addEventListener("click", () => {
+          zoom = 1;
+          render();
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

@@ -2,6 +2,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, connection
+from django.db.models.deletion import ProtectedError
 from django.db.migrations.executor import MigrationExecutor
 
 from census.models import ScheduleTranscription, TranscriptionRun
@@ -18,8 +19,16 @@ def test_transcription_run_identity_cannot_change():
     run = TranscriptionRunFactory(key="stable-run", kind="agent")
 
     run.key = "renamed-run"
-    with pytest.raises(ValidationError, match="key and kind are immutable"):
+    with pytest.raises(ValidationError, match="provenance is immutable"):
         run.save()
+
+    run.refresh_from_db()
+    run.metadata = {"changed": True}
+    with pytest.raises(ValidationError, match="provenance is immutable"):
+        run.save()
+
+    with pytest.raises(ValidationError, match="Immutable records"):
+        TranscriptionRun.objects.filter(pk=run.pk).update(metadata={"changed": True})
 
 
 @pytest.mark.django_db
@@ -32,6 +41,14 @@ def test_schedule_transcription_cannot_be_changed_or_deleted():
 
     with pytest.raises(ValidationError, match="immutable"):
         transcription.delete()
+
+    with pytest.raises(ValidationError, match="Immutable records"):
+        ScheduleTranscription.objects.filter(pk=transcription.pk).update(
+            data={"value": "bulk changed"}
+        )
+
+    with pytest.raises(ProtectedError):
+        transcription.census_schedule.delete()
 
     transcription.refresh_from_db()
     assert transcription.data == {"value": "original"}
@@ -111,4 +128,6 @@ def test_transcription_migration_preserves_legacy_json_and_notes():
     assert restored.ai_transcription == {"source": "agent", "value": 13}
     assert restored.ai_notes == "Uncertain handwriting"
 
-    MigrationExecutor(connection).migrate(new_target)
+    MigrationExecutor(connection).migrate(
+        [("census", "0024_alter_scheduletranscription_census_schedule_and_more")]
+    )

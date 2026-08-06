@@ -1,8 +1,18 @@
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
-from census.models import CensusSchedule, Clergy, Membership, ReligiousBody
+from census.models import (
+    CensusSchedule,
+    Clergy,
+    Membership,
+    ReligiousBody,
+    ScheduleTranscription,
+    TranscriptionBatch,
+    TranscriptionJob,
+    TranscriptionRun,
+)
 from location.models import County, PopulatedPlace, State
 from pages.models import BlogPost, Page
 from visualizations.models import Visualization
@@ -17,6 +27,12 @@ class Command(BaseCommand):
         religious_body_ct = ContentType.objects.get_for_model(ReligiousBody)
         membership_ct = ContentType.objects.get_for_model(Membership)
         clergy_ct = ContentType.objects.get_for_model(Clergy)
+        transcription_run_ct = ContentType.objects.get_for_model(TranscriptionRun)
+        transcription_batch_ct = ContentType.objects.get_for_model(TranscriptionBatch)
+        transcription_job_ct = ContentType.objects.get_for_model(TranscriptionJob)
+        schedule_transcription_ct = ContentType.objects.get_for_model(
+            ScheduleTranscription
+        )
         state_ct = ContentType.objects.get_for_model(State)
         county_ct = ContentType.objects.get_for_model(County)
         place_ct = ContentType.objects.get_for_model(PopulatedPlace)
@@ -66,7 +82,9 @@ class Command(BaseCommand):
             # Location data (read-only)
             Permission.objects.get(content_type=state_ct, codename="view_state"),
             Permission.objects.get(content_type=county_ct, codename="view_county"),
-            Permission.objects.get(content_type=place_ct, codename="view_populatedplace"),
+            Permission.objects.get(
+                content_type=place_ct, codename="view_populatedplace"
+            ),
             # Content management (read-only)
             Permission.objects.get(content_type=blogpost_ct, codename="view_blogpost"),
             Permission.objects.get(content_type=page_ct, codename="view_page"),
@@ -81,7 +99,23 @@ class Command(BaseCommand):
 
         # Add all permissions for reviewers
         reviewer_permissions = Permission.objects.filter(
-            content_type__in=[census_ct, religious_body_ct, membership_ct, clergy_ct]
+            Q(
+                content_type__in=[
+                    census_ct,
+                    religious_body_ct,
+                    membership_ct,
+                    clergy_ct,
+                ]
+            )
+            | Q(
+                content_type__in=[
+                    transcription_run_ct,
+                    transcription_batch_ct,
+                    transcription_job_ct,
+                    schedule_transcription_ct,
+                ],
+                codename__startswith="view_",
+            )
         )
         reviewers_group.permissions.set(reviewer_permissions)
 

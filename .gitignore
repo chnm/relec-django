@@ -144,6 +144,7 @@ celerybeat.pid
 
 # Environments
 .env
+.claude_key
 .venv
 env/
 venv/

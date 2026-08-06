@@ -1,0 +1,179 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+      <p class="mt-2 max-w-3xl text-sm text-gray-600">
+        Create an immutable transcription run for the selected schedules. A separate
+        worker submits the images to Anthropic; no result is promoted into canonical
+        census fields.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Eligible</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-800">{{ eligible_count }}</div>
+        <div class="mt-1 text-xs text-gray-500">Has an original image</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Contract</div>
+        <div class="mt-2 text-sm font-semibold text-gray-800">{{ prompt_version }}</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Workflow</div>
+        {% if transcription_enabled %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">Enabled</span>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">Disabled</span>
+        {% endif %}
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">API key</div>
+        {% if api_configured %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">Configured</span>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">Missing</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if not transcription_enabled or not api_configured %}
+      <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
+        <strong>Configuration required.</strong>
+        The run cannot be queued until the workflow is enabled and the API key is
+        available in the deployment environment.
+      </div>
+    {% endif %}
+
+    <form method="post" class="claude-run-form space-y-6">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="p-4 text-sm text-red-700 border border-red-200 rounded-lg bg-red-50">
+          {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <h2 class="text-lg font-semibold text-gray-800">Run settings</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          These values become permanent provenance for the run.
+        </p>
+
+        <div class="grid grid-cols-1 gap-6 mt-5 md:grid-cols-3">
+          {% for field in form %}
+            <div>
+              <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                {{ field.label }}{% if field.field.required %}<span class="text-red-600"> *</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}
+                <p class="mt-2 text-xs leading-5 text-gray-500">{{ field.help_text }}</p>
+              {% endif %}
+              {% for error in field.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% for object_id in selected %}
+        <input type="hidden" name="_selected_action" value="{{ object_id }}">
+      {% endfor %}
+      <input type="hidden" name="action" value="queue_claude_transcription">
+      <input type="hidden" name="apply" value="1">
+
+      <div class="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <a href="{% url 'admin:census_censusschedule_changelist' %}"
+           class="button secondary text-center">
+          ← Cancel
+        </a>
+        <button type="submit" class="button primary">
+          Create run and queue jobs
+        </button>
+      </div>
+    </form>
+
+    <div class="mt-8 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-base font-semibold text-gray-800">Selected schedules</h2>
+        <p class="mt-1 text-xs text-gray-500">Showing the first 100 selected records.</p>
+      </div>
+      <div class="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for object in objects %}
+          <div class="px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md bg-gray-50">
+            <span class="font-medium">{{ object.schedule_id }}</span>
+            <span class="text-gray-500">— {{ object.schedule_title|truncatechars:48 }}</span>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No schedules selected.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .claude-run-form input[type="text"],
+    .claude-run-form input[type="number"],
+    .claude-run-form select {
+      background-color: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      color: #374151;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      min-height: 40px;
+      padding: 0.55rem 0.75rem;
+      width: 100%;
+    }
+
+    .claude-run-form input:focus,
+    .claude-run-form select:focus {
+      border-color: #0060b1;
+      box-shadow: 0 0 0 3px rgba(0, 96, 177, 0.12);
+      outline: none;
+    }
+
+    .button.primary {
+      background-color: #0060b1 !important;
+      border: 1px solid #0060b1 !important;
+      border-radius: 0.375rem !important;
+      color: #fff !important;
+      cursor: pointer;
+      display: inline-block;
+      font-weight: 600 !important;
+      padding: 0.65rem 1.25rem !important;
+      text-decoration: none !important;
+    }
+
+    .button.primary:hover {
+      background-color: #00529a !important;
+      border-color: #00529a !important;
+    }
+
+    .button.secondary {
+      background-color: #fff !important;
+      border: 1px solid #d1d5db !important;
+      border-radius: 0.375rem !important;
+      color: #374151 !important;
+      display: inline-block;
+      font-weight: 500 !important;
+      padding: 0.65rem 1rem !important;
+      text-decoration: none !important;
+    }
+
+    .button.secondary:hover {
+      background-color: #f3f4f6 !important;
+    }
+  </style>
+{% endblock %}

@@ -40,6 +40,46 @@ CSRF_TRUSTED_ORIGINS = env.list(
     "DJANGO_CSRF_TRUSTED_ORIGINS", default=["http://localhost"]
 )
 
+# Claude batch transcription is opt-in. Secrets remain in the environment; the
+# database and admin record only whether the provider is configured.
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+ANTHROPIC_API_BASE_URL = env(
+    "ANTHROPIC_API_BASE_URL", default="https://api.anthropic.com"
+)
+CLAUDE_TRANSCRIPTION_ENABLED = env.bool("CLAUDE_TRANSCRIPTION_ENABLED", default=False)
+CLAUDE_TRANSCRIPTION_MODELS = env.list(
+    "CLAUDE_TRANSCRIPTION_MODELS", default=["claude-sonnet-4-6"]
+)
+CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=4096
+)
+CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT = env.int(
+    "CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT", default=10
+)
+CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT", default=100
+)
+CLAUDE_TRANSCRIPTION_BATCH_SIZE = env.int("CLAUDE_TRANSCRIPTION_BATCH_SIZE", default=25)
+CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES", default=1
+)
+CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES", default=200 * 1024 * 1024
+)
+CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES", default=10 * 1024 * 1024
+)
+CLAUDE_TRANSCRIPTION_LEASE_SECONDS = env.int(
+    "CLAUDE_TRANSCRIPTION_LEASE_SECONDS", default=300
+)
+CLAUDE_TRANSCRIPTION_POLL_SECONDS = env.int(
+    "CLAUDE_TRANSCRIPTION_POLL_SECONDS", default=60
+)
+CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT = env.int(
+    "CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT", default=120
+)
+CLAUDE_TRANSCRIPTION_PRICING = env.json("CLAUDE_TRANSCRIPTION_PRICING", default={})
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -191,7 +231,7 @@ AUTHENTICATION_BACKENDS = [
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "America/New_York"
 
 USE_I18N = True
 USE_TZ = True
@@ -251,7 +291,16 @@ THUMBNAIL_ALIASES = {
     },
 }
 
+
 # Django Unfold Configuration
+def can_view_ai_transcription(request):
+    """Keep paid AI workflow navigation limited to reviewers."""
+    return (
+        request.user.is_superuser
+        or request.user.groups.filter(name="Reviewers").exists()
+    )
+
+
 UNFOLD = {
     "SITE_TITLE": "Religious Ecologies",
     "SITE_HEADER": "Religious Ecologies",
@@ -362,6 +411,31 @@ UNFOLD = {
                         "title": "Missing Location",
                         "icon": "wrong_location",
                         "link": lambda request: "/admin/census/censusschedule/?schedule_location_status=missing_location",
+                    },
+                ],
+            },
+            {
+                "title": "AI Transcription",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Transcription Runs",
+                        "icon": "history",
+                        "link": lambda request: "/admin/census/transcriptionrun/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Batches",
+                        "icon": "stacks",
+                        "link": lambda request: "/admin/census/transcriptionbatch/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Jobs",
+                        "icon": "checklist",
+                        "link": lambda request: "/admin/census/transcriptionjob/",
+                        "permission": can_view_ai_transcription,
                     },
                 ],
             },
