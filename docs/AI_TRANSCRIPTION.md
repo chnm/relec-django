@@ -206,6 +206,79 @@ provider result is retained on the job; Django converts the transport values,
 validates the candidate schema, and confirms any selected populated-place ID belongs
 to the schedule county before creating `ScheduleTranscription`.
 
+### Revising the prompt or schema
+
+Treat every prompt/schema version as a permanent scholarly contract. Do not reuse a
+version name for changed instructions or a changed candidate shape, even though old
+runs retain exact copies of their original contract.
+
+To introduce a new contract:
+
+1. Copy the current prompt and schema to files with a new matching version name,
+   such as `relec-1926-v2.md` and `relec-1926-v2.json`. Keep the older files in the
+   repository for review and reproducibility.
+2. Update `CONTRACT_VERSION` in `census/transcription/contracts.py` to the new name.
+   Update the schema `$id`, its top-level `schema_version` constant, and the prompt's
+   required output version together.
+3. Add or revise fixtures and tests for every semantic change. Confirm the original
+   candidate schema still enforces research constraints locally and the derived
+   transport schema contains only features supported by Anthropic structured output.
+4. Run the transcription tests, the full test suite, and `manage.py check` before
+   making a live request.
+5. Launch a new, uniquely named run for the pilot. Never retrofit the new contract
+   into an existing run or overwrite a failed run; exact prompt/schema contents and
+   hashes are frozen when each run is created.
+6. Compare the pilot candidates with human snapshots in admin and record findings
+   before approving the new contract for a larger batch.
+
+A contract change does not require a database migration unless the durable run,
+batch, job, or output models also change.
+
+## Representative pilot runbook
+
+Live API calls incur cost and require explicit authorization. Start with a bounded
+sample rather than selecting a convenient sequence of similar schedules. Include,
+when available:
+
+- a clear, substantially complete schedule;
+- a schedule with meaningful blanks and zeroes;
+- faint, corrected, crossed-out, or otherwise uncertain handwriting;
+- multiple religious bodies, memberships, or clergy;
+- different denominations and geographic contexts;
+- variation in image dimensions or file size.
+
+Before queueing the pilot:
+
+1. Confirm the API key, model allowlist, object-storage settings, and transcription
+   feature flag are configured without displaying or copying credentials into admin.
+2. Confirm every selected schedule has a working `original_image` reference. Use the
+   manifest import dry run and bounded storage verification when local references are
+   incomplete.
+3. Restart the Django development server after environment changes. Stop and restart
+   the worker after code or contract changes because the management-command process
+   does not auto-reload.
+4. In the Census Schedule changelist, select only the representative sample, choose
+   the Claude queue action, give the run a unique key, and keep the explicit limit no
+   larger than the intended sample.
+5. Start `run_transcription_worker` separately. Monitor the read-only Runs, Batches,
+   and Jobs pages until every request reaches a terminal or manual-recovery state.
+
+Review each successful candidate through **Compare transcriptions** with the image
+visible. Record at least schema validity, blank-versus-zero differences, numeric
+agreement, significant text differences, newly recovered fields, uncertainty notes,
+input/output token usage, and reviewer observations. Do not promote values during
+this review.
+
+Keep provider rejections and invalid results as evidence. After correcting code or a
+contract, create a new immutable run rather than editing or resubmitting the failed
+one. Do not automatically retry `needs_recovery` work until provider acceptance is
+resolved; doing so can duplicate paid requests.
+
+Do not expand the batch until all pilot jobs are accounted for, differences have
+been reviewed, unexpected failures have an explanation, and observed usage remains
+within the approved budget. When the pilot is complete, stop the worker with
+`Ctrl-C`; queued and provider-backed state remains in PostgreSQL for a later restart.
+
 ## Testing
 
 Tests use fake clients and local media storage. They make no live Anthropic or S3
