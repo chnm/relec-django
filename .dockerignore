@@ -1,6 +1,9 @@
 *.swp
 
 .env
+.claude_key
+*.pem
+*.key
 .git/
 .github/
 
