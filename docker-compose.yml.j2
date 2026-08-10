@@ -41,6 +41,7 @@ services:
         condition: service_started
 
   {% set service = (stack.services | selectattr('name', 'eq', 'transcription-worker') | first) %}
+  {% if service is defined %}
 
   transcription-worker:
     image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
@@ -68,6 +69,7 @@ services:
     depends_on:
       app:
         condition: service_healthy
+  {% endif %}
 
   memcached:
     image: memcached:1-alpine
