@@ -7,9 +7,9 @@ models.
 ## Data model
 
 - `TranscriptionRun` is immutable scholarly provenance. It freezes the model,
-  prompt, candidate schema, provider transport schema, their SHA-256 hashes, deployed
-  application revision, launch selection, maximum output tokens, and an optional
-  pricing snapshot.
+  prompt, candidate schema, provider transport schema, their SHA-256 hashes, launch
+  selection, maximum output tokens, and optional application-revision and pricing
+  provenance.
 - `TranscriptionBatch` is one Anthropic Message Batch submission. It stores the
   provider ID, status snapshots, request counts, timestamps, and a renewable worker
   lease.
@@ -32,19 +32,19 @@ environment variables, never through an admin form:
 ANTHROPIC_API_KEY=...
 CLAUDE_TRANSCRIPTION_ENABLED=True
 CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6
-APPLICATION_REVISION=<deployed-git-commit-or-image-digest>
 ```
 
-`APPLICATION_REVISION` must identify the code actually running in both the web and
-worker services. Deployment should inject the exact Git commit, immutable image
-digest, or release identifier. A transcription run cannot be queued when this value
-is blank. The value is copied into immutable run provenance and must not be changed
-for an already-deployed image.
+`APPLICATION_REVISION` is optional best-effort provenance. When deployment automation
+supplies an exact Git commit, immutable image digest, or release identifier, the value
+is copied into the run. Its absence never blocks a run; prompt/schema contents and
+hashes remain the reproducibility contract. Do not maintain this setting manually in
+development unless a specific experiment needs it.
 
 Optional controls:
 
 ```text
 ANTHROPIC_API_BASE_URL=https://api.anthropic.com
+APPLICATION_REVISION=<deployed-git-commit-or-image-digest>
 CLAUDE_TRANSCRIPTION_MAX_TOKENS=4096
 CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT=10
 CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT=100
@@ -75,8 +75,8 @@ selected schedules for Claude transcription**. The confirmation page reports:
 
 - selected and image-eligible schedule counts;
 - the prompt/schema version;
-- whether the workflow, API key, and deployed application revision are configured
-  (never the key);
+- whether the workflow and API key are configured (never the key), plus an optional
+  application revision when one was supplied automatically;
 - run key, allowed model, and a hard-bounded schedule limit.
 
 The confirmation page deliberately makes no provider request. Exact encoded request

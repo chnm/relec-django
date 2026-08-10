@@ -49,17 +49,16 @@
         {% if revision_configured %}
           <div class="mt-2 font-mono text-xs text-gray-800 break-all">{{ application_revision }}</div>
         {% else %}
-          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">Missing</span>
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-full">Not recorded</span>
         {% endif %}
       </div>
     </div>
 
-    {% if not transcription_enabled or not api_configured or not revision_configured %}
+    {% if not transcription_enabled or not api_configured %}
       <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
         <strong>Configuration required.</strong>
         The run cannot be queued until the workflow is enabled, the API key is
-        available, and the deployed application revision is identified in the
-        deployment environment.
+        available in the deployment environment.
       </div>
     {% endif %}
 

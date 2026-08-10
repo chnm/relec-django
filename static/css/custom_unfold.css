@@ -460,6 +460,36 @@ button.bg-primary-600 {
   color: white;
 }
 
+.status-not-queued {
+  background-color: #6b7280;
+  color: white;
+}
+
+.status-queued {
+  background-color: #0060b1;
+  color: white;
+}
+
+.status-processing {
+  background-color: #f97316;
+  color: white;
+}
+
+.status-transcribed {
+  background-color: #0f766e;
+  color: white;
+}
+
+.status-failed {
+  background-color: #b91c1c;
+  color: white;
+}
+
+.status-needs-recovery {
+  background-color: #7c3aed;
+  color: white;
+}
+
 @media (prefers-color-scheme: dark) {
   .dashboard-card {
     background: #111827;
