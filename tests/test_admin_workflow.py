@@ -5,6 +5,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, override_settings
 
 from census.admin import (
+    AITranscriptionFilter,
     CensusScheduleAdmin,
     TranscriptionRunAdmin,
     assign_to_me,
@@ -13,7 +14,12 @@ from census.admin import (
     queue_claude_transcription,
 )
 from census.models import CensusSchedule, TranscriptionRun
-from tests.factories import CensusScheduleFactory, ReligiousBodyFactory
+from tests.factories import (
+    CensusScheduleFactory,
+    ReligiousBodyFactory,
+    ScheduleTranscriptionFactory,
+    TranscriptionRunFactory,
+)
 
 
 @pytest.fixture
@@ -46,6 +52,44 @@ def admin_post_request(user, data):
     request.session = {}
     request._messages = FallbackStorage(request)
     return request
+
+
+def ai_transcription_filter(user, value):
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = RequestFactory().get(
+        "/admin/census/censusschedule/",
+        {"ai_transcription": value},
+    )
+    request.user = user
+    return AITranscriptionFilter(
+        request,
+        request.GET.copy(),
+        CensusSchedule,
+        model_admin,
+    ), request
+
+
+@pytest.mark.django_db
+def test_ai_transcription_filter_uses_agent_candidates(reviewer):
+    transcribed = CensusScheduleFactory()
+    human_only = CensusScheduleFactory()
+    not_transcribed = CensusScheduleFactory()
+    ScheduleTranscriptionFactory(
+        census_schedule=transcribed,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=human_only,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+    )
+
+    completed_filter, request = ai_transcription_filter(reviewer, "yes")
+    completed = completed_filter.queryset(request, CensusSchedule.objects.all())
+    pending_filter, request = ai_transcription_filter(reviewer, "no")
+    pending = pending_filter.queryset(request, CensusSchedule.objects.all())
+
+    assert list(completed) == [transcribed]
+    assert set(pending) == {human_only, not_transcribed}
 
 
 @pytest.mark.django_db

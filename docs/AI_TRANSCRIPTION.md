@@ -295,6 +295,28 @@ been reviewed, unexpected failures have an explanation, and observed usage remai
 within the approved budget. When the pilot is complete, stop the worker with
 `Ctrl-C`; queued and provider-backed state remains in PostgreSQL for a later restart.
 
+### Representative pilot completed
+
+Run `claude-pilot-20260810-representative` evaluated contract
+`relec-1926-v1` with `claude-sonnet-4-6` at application revision
+`e23c41ca54a27b9c81df0ba0bf7c07a93f7eabf6`. It deliberately included a
+zero-heavy schedule with clergy, a second zero-heavy schedule from a different
+geographic context, and a blank-heavy schedule without denomination context.
+
+| Resource | Result | Input tokens | Output tokens |
+| --- | --- | ---: | ---: |
+| `6875` | Succeeded | 7,653 | 852 |
+| `32765` | Succeeded | 7,291 | 761 |
+| `182638` | Succeeded | 6,344 | 883 |
+
+The single provider batch ended normally with all three requests accounted for. It
+contained 15,146,239 encoded bytes and used 21,288 input and 2,496 output tokens;
+the provider reported no cache-creation or cache-read tokens. A reviewer visually
+compared all three immutable candidates with their human snapshots and source
+images. The materials were acceptable, with no blocking prompt/schema issue or
+required `relec-1926-v2` revision identified before merge. This review did not
+promote any candidate values into canonical census models.
+
 ## Issue scope reconciliation
 
 - #64's durable candidate-generation scope is implemented: immutable provenance and

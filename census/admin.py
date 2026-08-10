@@ -114,6 +114,30 @@ class CensusScheduleLocationFilter(admin.SimpleListFilter):
         return queryset
 
 
+class AITranscriptionFilter(admin.SimpleListFilter):
+    """Filter schedules by the presence of an immutable agent candidate."""
+
+    title = "AI transcription"
+    parameter_name = "ai_transcription"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("yes", "AI transcribed"),
+            ("no", "Not AI transcribed"),
+        )
+
+    def queryset(self, request, queryset):
+        agent_candidate = ScheduleTranscription.objects.filter(
+            census_schedule_id=models.OuterRef("pk"),
+            run__kind="agent",
+        )
+        if self.value() == "yes":
+            return queryset.filter(models.Exists(agent_candidate))
+        if self.value() == "no":
+            return queryset.filter(~models.Exists(agent_candidate))
+        return queryset
+
+
 class TranscriptionWorkflowFilter(admin.SimpleListFilter):
     """Custom filter for common transcription workflow views"""
 
@@ -822,6 +846,7 @@ class CensusScheduleAdmin(ModelAdmin):
     ]
     list_filter = [
         TranscriptionWorkflowFilter,
+        AITranscriptionFilter,
         "transcription_status",
         AssignmentStatusFilter,
         "assigned_transcriber",

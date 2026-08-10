@@ -24,7 +24,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
-      - DB_PASSWORD=password
+      - DB_PASS=password
       - OBJ_STORAGE=True
       - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
@@ -58,7 +58,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
-      - DB_PASSWORD=password
+      - DB_PASS=password
       - OBJ_STORAGE=True
       - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
