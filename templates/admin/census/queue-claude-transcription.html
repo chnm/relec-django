@@ -14,7 +14,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-6">
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-5">
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
@@ -37,14 +37,6 @@
         {% endif %}
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">API key</div>
-        {% if api_configured %}
-          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">Configured</span>
-        {% else %}
-          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">Missing</span>
-        {% endif %}
-      </div>
-      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">App revision</div>
         {% if revision_configured %}
           <div class="mt-2 font-mono text-xs text-gray-800 break-all">{{ application_revision }}</div>
@@ -54,11 +46,12 @@
       </div>
     </div>
 
-    {% if not transcription_enabled or not api_configured %}
+    {% if not transcription_enabled %}
       <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
         <strong>Configuration required.</strong>
-        The run cannot be queued until the workflow is enabled, the API key is
-        available in the deployment environment.
+        The run cannot be queued until CLAUDE_TRANSCRIPTION_ENABLED is set in
+        the deployment environment. The API key is held only by the
+        transcription worker, so this page cannot report on it.
       </div>
     {% endif %}
 

@@ -21,7 +21,7 @@ from census.transcription.contracts import (
     validate_candidate,
 )
 from census.transcription.payloads import build_batch_request
-from census.transcription.services import launch_transcription_run
+from census.transcription.services import LaunchError, launch_transcription_run
 from census.transcription.worker import ClaudeTranscriptionWorker
 from tests.factories import (
     CensusScheduleFactory,
@@ -195,7 +195,7 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
 @pytest.mark.django_db
 @override_settings(
     CLAUDE_TRANSCRIPTION_ENABLED=True,
-    ANTHROPIC_API_KEY="test-key",
+    ANTHROPIC_API_KEY="",
     CLAUDE_TRANSCRIPTION_MODELS=["test-model"],
     CLAUDE_TRANSCRIPTION_MAX_TOKENS=2048,
     CLAUDE_TRANSCRIPTION_PRICING={"test-model": {"input_per_million": "1.00"}},
@@ -233,7 +233,7 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
 @pytest.mark.django_db
 @override_settings(
     CLAUDE_TRANSCRIPTION_ENABLED=True,
-    ANTHROPIC_API_KEY="test-key",
+    ANTHROPIC_API_KEY="",
     APPLICATION_REVISION="",
 )
 def test_launch_allows_missing_application_revision():
@@ -248,6 +248,39 @@ def test_launch_allows_missing_application_revision():
 
     assert run.metadata["application_revision"] is None
     assert run.transcription_jobs.count() == 1
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True, ANTHROPIC_API_KEY="")
+def test_launch_does_not_require_an_api_key_in_the_web_process():
+    """Only the worker talks to the provider, so the key stays out of the web tier."""
+    schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+        key="no-api-key-in-web-process",
+        model="claude-sonnet-4-6",
+        limit=1,
+    )
+
+    assert run.transcription_jobs.count() == 1
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=False, ANTHROPIC_API_KEY="test-key")
+def test_launch_refuses_when_the_workflow_is_disabled():
+    """CLAUDE_TRANSCRIPTION_ENABLED is now the only launch gate."""
+    schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+
+    with pytest.raises(LaunchError):
+        launch_transcription_run(
+            queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+            key="workflow-disabled",
+            model="claude-sonnet-4-6",
+            limit=1,
+        )
+
+    assert not TranscriptionJob.objects.exists()
 
 
 @pytest.mark.django_db
