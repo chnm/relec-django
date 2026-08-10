@@ -18,6 +18,7 @@ from tests.factories import (
     CensusScheduleFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
+    TranscriptionJobFactory,
     TranscriptionRunFactory,
 )
 
@@ -54,11 +55,11 @@ def admin_post_request(user, data):
     return request
 
 
-def ai_transcription_filter(user, value):
+def ai_status_filter(user, value):
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
     request = RequestFactory().get(
         "/admin/census/censusschedule/",
-        {"ai_transcription": value},
+        {"ai_status": value},
     )
     request.user = user
     return AITranscriptionFilter(
@@ -70,26 +71,67 @@ def ai_transcription_filter(user, value):
 
 
 @pytest.mark.django_db
-def test_ai_transcription_filter_uses_agent_candidates(reviewer):
+def test_ai_status_filter_uses_latest_job_and_legacy_candidates(reviewer):
+    not_queued = CensusScheduleFactory()
+    queued = CensusScheduleFactory()
+    processing = CensusScheduleFactory()
     transcribed = CensusScheduleFactory()
-    human_only = CensusScheduleFactory()
-    not_transcribed = CensusScheduleFactory()
+    legacy_transcribed = CensusScheduleFactory()
+    failed = CensusScheduleFactory()
+    needs_recovery = CensusScheduleFactory()
+    TranscriptionJobFactory(
+        census_schedule=queued,
+        state="preparing",
+    )
+    TranscriptionJobFactory(
+        census_schedule=processing,
+        state="submitted",
+    )
+    TranscriptionJobFactory(
+        census_schedule=transcribed,
+        state="succeeded",
+    )
     ScheduleTranscriptionFactory(
         census_schedule=transcribed,
         run=TranscriptionRunFactory(kind="agent"),
     )
     ScheduleTranscriptionFactory(
-        census_schedule=human_only,
-        run=TranscriptionRunFactory(kind="human_snapshot"),
+        census_schedule=legacy_transcribed,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    TranscriptionJobFactory(
+        census_schedule=failed,
+        state="invalid",
+    )
+    TranscriptionJobFactory(
+        census_schedule=needs_recovery,
+        state="needs_recovery",
     )
 
-    completed_filter, request = ai_transcription_filter(reviewer, "yes")
-    completed = completed_filter.queryset(request, CensusSchedule.objects.all())
-    pending_filter, request = ai_transcription_filter(reviewer, "no")
-    pending = pending_filter.queryset(request, CensusSchedule.objects.all())
+    expected = {
+        "not_queued": {not_queued},
+        "queued": {queued},
+        "processing": {processing},
+        "transcribed": {transcribed, legacy_transcribed},
+        "failed": {failed},
+        "needs_recovery": {needs_recovery},
+    }
+    for status, schedules in expected.items():
+        status_filter, request = ai_status_filter(reviewer, status)
+        queryset = status_filter.queryset(request, CensusSchedule.objects.all())
+        assert set(queryset) == schedules
 
-    assert list(completed) == [transcribed]
-    assert set(pending) == {human_only, not_transcribed}
+
+@pytest.mark.django_db
+def test_ai_status_is_displayed_in_schedule_list(reviewer):
+    schedule = CensusScheduleFactory()
+    TranscriptionJobFactory(census_schedule=schedule, state="submitted")
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    annotated = model_admin.get_queryset(admin_request(reviewer)).get(pk=schedule.pk)
+
+    assert "ai_status_display" in model_admin.list_display
+    assert "Processing" in model_admin.ai_status_display(annotated)
 
 
 @pytest.mark.django_db
@@ -149,6 +191,31 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert b"This field is required" not in response.content
     assert b"claude-" in response.content
     assert b"revision-for-admin-preview" in response.content
+
+
+@pytest.mark.django_db
+@override_settings(
+    APPLICATION_REVISION="",
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    ANTHROPIC_API_KEY="test-key",
+)
+def test_claude_action_treats_application_revision_as_optional(reviewer):
+    schedule = CensusScheduleFactory()
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {"_selected_action": [schedule.pk], "action": "queue_claude_transcription"},
+    )
+
+    response = queue_claude_transcription(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk=schedule.pk),
+    )
+
+    assert response.status_code == 200
+    assert b"Not recorded" in response.content
+    assert b"Configuration required" not in response.content
 
 
 @pytest.mark.django_db

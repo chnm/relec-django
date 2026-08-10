@@ -21,7 +21,7 @@ from census.transcription.contracts import (
     validate_candidate,
 )
 from census.transcription.payloads import build_batch_request
-from census.transcription.services import LaunchError, launch_transcription_run
+from census.transcription.services import launch_transcription_run
 from census.transcription.worker import ClaudeTranscriptionWorker
 from tests.factories import (
     CensusScheduleFactory,
@@ -236,16 +236,18 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
     ANTHROPIC_API_KEY="test-key",
     APPLICATION_REVISION="",
 )
-def test_launch_requires_application_revision():
+def test_launch_allows_missing_application_revision():
     schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
 
-    with pytest.raises(LaunchError, match="APPLICATION_REVISION is not configured"):
-        launch_transcription_run(
-            queryset=CensusSchedule.objects.filter(pk=schedule.pk),
-            key="missing-application-revision",
-            model="claude-sonnet-4-6",
-            limit=1,
-        )
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+        key="missing-application-revision",
+        model="claude-sonnet-4-6",
+        limit=1,
+    )
+
+    assert run.metadata["application_revision"] is None
+    assert run.transcription_jobs.count() == 1
 
 
 @pytest.mark.django_db

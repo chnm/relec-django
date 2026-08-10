@@ -20,8 +20,6 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
         raise LaunchError("Claude transcription is disabled by configuration.")
     if not settings.ANTHROPIC_API_KEY:
         raise LaunchError("ANTHROPIC_API_KEY is not configured.")
-    if not settings.APPLICATION_REVISION:
-        raise LaunchError("APPLICATION_REVISION is not configured.")
     if model not in settings.CLAUDE_TRANSCRIPTION_MODELS:
         raise LaunchError("The selected Claude model is not allowed.")
     if limit < 1 or limit > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT:
@@ -42,7 +40,7 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
     metadata = {
         "provider": "anthropic",
         "orchestration": "messages_batch_api",
-        "application_revision": settings.APPLICATION_REVISION,
+        "application_revision": settings.APPLICATION_REVISION or None,
         "model": model,
         "max_tokens": settings.CLAUDE_TRANSCRIPTION_MAX_TOKENS,
         "contract_version": contract["version"],
