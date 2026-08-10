@@ -23,12 +23,7 @@ from .contracts import (
 )
 from .payloads import PayloadError, build_batch_request
 
-ACTIVE_BATCH_STATES = [
-    TranscriptionBatch.State.QUEUED,
-    TranscriptionBatch.State.SUBMITTING,
-    TranscriptionBatch.State.IN_PROGRESS,
-    TranscriptionBatch.State.COLLECTING,
-]
+ACTIVE_BATCH_STATES = TranscriptionBatch.ACTIVE_STATES
 SCHEDULER_ADVISORY_LOCK_ID = 6401926
 
 

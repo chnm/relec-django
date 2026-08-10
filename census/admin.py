@@ -41,7 +41,11 @@ from .models import (
 from .resources import CensusScheduleResource, DenominationResource
 from .transcription.comparison import build_comparison, source_raw_json
 from .transcription.contracts import CONTRACT_VERSION
-from .transcription.services import LaunchError, launch_transcription_run
+from .transcription.services import (
+    LaunchError,
+    launch_transcription_run,
+    worker_status,
+)
 from .workflow import (
     LOCKED_FOR_TRANSCRIBERS,
     TRANSCRIBER_ACTIONS,
@@ -859,6 +863,7 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "application_revision": settings.APPLICATION_REVISION,
             "revision_configured": bool(settings.APPLICATION_REVISION),
             "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,
+            "worker_status": worker_status(),
             "prompt_version": CONTRACT_VERSION,
         },
     )

@@ -21,7 +21,11 @@ from census.transcription.contracts import (
     validate_candidate,
 )
 from census.transcription.payloads import build_batch_request
-from census.transcription.services import LaunchError, launch_transcription_run
+from census.transcription.services import (
+    LaunchError,
+    launch_transcription_run,
+    worker_status,
+)
 from census.transcription.worker import ClaudeTranscriptionWorker
 from tests.factories import (
     CensusScheduleFactory,
@@ -281,6 +285,62 @@ def test_launch_refuses_when_the_workflow_is_disabled():
         )
 
     assert not TranscriptionJob.objects.exists()
+
+
+@pytest.mark.django_db
+def test_worker_status_reports_idle_without_claiming_the_process_is_up():
+    """An empty database means "no work", which is not evidence of liveness."""
+    status = worker_status()
+
+    assert status["tone"] == "idle"
+    assert status["label"] == "Idle"
+    assert status["last_activity"] is None
+    assert "cannot confirm" in status["detail"]
+
+
+@pytest.mark.django_db
+def test_worker_status_reports_a_freshly_heartbeating_batch_as_working():
+    now = timezone.now()
+    TranscriptionBatchFactory(
+        state=TranscriptionBatch.State.IN_PROGRESS,
+        heartbeat_at=now - timedelta(seconds=5),
+    )
+
+    status = worker_status(now=now)
+
+    assert status["tone"] == "ok"
+    assert status["label"] == "Working"
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_LEASE_SECONDS=300)
+def test_worker_status_flags_an_active_batch_with_a_lapsed_heartbeat():
+    """A hung worker looks exactly like this from the web tier."""
+    now = timezone.now()
+    TranscriptionBatchFactory(
+        state=TranscriptionBatch.State.COLLECTING,
+        heartbeat_at=now - timedelta(seconds=1200),
+    )
+
+    status = worker_status(now=now)
+
+    assert status["tone"] == "alert"
+    assert status["label"] == "Stalled"
+
+
+@pytest.mark.django_db
+def test_worker_status_surfaces_batches_awaiting_manual_recovery():
+    now = timezone.now()
+    TranscriptionBatchFactory(
+        state=TranscriptionBatch.State.NEEDS_RECOVERY,
+        heartbeat_at=now - timedelta(seconds=30),
+    )
+
+    status = worker_status(now=now)
+
+    assert status["tone"] == "warn"
+    assert status["label"] == "Needs recovery"
+    assert "1 batch requires" in status["detail"]
 
 
 @pytest.mark.django_db
