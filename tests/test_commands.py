@@ -7,8 +7,10 @@ import requests
 from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.test import override_settings
 
 from census.management.commands.import_datascribe_data import map_workflow_status
+from census.transcription.worker import ClaudeTranscriptionWorker
 
 from .factories import CensusScheduleFactory
 
@@ -387,3 +389,48 @@ class TestFetchScheduleImageManifestCommand:
             call_command("fetch_schedule_image_manifest", output)
 
         assert output.read_text(encoding="utf-8") == "keep me"
+
+
+@pytest.mark.django_db
+class TestTranscriptionWorkerLiveness:
+    """The container healthcheck reads the file these tests assert on."""
+
+    @override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True, ANTHROPIC_API_KEY="test-key")
+    def test_working_worker_refreshes_the_liveness_file(self, tmp_path):
+        liveness = tmp_path / "alive"
+
+        with patch.object(ClaudeTranscriptionWorker, "run_once", return_value=False):
+            call_command(
+                "run_transcription_worker",
+                "--once",
+                f"--liveness-file={liveness}",
+            )
+
+        assert liveness.exists()
+
+    @override_settings(CLAUDE_TRANSCRIPTION_ENABLED=False, ANTHROPIC_API_KEY="")
+    def test_disabled_worker_refreshes_it_before_idling(self, tmp_path):
+        """A deliberately disabled worker must not look unhealthy."""
+        liveness = tmp_path / "alive"
+
+        with patch(
+            "census.management.commands.run_transcription_worker.time.sleep"
+        ) as sleep:
+            sleep.side_effect = InterruptedError
+            with pytest.raises(InterruptedError):
+                call_command(
+                    "run_transcription_worker",
+                    "--idle-when-disabled",
+                    f"--liveness-file={liveness}",
+                )
+
+        assert liveness.exists()
+
+    @override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True, ANTHROPIC_API_KEY="test-key")
+    def test_liveness_file_can_be_disabled(self, tmp_path):
+        liveness = tmp_path / "alive"
+
+        with patch.object(ClaudeTranscriptionWorker, "run_once", return_value=False):
+            call_command("run_transcription_worker", "--once", "--liveness-file=")
+
+        assert not liveness.exists()
