@@ -376,8 +376,11 @@ class ClaudeTranscriptionWorker:
             return
 
         try:
-            candidate = normalize_transport_candidate(_message_json(message))
-            validate_candidate(candidate, job.census_schedule)
+            schema = job.run.metadata["schema"]
+            candidate = normalize_transport_candidate(
+                _message_json(message), schema=schema
+            )
+            validate_candidate(candidate, job.census_schedule, schema=schema)
         except (CandidateValidationError, ValueError, KeyError, TypeError) as exc:
             job.state = TranscriptionJob.State.INVALID
             job.error_type = "invalid_candidate"

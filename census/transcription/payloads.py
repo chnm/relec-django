@@ -6,8 +6,6 @@ import mimetypes
 
 from django.conf import settings
 
-from .contracts import load_contract
-
 
 class PayloadError(ValueError):
     pass
@@ -66,7 +64,7 @@ def schedule_context(schedule):
 
 
 def build_batch_request(job):
-    contract = load_contract()
+    metadata = job.run.metadata
     media_type, image_data = read_schedule_image(job.census_schedule)
     context = json.dumps(schedule_context(job.census_schedule), sort_keys=True)
     return {
@@ -74,7 +72,7 @@ def build_batch_request(job):
         "params": {
             "model": job.run.metadata["model"],
             "max_tokens": job.run.metadata["max_tokens"],
-            "system": contract["prompt"],
+            "system": metadata["prompt"],
             "messages": [
                 {
                     "role": "user",
@@ -97,7 +95,7 @@ def build_batch_request(job):
             "output_config": {
                 "format": {
                     "type": "json_schema",
-                    "schema": contract["transport_schema"],
+                    "schema": metadata["transport_schema"],
                 }
             },
         },

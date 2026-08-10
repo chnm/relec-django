@@ -31,6 +31,7 @@ services:
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
       - MEMCACHED_URL=memcached:11211
+      - APPLICATION_REVISION=${APPLICATION_REVISION:-}
     command: >
       sh -c "uv run manage.py migrate &&
              uv run manage.py runserver 0.0.0.0:8000"
@@ -64,6 +65,7 @@ services:
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
       - MEMCACHED_URL=memcached:11211
+      - APPLICATION_REVISION=${APPLICATION_REVISION:-}
       - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     command: uv run manage.py run_transcription_worker --idle-when-disabled

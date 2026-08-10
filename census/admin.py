@@ -40,6 +40,7 @@ from .models import (
 )
 from .resources import CensusScheduleResource, DenominationResource
 from .transcription.comparison import build_comparison, source_raw_json
+from .transcription.contracts import CONTRACT_VERSION
 from .transcription.services import LaunchError, launch_transcription_run
 from .workflow import (
     LOCKED_FOR_TRANSCRIBERS,
@@ -781,8 +782,10 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "opts": modeladmin.model._meta,
             "title": "Queue Claude transcription run",
             "api_configured": bool(settings.ANTHROPIC_API_KEY),
+            "application_revision": settings.APPLICATION_REVISION,
+            "revision_configured": bool(settings.APPLICATION_REVISION),
             "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,
-            "prompt_version": "relec-1926-v1",
+            "prompt_version": CONTRACT_VERSION,
         },
     )
 

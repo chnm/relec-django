@@ -2,7 +2,7 @@ import pytest
 from django.contrib import admin
 from django.contrib.auth.models import Group, User
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 from census.admin import (
     CensusScheduleAdmin,
@@ -86,6 +86,7 @@ def test_reviewer_can_view_read_only_transcription_runs(reviewer):
 
 
 @pytest.mark.django_db
+@override_settings(APPLICATION_REVISION="revision-for-admin-preview")
 def test_claude_action_confirmation_uses_initial_values(reviewer):
     schedule = CensusScheduleFactory()
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
@@ -103,6 +104,7 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert response.status_code == 200
     assert b"This field is required" not in response.content
     assert b"claude-" in response.content
+    assert b"revision-for-admin-preview" in response.content
 
 
 @pytest.mark.django_db

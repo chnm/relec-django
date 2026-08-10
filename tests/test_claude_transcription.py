@@ -21,7 +21,7 @@ from census.transcription.contracts import (
     validate_candidate,
 )
 from census.transcription.payloads import build_batch_request
-from census.transcription.services import launch_transcription_run
+from census.transcription.services import LaunchError, launch_transcription_run
 from census.transcription.worker import ClaudeTranscriptionWorker
 from tests.factories import (
     CensusScheduleFactory,
@@ -108,6 +108,19 @@ def candidate(place_id=None):
     }
 
 
+def frozen_run_metadata(**overrides):
+    contract = load_contract()
+    metadata = {
+        "model": "test-model",
+        "max_tokens": 1024,
+        "prompt": contract["prompt"],
+        "schema": contract["schema"],
+        "transport_schema": contract["transport_schema"],
+    }
+    metadata.update(overrides)
+    return metadata
+
+
 @pytest.mark.django_db
 def test_contract_validates_shape_and_county_local_place():
     schedule = CensusScheduleFactory()
@@ -186,6 +199,7 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
     CLAUDE_TRANSCRIPTION_MODELS=["test-model"],
     CLAUDE_TRANSCRIPTION_MAX_TOKENS=2048,
     CLAUDE_TRANSCRIPTION_PRICING={"test-model": {"input_per_million": "1.00"}},
+    APPLICATION_REVISION="0123456789abcdef0123456789abcdef01234567",
 )
 def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
     settings.MEDIA_ROOT = tmp_path
@@ -209,7 +223,29 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
     assert run.transcription_jobs.count() == 2
     assert run.metadata["prompt"] == contract["prompt"]
     assert run.metadata["schema_sha256"] == contract["schema_sha256"]
+    assert (
+        run.metadata["application_revision"]
+        == "0123456789abcdef0123456789abcdef01234567"
+    )
     assert run.metadata["pricing_snapshot"]["test-model"]["input_per_million"] == "1.00"
+
+
+@pytest.mark.django_db
+@override_settings(
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    ANTHROPIC_API_KEY="test-key",
+    APPLICATION_REVISION="",
+)
+def test_launch_requires_application_revision():
+    schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+
+    with pytest.raises(LaunchError, match="APPLICATION_REVISION is not configured"):
+        launch_transcription_run(
+            queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+            key="missing-application-revision",
+            model="claude-sonnet-4-6",
+            limit=1,
+        )
 
 
 @pytest.mark.django_db
@@ -223,7 +259,14 @@ def test_payload_contains_base64_image_context_and_structured_output(
             "schedule.jpg", b"image bytes", content_type="image/jpeg"
         )
     )
-    run = TranscriptionRunFactory(metadata={"model": "test-model", "max_tokens": 1024})
+    frozen_prompt = "Use the frozen prompt from run provenance."
+    frozen_transport_schema = {"type": "object", "additionalProperties": False}
+    run = TranscriptionRunFactory(
+        metadata=frozen_run_metadata(
+            prompt=frozen_prompt,
+            transport_schema=frozen_transport_schema,
+        )
+    )
     job = TranscriptionJobFactory(census_schedule=schedule, run=run)
 
     payload = build_batch_request(job)
@@ -231,6 +274,8 @@ def test_payload_contains_base64_image_context_and_structured_output(
     params = payload["params"]
     assert len(payload["custom_id"]) <= 64
     assert params["messages"][0]["content"][0]["type"] == "image"
+    assert params["system"] == frozen_prompt
+    assert params["output_config"]["format"]["schema"] == frozen_transport_schema
     assert params["output_config"]["format"]["type"] == "json_schema"
     assert "populated_place_candidates" in params["messages"][0]["content"][1]["text"]
 
@@ -290,9 +335,15 @@ class SuccessfulBatchClient:
     CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=1024,
     CLAUDE_TRANSCRIPTION_LEASE_SECONDS=60,
 )
-def test_worker_submits_collects_out_of_order_and_records_usage(tmp_path, settings):
+def test_worker_submits_collects_out_of_order_and_records_usage(
+    tmp_path, settings, monkeypatch
+):
     settings.MEDIA_ROOT = tmp_path
-    run = TranscriptionRunFactory(metadata={"model": "test-model", "max_tokens": 1024})
+    run = TranscriptionRunFactory(metadata=frozen_run_metadata())
+    monkeypatch.setattr(
+        "census.transcription.contracts.load_contract",
+        lambda: (_ for _ in ()).throw(AssertionError("loaded current contract")),
+    )
     for index in range(2):
         schedule = CensusScheduleFactory(
             original_image=SimpleUploadedFile(
@@ -342,7 +393,7 @@ def test_ambiguous_submission_is_never_automatically_retried(tmp_path, settings)
             "schedule.jpg", b"image bytes", content_type="image/jpeg"
         )
     )
-    run = TranscriptionRunFactory(metadata={"model": "test-model", "max_tokens": 1024})
+    run = TranscriptionRunFactory(metadata=frozen_run_metadata())
     TranscriptionJobFactory(census_schedule=schedule, run=run)
 
     worker = ClaudeTranscriptionWorker(client=AmbiguousClient())
