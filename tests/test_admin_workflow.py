@@ -197,7 +197,7 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
 @override_settings(
     APPLICATION_REVISION="",
     CLAUDE_TRANSCRIPTION_ENABLED=True,
-    ANTHROPIC_API_KEY="test-key",
+    ANTHROPIC_API_KEY="",
 )
 def test_claude_action_treats_application_revision_as_optional(reviewer):
     schedule = CensusScheduleFactory()

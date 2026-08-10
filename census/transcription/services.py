@@ -16,10 +16,11 @@ class LaunchError(ValueError):
 @transaction.atomic
 def launch_transcription_run(*, queryset, key, model, limit, user=None):
     """Freeze provenance and queue one job per selected schedule."""
+    # Deliberately does not check ANTHROPIC_API_KEY. Only the worker talks to
+    # the provider, so the key belongs in the worker's environment alone and
+    # the web process must never require it.
     if not settings.CLAUDE_TRANSCRIPTION_ENABLED:
         raise LaunchError("Claude transcription is disabled by configuration.")
-    if not settings.ANTHROPIC_API_KEY:
-        raise LaunchError("ANTHROPIC_API_KEY is not configured.")
     if model not in settings.CLAUDE_TRANSCRIPTION_MODELS:
         raise LaunchError("The selected Claude model is not allowed.")
     if limit < 1 or limit > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT:

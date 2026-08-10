@@ -856,7 +856,6 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "eligible_count": eligible_count,
             "opts": modeladmin.model._meta,
             "title": "Queue Claude transcription run",
-            "api_configured": bool(settings.ANTHROPIC_API_KEY),
             "application_revision": settings.APPLICATION_REVISION,
             "revision_configured": bool(settings.APPLICATION_REVISION),
             "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,

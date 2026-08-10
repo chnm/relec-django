@@ -29,10 +29,17 @@ The feature is disabled by default. Configure it through deployment secrets and
 environment variables, never through an admin form:
 
 ```text
-ANTHROPIC_API_KEY=...
 CLAUDE_TRANSCRIPTION_ENABLED=True
 CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6
+ANTHROPIC_API_KEY=...   # transcription-worker environment only
 ```
+
+`ANTHROPIC_API_KEY` belongs in the transcription worker's environment and nowhere
+else. Only the worker calls the provider; the web process never reads the key, and
+`launch_transcription_run` gates on `CLAUDE_TRANSCRIPTION_ENABLED` alone so that
+queueing works without the secret being present in the internet-facing container.
+Set `CLAUDE_TRANSCRIPTION_ENABLED` for both services: the web process needs it to
+permit queueing, and the worker needs it to leave its idle loop.
 
 `APPLICATION_REVISION` is optional best-effort provenance. When deployment automation
 supplies an exact Git commit, immutable image digest, or release identifier, the value
@@ -75,8 +82,9 @@ selected schedules for Claude transcription**. The confirmation page reports:
 
 - selected and image-eligible schedule counts;
 - the prompt/schema version;
-- whether the workflow and API key are configured (never the key), plus an optional
-  application revision when one was supplied automatically;
+- whether the workflow is enabled, plus an optional application revision when one
+  was supplied automatically. It reports nothing about the API key: the key is held
+  only by the worker, so the web process cannot observe it;
 - run key, allowed model, and a hard-bounded schedule limit.
 
 The confirmation page deliberately makes no provider request. Exact encoded request
@@ -265,8 +273,9 @@ when available:
 
 Before queueing the pilot:
 
-1. Confirm the API key, model allowlist, object-storage settings, and transcription
-   feature flag are configured without displaying or copying credentials into admin.
+1. Confirm the model allowlist, object-storage settings, and transcription feature
+   flag are configured, and that the API key is present in the worker's environment
+   (check the worker's logs, not the admin, which cannot see it).
 2. Confirm every selected schedule has a working `original_image` reference. Use the
    manifest import dry run and bounded storage verification when local references are
    incomplete.
