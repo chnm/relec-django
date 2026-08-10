@@ -98,9 +98,9 @@ def build_transport_schema(candidate_schema):
     return schema
 
 
-def normalize_transport_candidate(candidate):
+def normalize_transport_candidate(candidate, *, schema=None):
     """Convert provider transport sentinels back into the candidate contract."""
-    schema = load_contract()["schema"]
+    schema = schema or load_contract()["schema"]
 
     def resolve(node):
         reference = node.get("$ref") if isinstance(node, dict) else None
@@ -143,11 +143,11 @@ def normalize_transport_candidate(candidate):
     return normalize(candidate, schema)
 
 
-def validate_candidate(candidate, schedule):
+def validate_candidate(candidate, schedule, *, schema=None):
     """Validate the frozen contract and schedule-local place constraint."""
-    contract = load_contract()
+    schema = schema or load_contract()["schema"]
     errors = sorted(
-        Draft202012Validator(contract["schema"]).iter_errors(candidate),
+        Draft202012Validator(schema).iter_errors(candidate),
         key=lambda error: list(error.absolute_path),
     )
     if errors:

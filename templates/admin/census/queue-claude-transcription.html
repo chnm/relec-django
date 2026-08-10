@@ -14,7 +14,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-5">
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-6">
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
@@ -44,13 +44,22 @@
           <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">Missing</span>
         {% endif %}
       </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">App revision</div>
+        {% if revision_configured %}
+          <div class="mt-2 font-mono text-xs text-gray-800 break-all">{{ application_revision }}</div>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">Missing</span>
+        {% endif %}
+      </div>
     </div>
 
-    {% if not transcription_enabled or not api_configured %}
+    {% if not transcription_enabled or not api_configured or not revision_configured %}
       <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
         <strong>Configuration required.</strong>
-        The run cannot be queued until the workflow is enabled and the API key is
-        available in the deployment environment.
+        The run cannot be queued until the workflow is enabled, the API key is
+        available, and the deployed application revision is identified in the
+        deployment environment.
       </div>
     {% endif %}
 

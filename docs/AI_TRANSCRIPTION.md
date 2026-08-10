@@ -7,8 +7,9 @@ models.
 ## Data model
 
 - `TranscriptionRun` is immutable scholarly provenance. It freezes the model,
-  prompt, candidate schema, provider transport schema, their SHA-256 hashes, launch
-  selection, maximum output tokens, and an optional pricing snapshot.
+  prompt, candidate schema, provider transport schema, their SHA-256 hashes, deployed
+  application revision, launch selection, maximum output tokens, and an optional
+  pricing snapshot.
 - `TranscriptionBatch` is one Anthropic Message Batch submission. It stores the
   provider ID, status snapshots, request counts, timestamps, and a renewable worker
   lease.
@@ -31,7 +32,14 @@ environment variables, never through an admin form:
 ANTHROPIC_API_KEY=...
 CLAUDE_TRANSCRIPTION_ENABLED=True
 CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6
+APPLICATION_REVISION=<deployed-git-commit-or-image-digest>
 ```
+
+`APPLICATION_REVISION` must identify the code actually running in both the web and
+worker services. Deployment should inject the exact Git commit, immutable image
+digest, or release identifier. A transcription run cannot be queued when this value
+is blank. The value is copied into immutable run provenance and must not be changed
+for an already-deployed image.
 
 Optional controls:
 
@@ -67,8 +75,16 @@ selected schedules for Claude transcription**. The confirmation page reports:
 
 - selected and image-eligible schedule counts;
 - the prompt/schema version;
-- whether the workflow is enabled and an API key is configured (never the key);
+- whether the workflow, API key, and deployed application revision are configured
+  (never the key);
 - run key, allowed model, and a hard-bounded schedule limit.
+
+The confirmation page deliberately makes no provider request. Exact encoded request
+bytes are calculated, bounded, and recorded by the worker after it reads each image.
+Provider token-counting preflight and projected-cost reporting are deferred to #127,
+where estimates can be kept distinct from provider-reported actual usage. This
+pipeline continues to preserve the complete actual usage object and denormalized
+token categories for that reporting layer.
 
 Confirmation only creates the immutable run and queued jobs. It does not make a
 provider request from the web process. Run, batch, and job admin pages are read-only
@@ -278,6 +294,28 @@ Do not expand the batch until all pilot jobs are accounted for, differences have
 been reviewed, unexpected failures have an explanation, and observed usage remains
 within the approved budget. When the pilot is complete, stop the worker with
 `Ctrl-C`; queued and provider-backed state remains in PostgreSQL for a later restart.
+
+## Issue scope reconciliation
+
+- #64's durable candidate-generation scope is implemented: immutable provenance and
+  outputs, batches and jobs, environment-only credentials, request byte limits,
+  restart and recovery behavior, raw failures, validation, usage capture, reviewer
+  admin pages, worker deployment, tests, and operations documentation. The remaining
+  acceptance step is a separately authorized pilot across several representative
+  schedule types; resource `6893` proves the bounded single-schedule path only.
+- #142's versioned prompt/schema, location contract, semantic validation, hashes,
+  fixtures, mocked request tests, and revision procedure are implemented. Evaluation
+  against the multi-schedule representative sample remains pending and must use a new
+  contract version if it exposes changes to the prompt or schema.
+- #127 owns provider token-counting preflight, detailed cost/quality reporting,
+  exports, and the benchmark protocol. This pipeline supplies its foundation: raw
+  usage, denormalized token categories, timing, pricing provenance, and basic admin
+  totals.
+- #134 still owns reconciliation and promotion. The comparison page in this change
+  is intentionally read-only and records no decisions or canonical-model updates.
+- #143 still owns crawler-query and thumbnail performance work. The manifest commands
+  here only link schedule records to existing object-storage originals for
+  transcription; they do not warm thumbnails or alter the public browser.
 
 ## Testing
 
