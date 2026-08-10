@@ -45,6 +45,7 @@ services:
   transcription-worker:
     image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
     restart: unless-stopped
+    {{ service | get_deploy_resources_by_service | indent(width=2) }}
     {% if service.environment is defined %}
 
     environment:
