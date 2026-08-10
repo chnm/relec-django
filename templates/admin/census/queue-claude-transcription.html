@@ -14,7 +14,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-5">
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-6">
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
@@ -35,6 +35,24 @@
         {% else %}
           <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">Disabled</span>
         {% endif %}
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Worker</div>
+        {% if worker_status.tone == "ok" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">{{ worker_status.label }}</span>
+        {% elif worker_status.tone == "alert" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">{{ worker_status.label }}</span>
+        {% elif worker_status.tone == "warn" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">{{ worker_status.label }}</span>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-full">{{ worker_status.label }}</span>
+        {% endif %}
+        <div class="mt-1 text-xs leading-4 text-gray-500">
+          {{ worker_status.detail }}
+          {% if worker_status.last_activity %}
+            Last activity {{ worker_status.last_activity|timesince }} ago.
+          {% endif %}
+        </div>
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">App revision</div>

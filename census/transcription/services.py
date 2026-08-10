@@ -1,16 +1,85 @@
 """Application services for creating immutable transcription runs."""
 
+from datetime import timedelta
+
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
-from census.models import TranscriptionJob, TranscriptionRun
+from census.models import TranscriptionBatch, TranscriptionJob, TranscriptionRun
 
 from .contracts import load_contract
+
+#: How many lease periods an active batch may go without a heartbeat before the
+#: worker holding it is treated as stuck rather than merely slow.
+STALE_LEASE_PERIODS = 2
 
 
 class LaunchError(ValueError):
     pass
+
+
+def worker_status(now=None):
+    """Summarize worker health from batch evidence the web tier can observe.
+
+    The web process cannot see the worker directly: they share only the
+    database, and the worker writes to it only while it holds work. A quiet
+    database therefore means "nothing queued", never "not running", and this
+    function is careful not to claim otherwise. The one honest liveness signal
+    is a batch that is still active while its heartbeat has lapsed well past
+    the lease window, which is what a hung worker looks like from here.
+    """
+    now = now or timezone.now()
+    stale_before = now - (
+        timedelta(seconds=settings.CLAUDE_TRANSCRIPTION_LEASE_SECONDS)
+        * STALE_LEASE_PERIODS
+    )
+    batches = TranscriptionBatch.objects.all()
+    active = (
+        batches.filter(state__in=TranscriptionBatch.ACTIVE_STATES)
+        .order_by(models.F("heartbeat_at").desc(nulls_last=True), "-pk")
+        .first()
+    )
+    unrecovered = batches.filter(state=TranscriptionBatch.State.NEEDS_RECOVERY).count()
+    last_activity = batches.aggregate(latest=models.Max("heartbeat_at"))["latest"]
+
+    if active is not None and (
+        active.heartbeat_at is None or active.heartbeat_at < stale_before
+    ):
+        return {
+            "tone": "alert",
+            "label": "Stalled",
+            "detail": (
+                f"Batch {active.pk} is {active.get_state_display().lower()} but "
+                "has not renewed its lease. Check the worker container."
+            ),
+            "last_activity": active.heartbeat_at,
+        }
+    if unrecovered:
+        noun = "batch" if unrecovered == 1 else "batches"
+        verb = "requires" if unrecovered == 1 else "require"
+        return {
+            "tone": "warn",
+            "label": "Needs recovery",
+            "detail": f"{unrecovered} {noun} {verb} manual recovery.",
+            "last_activity": last_activity,
+        }
+    if active is not None:
+        return {
+            "tone": "ok",
+            "label": "Working",
+            "detail": f"Batch {active.pk} is {active.get_state_display().lower()}.",
+            "last_activity": active.heartbeat_at,
+        }
+    return {
+        "tone": "idle",
+        "label": "Idle",
+        "detail": (
+            "No active batch. The worker writes only while it holds work, so "
+            "this cannot confirm the process is running."
+        ),
+        "last_activity": last_activity,
+    }
 
 
 @transaction.atomic

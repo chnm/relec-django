@@ -85,6 +85,12 @@ selected schedules for Claude transcription**. The confirmation page reports:
 - whether the workflow is enabled, plus an optional application revision when one
   was supplied automatically. It reports nothing about the API key: the key is held
   only by the worker, so the web process cannot observe it;
+- a worker tile derived from batch evidence in the database. **Working** means an
+  active batch is heartbeating, **Stalled** means an active batch has not renewed
+  its lease for two lease periods (what a hung worker looks like from the web
+  tier), and **Needs recovery** counts batches awaiting manual intervention.
+  **Idle** means no batch is active; because the worker writes only while it holds
+  work, that is not evidence the process is running;
 - run key, allowed model, and a hard-bounded schedule limit.
 
 The confirmation page deliberately makes no provider request. Exact encoded request

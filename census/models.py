@@ -491,6 +491,14 @@ class TranscriptionBatch(models.Model):
         CANCELED = "canceled", "Canceled"
         NEEDS_RECOVERY = "needs_recovery", "Needs manual recovery"
 
+    #: States in which a batch is still the worker's responsibility.
+    ACTIVE_STATES = (
+        State.QUEUED,
+        State.SUBMITTING,
+        State.IN_PROGRESS,
+        State.COLLECTING,
+    )
+
     run = models.ForeignKey(
         TranscriptionRun,
         on_delete=models.PROTECT,
