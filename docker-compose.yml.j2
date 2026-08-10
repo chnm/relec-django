@@ -40,6 +40,8 @@ services:
       memcached:
         condition: service_started
 
+  {% set service = (stack.services | selectattr('name', 'eq', 'transcription-worker') | first) %}
+
   transcription-worker:
     image: ghcr.io/{{ template.git.package.image_name }}:{{ template.git.package.tag }}
     restart: unless-stopped
