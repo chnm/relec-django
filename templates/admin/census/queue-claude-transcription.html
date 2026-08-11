@@ -1,5 +1,5 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n %}
+{% load humanize i18n %}
 
 {% block title %}{{ title }}{% endblock %}
 
@@ -14,7 +14,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-6">
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-7">
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
@@ -23,6 +23,11 @@
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Eligible</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ eligible_count }}</div>
         <div class="mt-1 text-xs text-gray-500">Has an original image</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Will queue</div>
+        <div id="planned-job-count" class="mt-1 text-2xl font-semibold text-gray-800">—</div>
+        <div class="mt-1 text-xs text-gray-500">At most the limit</div>
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Contract</div>
@@ -73,6 +78,17 @@
       </div>
     {% endif %}
 
+    {% if pricing_errors %}
+      <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
+        <strong>Some allowed models cannot currently be queued.</strong>
+        Select a model with frozen rates below; an unpriced or expired model
+        will be blocked when the form is submitted.
+        <ul class="mt-2 space-y-1 list-disc list-inside">
+          {% for model, error in pricing_errors.items %}<li><code>{{ model }}</code>: {{ error }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
     <form method="post" class="claude-run-form space-y-6">
       {% csrf_token %}
 
@@ -104,6 +120,55 @@
             </div>
           {% endfor %}
         </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800">What will happen</h2>
+          <ol class="mt-3 space-y-3 text-sm leading-6 text-gray-600 list-decimal list-inside">
+            <li>
+              Only selected schedules with an original image are eligible.
+              {% if ineligible_count %}<strong>{{ ineligible_count }}</strong> selected schedule{{ ineligible_count|pluralize }} will be skipped.{% endif %}
+            </li>
+            <li>
+              <strong>Limit</strong> caps the number of eligible schedules queued as
+              individual jobs, ordered by the schedule’s internal database ID. If
+              fewer than the limit are eligible, only that smaller number is queued.
+              The deployment hard maximum is {{ max_run_limit }} jobs per run.
+            </li>
+            <li>
+              The worker groups those jobs into provider batches of up to
+              {{ batch_size }} requests, subject to the encoded-size safety limit.
+              One run may therefore create several provider batches.
+            </li>
+            <li>
+              <strong>{{ max_tokens|intcomma }} max output tokens</strong> is applied to
+              each schedule. It limits generated response length; it is not an input
+              limit, a predicted usage amount, or a spending cap.
+            </li>
+            <li>
+              The run key, model, prompt/schema contract, application revision, and
+              pricing below become immutable provenance. Results remain comparison
+              candidates and never overwrite canonical census data automatically.
+            </li>
+          </ol>
+        </section>
+
+        <section class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800">Frozen pricing estimate</h2>
+          <p class="mt-1 text-sm leading-6 text-gray-500">
+            Rates are USD per million tokens for Anthropic’s Batch service. Actual
+            cost depends on provider-reported usage, so this page cannot give an
+            exact total in advance.
+          </p>
+          <div id="pricing-details" class="mt-4 text-sm text-gray-600">
+            Select a configured model to see its rates.
+          </div>
+          <p class="mt-4 text-xs leading-5 text-gray-500">
+            The selected rates are copied into this run. Future pricing changes do
+            not alter historical estimates.
+          </p>
+        </section>
       </div>
 
       {% for object_id in selected %}
@@ -140,6 +205,8 @@
       </div>
     </div>
   </div>
+
+  {{ pricing_snapshots|json_script:"claude-pricing-snapshots" }}
 
   <style>
     .claude-run-form input[type="text"],
@@ -195,4 +262,52 @@
       background-color: #f3f4f6 !important;
     }
   </style>
+
+  <script>
+    (() => {
+      const eligibleCount = {{ eligible_count }};
+      const limitInput = document.getElementById("id_limit");
+      const modelInput = document.getElementById("id_model");
+      const plannedCount = document.getElementById("planned-job-count");
+      const pricingDetails = document.getElementById("pricing-details");
+      const snapshots = JSON.parse(
+        document.getElementById("claude-pricing-snapshots").textContent
+      );
+
+      const money = (value) => Number(value).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4,
+      });
+
+      const updatePlan = () => {
+        const requested = Math.max(Number.parseInt(limitInput.value, 10) || 0, 0);
+        plannedCount.textContent = Math.min(eligibleCount, requested).toLocaleString();
+      };
+
+      const updatePricing = () => {
+        const snapshot = snapshots[modelInput.value];
+        if (!snapshot) {
+          pricingDetails.innerHTML = '<span class="text-red-700">No valid pricing is configured for this model. The run cannot be queued.</span>';
+          return;
+        }
+        const rates = snapshot.rates;
+        pricingDetails.innerHTML = `
+          <dl class="grid grid-cols-2 gap-x-5 gap-y-3">
+            <div><dt class="text-xs text-gray-500">Ordinary input</dt><dd class="font-semibold">$${money(rates.input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">Output</dt><dd class="font-semibold">$${money(rates.output_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">5-minute cache write</dt><dd class="font-semibold">$${money(rates.cache_creation_input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">1-hour cache write</dt><dd class="font-semibold">$${money(rates.cache_creation_1h_input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">Cache read</dt><dd class="font-semibold">$${money(rates.cache_read_input_tokens)}</dd></div>
+                            <div><dt class="text-xs text-gray-500">Effective</dt><dd class="font-semibold">${snapshot.effective_date}${snapshot.valid_through ? `–${snapshot.valid_through}` : ""}</dd></div>
+          </dl>
+          <p class="mt-3 text-xs text-gray-500">${snapshot.service_tier} · ${snapshot.currency} · <a class="text-primary-600 underline" href="${snapshot.source}" target="_blank" rel="noopener">pricing source</a></p>
+        `;
+      };
+
+      limitInput.addEventListener("input", updatePlan);
+      modelInput.addEventListener("change", updatePricing);
+      updatePlan();
+      updatePricing();
+    })();
+  </script>
 {% endblock %}

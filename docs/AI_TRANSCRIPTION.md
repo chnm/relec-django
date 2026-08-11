@@ -8,8 +8,8 @@ models.
 
 - `TranscriptionRun` is immutable scholarly provenance. It freezes the model,
   prompt, candidate schema, provider transport schema, their SHA-256 hashes, launch
-  selection, maximum output tokens, and optional application-revision and pricing
-  provenance.
+  selection, maximum output tokens, optional application revision, and a validated
+  model-specific Batch pricing snapshot.
 - `TranscriptionBatch` is one Anthropic Message Batch submission. It stores the
   provider ID, status snapshots, request counts, timestamps, and a renewable worker
   lease.
@@ -30,7 +30,7 @@ environment variables, never through an admin form:
 
 ```text
 CLAUDE_TRANSCRIPTION_ENABLED=True
-CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6
+CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6,claude-sonnet-5
 ANTHROPIC_API_KEY=...   # transcription-worker environment only
 ```
 
@@ -62,12 +62,36 @@ CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=10485760
 CLAUDE_TRANSCRIPTION_LEASE_SECONDS=300
 CLAUDE_TRANSCRIPTION_POLL_SECONDS=60
 CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT=120
-CLAUDE_TRANSCRIPTION_PRICING={}
+CLAUDE_TRANSCRIPTION_PRICING=<optional validated JSON catalog override>
 ```
 
-`CLAUDE_TRANSCRIPTION_PRICING` is a JSON object captured unchanged in each run. It
-allows later cost estimates to use the prices that staff intended at launch time;
-provider-reported token counts remain the benchmark source of truth.
+The application includes a version-controlled Batch pricing catalog for its default
+Claude model. `CLAUDE_TRANSCRIPTION_PRICING` can replace that catalog with a
+deployment-approved JSON object when models or prices change. Before queueing, the
+selected model must have nonnegative decimal rates for ordinary input, output,
+5-minute cache creation, 1-hour cache creation, and cache reads, plus currency,
+service tier, effective date, and source metadata. A normalized model-specific copy
+is frozen in the run; current prices are never applied retroactively. Existing runs
+created before validated snapshots remain explicitly unpriced. An absent or empty
+environment override uses the version-controlled default, which keeps deployments
+that previously set the old `{}` placeholder from blocking new runs.
+
+Temporary rates may include `valid_through` in `YYYY-MM-DD` form. The launch path
+rejects an expired rate rather than silently estimating new work with an obsolete
+price. Cost reporting also leaves a job unpriced if its submission timestamp falls
+after the frozen rate's validity window. Model entries can override catalog-level
+dates and other metadata.
+
+The version-controlled default uses Anthropic's published Claude Sonnet 4.6 Batch
+rates effective 2026-08-11: $1.50 ordinary input, $7.50 output, $1.875 5-minute
+cache writes, $3.00 1-hour cache writes, and $0.15 cache reads per million tokens.
+It also records Claude Sonnet 5's introductory Batch rates through 2026-08-31:
+$1.00 input, $5.00 output, $1.25 5-minute cache writes, $2.00 1-hour cache writes,
+and $0.10 cache reads per million tokens. Sonnet 5's standard rates begin
+2026-09-01, so deployments must update the catalog before launching it after the
+introductory period.
+Confirm the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing)
+before changing the catalog.
 `CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES` applies to the base64-encoded image, matching
 the direct Claude API's image-size definition.
 
@@ -91,18 +115,65 @@ selected schedules for Claude transcription**. The confirmation page reports:
   tier), and **Needs recovery** counts batches awaiting manual intervention.
   **Idle** means no batch is active; because the worker writes only while it holds
   work, that is not evidence the process is running;
-- run key, allowed model, and a hard-bounded schedule limit.
+- run key, allowed model, and a hard-bounded schedule limit. The page defines the
+  limit as the maximum number of eligible selected schedules queued as jobs—not a
+  provider batch count, token budget, or spending cap—and previews the resulting
+  job count;
+- the per-schedule output-token ceiling, worker batch size, selection order, skip
+  behavior, and the selected model's frozen Batch rates.
 
-The confirmation page deliberately makes no provider request. Exact encoded request
-bytes are calculated, bounded, and recorded by the worker after it reads each image.
-Provider token-counting preflight and projected-cost reporting are deferred to #127,
-where estimates can be kept distinct from provider-reported actual usage. This
-pipeline continues to preserve the complete actual usage object and denormalized
-token categories for that reporting layer.
+The confirmation page deliberately makes no provider request: the web tier has no
+API key, and image-dependent input usage cannot be known exactly before the worker
+builds the request. Exact encoded request bytes are calculated, bounded, and
+recorded by the worker after it reads each image. The limit is therefore a bounded
+job-count control, while the reviewer usage report records actual provider usage and
+derived cost after processing.
 
 Confirmation only creates the immutable run and queued jobs. It does not make a
 provider request from the web process. Run, batch, and job admin pages are read-only
 and expose progress, errors, and token usage.
+
+## Usage, cost, and benchmark reporting
+
+Reviewers can open **AI Transcription → Usage & Costs** from the always-expanded
+admin sidebar. The admin home also shows a compact cost summary. Reporting includes
+run/job counts, success and failure counts, success rate, total/mean/median/P95 token
+usage, elapsed throughput, estimated cost, cost per successful transcription, and
+per-run model/contract/pricing provenance. CSV and JSON exports provide one row per
+job for reproducible outside analysis.
+
+Costs are derived with `Decimal` arithmetic from the untouched provider usage and
+the rates frozen on that job's run. Cache categories are priced separately when the
+provider supplies their breakdown. Failed jobs remain in usage and cost totals.
+Jobs from older runs without a valid snapshot remain in token totals and exports but
+are excluded from cost totals with a visible warning. These estimates are not an
+Anthropic invoice; organization-level billing reconciliation belongs in financial
+operations, not immutable transcription evidence.
+
+As a calculator sanity check, the pre-reporting local test runs recorded 37,079
+input tokens and 4,201 output tokens with no cache usage. Applying Claude Sonnet 4.6
+Batch rates retrospectively gives `$0.087126`, consistent with the approximately
+`$0.09` observed provider cost. The dashboard still labels those historical runs
+unpriced because their rates were not frozen at launch; this comparison validates
+the formula without rewriting provenance.
+
+Efficiency and transcription quality are deliberately separate. Before a contract
+or model is approved for a large run:
+
+1. Freeze a stratified human gold sample covering clear, blank-heavy, zero-heavy,
+   difficult handwriting, repeated entities, and varied geography/denominations.
+2. Queue every candidate model/contract against the same schedule IDs. Never edit
+   old runs or reuse a run key.
+3. Export usage and compare efficiency metrics: success/failure rate, input/output
+   distributions, elapsed throughput, total estimated cost, and cost per success.
+4. Independently review quality against the image and frozen human snapshot:
+   schema validity, field completeness, exact numeric agreement, normalized text
+   agreement, blank-versus-zero errors, entity alignment, uncertainty notes, and
+   reviewer correction time.
+5. Record efficiency and quality findings side by side, but do not collapse them
+   into one score. A cheaper run is not better if accuracy or review burden worsens.
+6. Approve expansion only after every pilot job is accounted for, failures are
+   explained, quality thresholds are met, and projected scale fits the budget.
 
 Once a schedule has both a human snapshot and a successful agent candidate,
 reviewers can open **Compare transcriptions** from its admin change page. The
@@ -205,6 +276,13 @@ prevent simultaneous claims; expiring leases allow another worker to resume. The
 provider batch ID is persisted before polling. Results are matched by opaque
 `custom_id`, because Anthropic does not guarantee result ordering. Collection is
 idempotent and already-recorded raw results are skipped.
+
+At `INFO` level, the worker records three operational lifecycle events: a local
+batch claiming queued jobs, successful submission with the provider batch ID and
+encoded request size, and each returned job result with terminal state and token
+counts. These entries include run, batch, opaque job, and schedule identifiers for
+correlation. They never include API credentials, image data, prompts, raw provider
+responses, or transcription content.
 
 Preparation has its own lease. If a worker dies while reading or encoding images,
 the expired preparation is marked failed and its unsubmitted jobs are safely
@@ -344,10 +422,10 @@ promote any candidate values into canonical census models.
   fixtures, mocked request tests, and revision procedure are implemented. Evaluation
   against the multi-schedule representative sample remains pending and must use a new
   contract version if it exposes changes to the prompt or schema.
-- #127 owns provider token-counting preflight, detailed cost/quality reporting,
-  exports, and the benchmark protocol. This pipeline supplies its foundation: raw
-  usage, denormalized token categories, timing, pricing provenance, and basic admin
-  totals.
+- #127's durable usage/cost reporting, immutable validated pricing, reviewer
+  dashboard, reproducible exports, and benchmark protocol are implemented. Quality
+  remains a separate human evaluation against frozen snapshots; estimated costs are
+  intentionally based on completed provider usage rather than a web-tier preflight.
 - #134 still owns reconciliation and promotion. The comparison page in this change
   is intentionally read-only and records no decisions or canonical-model updates.
 - #143 still owns crawler-query and thumbnail performance work. The manifest commands
