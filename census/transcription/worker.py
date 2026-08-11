@@ -1,6 +1,7 @@
 """Restart-safe orchestration for Anthropic message batches."""
 
 import json
+import logging
 import uuid
 from datetime import timedelta
 
@@ -25,6 +26,7 @@ from .payloads import PayloadError, build_batch_request
 
 ACTIVE_BATCH_STATES = TranscriptionBatch.ACTIVE_STATES
 SCHEDULER_ADVISORY_LOCK_ID = 6401926
+logger = logging.getLogger(__name__)
 
 
 class ClaudeTranscriptionWorker:
@@ -151,6 +153,13 @@ class ClaudeTranscriptionWorker:
         batch, jobs = self._claim_queued_jobs()
         if not batch:
             return False
+        logger.info(
+            "Claude transcription work claimed run=%s batch=%s job_count=%s jobs=%s",
+            batch.run.key,
+            batch.pk,
+            len(jobs),
+            ",".join(job.custom_id for job in jobs),
+        )
 
         payloads = []
         encoded_size = 0
@@ -198,6 +207,15 @@ class ClaudeTranscriptionWorker:
             return True
 
         self._record_submission(batch, snapshot)
+        logger.info(
+            "Claude transcription batch submitted run=%s batch=%s "
+            "provider_batch=%s request_count=%s encoded_size_bytes=%s",
+            batch.run.key,
+            batch.pk,
+            snapshot["id"],
+            len(payloads),
+            encoded_size,
+        )
         return True
 
     @transaction.atomic
@@ -298,7 +316,21 @@ class ClaudeTranscriptionWorker:
             batch.save()
 
         for result in self.client.iter_results(batch.provider_batch_id):
-            self._record_result(batch, result)
+            recorded_job = self._record_result(batch, result)
+            if recorded_job is not None:
+                logger.info(
+                    "Claude transcription result returned run=%s batch=%s "
+                    "provider_batch=%s job=%s schedule=%s state=%s "
+                    "input_tokens=%s output_tokens=%s",
+                    recorded_job.run.key,
+                    batch.pk,
+                    batch.provider_batch_id,
+                    recorded_job.custom_id,
+                    recorded_job.census_schedule_id,
+                    recorded_job.state,
+                    recorded_job.total_input_tokens,
+                    recorded_job.output_tokens or 0,
+                )
             self._heartbeat(batch)
 
         missing_results = TranscriptionJob.objects.filter(
@@ -330,12 +362,12 @@ class ClaudeTranscriptionWorker:
         custom_id = raw_result.get("custom_id")
         job = (
             TranscriptionJob.objects.select_for_update(of=("self",))
-            .select_related("census_schedule__county")
+            .select_related("run", "census_schedule__county")
             .filter(batch=batch, custom_id=custom_id)
             .first()
         )
         if not job or job.raw_result is not None:
-            return
+            return None
 
         job.raw_result = raw_result
         result = raw_result.get("result") or {}
@@ -349,7 +381,7 @@ class ClaudeTranscriptionWorker:
             job.error_type = result_type
             job.error_message = json.dumps(result.get("error") or result)[:4000]
             job.save()
-            return
+            return job
 
         message = result.get("message") or {}
         usage = message.get("usage") or {}
@@ -368,7 +400,7 @@ class ClaudeTranscriptionWorker:
             job.error_type = "unexpected_stop_reason"
             job.error_message = f"Claude stopped with {job.stop_reason!r}."
             job.save()
-            return
+            return job
 
         try:
             schema = job.run.metadata["schema"]
@@ -381,7 +413,7 @@ class ClaudeTranscriptionWorker:
             job.error_type = "invalid_candidate"
             job.error_message = str(exc)[:4000]
             job.save()
-            return
+            return job
 
         ScheduleTranscription.objects.get_or_create(
             census_schedule=job.census_schedule,
@@ -390,6 +422,7 @@ class ClaudeTranscriptionWorker:
         )
         job.state = TranscriptionJob.State.SUCCEEDED
         job.save()
+        return job
 
     def _mark_ambiguous(self, batch, exc):
         batch.state = TranscriptionBatch.State.NEEDS_RECOVERY

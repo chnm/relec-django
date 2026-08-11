@@ -33,6 +33,7 @@ services:
       - MEMCACHED_URL=memcached:11211
       - APPLICATION_REVISION=${APPLICATION_REVISION:-}
       - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
+      - CLAUDE_TRANSCRIPTION_PRICING
     command: >
       sh -c "uv run manage.py migrate &&
              uv run manage.py runserver 0.0.0.0:8000"

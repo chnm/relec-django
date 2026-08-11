@@ -1,5 +1,5 @@
 {% extends "admin/index.html" %}
-{% load static %}
+{% load humanize static %}
 
 {% block extrahead %}
     {{ block.super }}
@@ -31,6 +31,41 @@
                 </div>
             </div>
         </div>
+
+        {% if show_ai_usage %}
+            <div class="dashboard-card">
+                <div class="dashboard-section-heading">
+                    <div>
+                        <h2>Claude Usage &amp; Estimated Cost</h2>
+                        <p class="dashboard-muted">Based on provider tokens and the immutable Batch pricing snapshot for each run.</p>
+                    </div>
+                    <a href="{% url 'admin:census_transcription_usage' %}" class="button default quick-action">Full usage report</a>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="dashboard-stat">
+                        <h3>{{ ai_usage_report.overall.total_runs }}</h3>
+                        <p>Agent Runs</p>
+                    </div>
+                    <div class="dashboard-stat">
+                        <h3>{{ ai_usage_report.overall.succeeded }}</h3>
+                        <p>Successful Jobs</p>
+                    </div>
+                    <div class="dashboard-stat">
+                        <h3>{{ ai_usage_report.overall.total_input_tokens|intcomma }}</h3>
+                        <p>Input Tokens</p>
+                    </div>
+                    <div class="dashboard-stat">
+                        <h3>${{ ai_usage_report.overall.total_cost|floatformat:6 }}</h3>
+                        <p>Estimated Cost</p>
+                    </div>
+                </div>
+                {% if ai_usage_report.overall.unpriced_jobs %}
+                    <p class="dashboard-warning">
+                        {{ ai_usage_report.overall.unpriced_jobs }} usage record{{ ai_usage_report.overall.unpriced_jobs|pluralize }} from older runs are unpriced and excluded from the cost total.
+                    </p>
+                {% endif %}
+            </div>
+        {% endif %}
 
     <!-- Charts Row -->
         <div class="dashboard-grid">
@@ -105,70 +140,70 @@
         </div>
     </div>
 
-        {{ block.super }}
+    {{ block.super }}
 
-        <script>
+    <script>
 // Status Chart
-            const statusCtx = document.getElementById('statusChart').getContext('2d');
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: [
-                        'Unassigned', 'Assigned', 'In Progress',
-                        'Imported - Needs Review', 'Ready for Review', 'Approved'
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [
+                    'Unassigned', 'Assigned', 'In Progress',
+                    'Imported - Needs Review', 'Ready for Review', 'Approved'
+                ],
+                datasets: [{
+                    data: [
+                        {{ status_counts.unassigned }}, {{ status_counts.assigned }},
+                        {{ status_counts.in_progress }}, {{ status_counts.needs_review }},
+                        {{ status_counts.completed }}, {{ status_counts.approved }}
                     ],
-                    datasets: [{
-                        data: [
-                            {{ status_counts.unassigned }}, {{ status_counts.assigned }},
-                            {{ status_counts.in_progress }}, {{ status_counts.needs_review }},
-                            {{ status_counts.completed }}, {{ status_counts.approved }}
-                        ],
-                        backgroundColor: [
-                            '#6c757d', '#007bff', '#fd7e14',
-                            '#ffc107', '#0f766e', '#155724'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
+                    backgroundColor: [
+                        '#6c757d', '#007bff', '#fd7e14',
+                        '#ffc107', '#0f766e', '#155724'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
                     }
                 }
-            });
+            }
+        });
 
 // Assignment Chart
-            const assignmentCtx = document.getElementById('assignmentChart').getContext('2d');
-            new Chart(assignmentCtx, {
-                type: 'bar',
-                data: {
-                    labels: [
+        const assignmentCtx = document.getElementById('assignmentChart').getContext('2d');
+        new Chart(assignmentCtx, {
+            type: 'bar',
+            data: {
+                labels: [
+                    {% for user in top_transcribers %}
+                        '{{ user.user__username|escapejs }}',
+                    {% endfor %}
+                ],
+                datasets: [{
+                    label: 'Assigned Records',
+                    data: [
                         {% for user in top_transcribers %}
-                            '{{ user.user__username|escapejs }}',
+                            {{ user.count }},
                         {% endfor %}
                     ],
-                    datasets: [{
-                        label: 'Assigned Records',
-                        data: [
-                            {% for user in top_transcribers %}
-                                {{ user.count }},
-                            {% endfor %}
-                        ],
-                        backgroundColor: '#0060b1'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
+                    backgroundColor: '#0060b1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
                     }
                 }
-            });
-        </script>
+            }
+        });
+    </script>
 {% endblock %}

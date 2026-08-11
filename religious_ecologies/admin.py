@@ -4,9 +4,11 @@ from django.contrib import admin
 from django.db.models import Count
 
 from census.models import CensusSchedule
+from census.transcription.usage import usage_report
+from census.workflow import is_reviewer
 
 
-def _get_dashboard_data_sync():
+def _get_dashboard_data_sync(include_ai_usage=False):
     """Get dashboard data - synchronous version for DB queries"""
     # Get transcription status counts
     status_counts = list(
@@ -65,12 +67,11 @@ def _get_dashboard_data_sync():
         ).order_by("-updated_at")[:10]
     )
 
-    return {
+    context = {
         "total_records": total_records,
         "transcribed_count": transcribed_count,
         "needs_review_count": (
-            status_counts_complete["needs_review"]
-            + status_counts_complete["completed"]
+            status_counts_complete["needs_review"] + status_counts_complete["completed"]
         ),
         "unassigned_count": status_counts_complete["unassigned"],
         "assigned_count": status_counts_complete["assigned"],
@@ -79,6 +80,10 @@ def _get_dashboard_data_sync():
         "top_transcribers": top_transcribers_list,
         "recent_activity": recent_activity,
     }
+    if include_ai_usage:
+        context["ai_usage_report"] = usage_report()
+        context["show_ai_usage"] = True
+    return context
 
 
 def dashboard_context(request):
@@ -92,7 +97,7 @@ def dashboard_context(request):
             return {}
         except RuntimeError:
             # No running loop - we're in sync context, safe to call DB
-            return _get_dashboard_data_sync()
+            return _get_dashboard_data_sync(include_ai_usage=is_reviewer(request.user))
     except Exception as e:
         print(f"Dashboard context error: {e}")
         return {}

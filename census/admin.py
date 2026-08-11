@@ -1,3 +1,4 @@
+import csv
 import datetime
 import os
 import re
@@ -12,7 +13,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, models
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -45,6 +46,12 @@ from .transcription.services import (
     LaunchError,
     launch_transcription_run,
     worker_status,
+)
+from .transcription.usage import (
+    USAGE_EXPORT_FIELDS,
+    configured_pricing_snapshots,
+    usage_export_rows,
+    usage_report,
 )
 from .workflow import (
     LOCKED_FOR_TRANSCRIBERS,
@@ -408,6 +415,68 @@ class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
     search_fields = ["key"]
     readonly_fields = ["key", "kind", "metadata", "created_at", "token_usage"]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "usage/",
+                self.admin_site.admin_view(self.usage_dashboard_view),
+                name="census_transcription_usage",
+            ),
+            path(
+                "usage/export.csv",
+                self.admin_site.admin_view(self.usage_csv_view),
+                name="census_transcription_usage_csv",
+            ),
+            path(
+                "usage/export.json",
+                self.admin_site.admin_view(self.usage_json_view),
+                name="census_transcription_usage_json",
+            ),
+        ]
+        return custom_urls + urls
+
+    def _require_reporting_permission(self, request):
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+    def usage_dashboard_view(self, request):
+        self._require_reporting_permission(request)
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Claude usage & cost reporting",
+            "opts": self.model._meta,
+            "report": usage_report(),
+        }
+        return render(
+            request,
+            "admin/census/transcriptionrun/usage-dashboard.html",
+            context,
+        )
+
+    def usage_csv_view(self, request):
+        self._require_reporting_permission(request)
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            'attachment; filename="claude-transcription-usage.csv"'
+        )
+        writer = csv.DictWriter(response, fieldnames=USAGE_EXPORT_FIELDS)
+        writer.writeheader()
+        writer.writerows(usage_export_rows())
+        return response
+
+    def usage_json_view(self, request):
+        self._require_reporting_permission(request)
+        response = JsonResponse(
+            list(usage_export_rows()),
+            safe=False,
+            json_dumps_params={"indent": 2},
+        )
+        response["Content-Disposition"] = (
+            'attachment; filename="claude-transcription-usage.json"'
+        )
+        return response
+
     def get_queryset(self, request):
         return (
             super()
@@ -439,7 +508,7 @@ class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
                 obj.aggregate_cache_read_tokens,
             )
         )
-        return f"in {total_input:,} / " f"out {obj.aggregate_output_tokens or 0:,}"
+        return f"in {total_input:,} / out {obj.aggregate_output_tokens or 0:,}"
 
 
 @admin.register(TranscriptionBatch)
@@ -794,8 +863,20 @@ class ClaudeTranscriptionRunForm(forms.Form):
         max_length=120,
         help_text="A permanent provenance key; it cannot be renamed later.",
     )
-    model = forms.ChoiceField()
-    limit = forms.IntegerField(min_value=1)
+    model = forms.ChoiceField(
+        help_text=(
+            "The provider model used for every schedule in this run. Its Batch "
+            "pricing is validated and frozen with the run."
+        )
+    )
+    limit = forms.IntegerField(
+        min_value=1,
+        help_text=(
+            "The maximum number of eligible selected schedules to queue, in "
+            "internal record-ID order. This is a job count—not a provider batch "
+            "count, token budget, or spending cap."
+        ),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -849,6 +930,10 @@ def queue_claude_transcription(modeladmin, request, queryset):
     eligible_count = (
         queryset.exclude(original_image="").exclude(original_image__isnull=True).count()
     )
+    pricing_snapshots, pricing_errors = configured_pricing_snapshots(
+        settings.CLAUDE_TRANSCRIPTION_PRICING,
+        settings.CLAUDE_TRANSCRIPTION_MODELS,
+    )
     return render(
         request,
         "admin/census/queue-claude-transcription.html",
@@ -858,6 +943,7 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "selected": selected,
             "selected_count": queryset.count(),
             "eligible_count": eligible_count,
+            "ineligible_count": queryset.count() - eligible_count,
             "opts": modeladmin.model._meta,
             "title": "Queue Claude transcription run",
             "application_revision": settings.APPLICATION_REVISION,
@@ -865,6 +951,11 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,
             "worker_status": worker_status(),
             "prompt_version": CONTRACT_VERSION,
+            "max_tokens": settings.CLAUDE_TRANSCRIPTION_MAX_TOKENS,
+            "batch_size": settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE,
+            "max_run_limit": settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT,
+            "pricing_snapshots": pricing_snapshots,
+            "pricing_errors": pricing_errors,
         },
     )
 
@@ -1010,9 +1101,7 @@ class CensusScheduleAdmin(ModelAdmin):
             pk=object_id,
         )
         transcriptions = list(
-            schedule.transcriptions.select_related("run").order_by(
-                "-created_at", "-pk"
-            )
+            schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
         )
         human_sources = [
             source for source in transcriptions if source.run.kind == "human_snapshot"
@@ -1020,12 +1109,8 @@ class CensusScheduleAdmin(ModelAdmin):
         agent_sources = [
             source for source in transcriptions if source.run.kind == "agent"
         ]
-        human_source = self._comparison_source(
-            human_sources, request.GET.get("human")
-        )
-        agent_source = self._comparison_source(
-            agent_sources, request.GET.get("agent")
-        )
+        human_source = self._comparison_source(human_sources, request.GET.get("human"))
+        agent_source = self._comparison_source(agent_sources, request.GET.get("agent"))
 
         jobs = {
             job.run_id: job
@@ -1113,9 +1198,9 @@ class CensusScheduleAdmin(ModelAdmin):
             for religious_body in schedule.church_details.all():
                 if religious_body.denomination:
                     denom_id = religious_body.denomination.id
-                    denomination_gaps[denom_id][
-                        "denomination_name"
-                    ] = religious_body.denomination.name
+                    denomination_gaps[denom_id]["denomination_name"] = (
+                        religious_body.denomination.name
+                    )
                     denomination_gaps[denom_id]["schedules"].append(
                         {
                             "schedule_id": schedule.schedule_id,

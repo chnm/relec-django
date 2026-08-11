@@ -9,6 +9,7 @@ from django.utils import timezone
 from census.models import TranscriptionBatch, TranscriptionJob, TranscriptionRun
 
 from .contracts import load_contract
+from .usage import PricingConfigurationError, pricing_snapshot_for_model
 
 #: How many lease periods an active batch may go without a heartbeat before the
 #: worker holding it is treated as stuck rather than merely slow.
@@ -96,6 +97,12 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
         raise LaunchError(
             f"Limit must be between 1 and {settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT}."
         )
+    try:
+        pricing_snapshot = pricing_snapshot_for_model(
+            settings.CLAUDE_TRANSCRIPTION_PRICING, model
+        )
+    except PricingConfigurationError as exc:
+        raise LaunchError(str(exc)) from exc
 
     schedules = list(
         queryset.select_related("county__state", "schedule_denomination")
@@ -120,7 +127,7 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
         "schema_sha256": contract["schema_sha256"],
         "transport_schema": contract["transport_schema"],
         "transport_schema_sha256": contract["transport_schema_sha256"],
-        "pricing_snapshot": settings.CLAUDE_TRANSCRIPTION_PRICING,
+        "pricing_snapshot": pricing_snapshot,
         "requested_limit": limit,
         "schedule_count": len(schedules),
         "schedule_ids": [schedule.pk for schedule in schedules],

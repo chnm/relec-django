@@ -146,9 +146,7 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
         if not isinstance(node, dict):
             return 0
         own = int(keyword in node)
-        return own + sum(
-            keyword_count(value, keyword) for value in node.values()
-        )
+        return own + sum(keyword_count(value, keyword) for value in node.values())
 
     def keyword_values(node, keyword):
         if isinstance(node, list):
@@ -164,8 +162,7 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
     assert keyword_count(transport_schema, "minimum") == 0
     assert keyword_count(transport_schema, "minItems") == 0
     assert not any(
-        isinstance(node, list)
-        for node in keyword_values(transport_schema, "type")
+        isinstance(node, list) for node in keyword_values(transport_schema, "type")
     )
 
     candidate_members = contract["schema"]["$defs"]["membership"]["properties"]
@@ -174,12 +171,13 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
 
     transport_members = transport_schema["$defs"]["membership"]["properties"]
     assert transport_members["male_members"]["type"] == "integer"
-    assert "Non-null values must be at least 0." in transport_members[
-        "male_members"
-    ]["description"]
-    assert "Transport: -1 means null." in transport_members["male_members"][
-        "description"
-    ]
+    assert (
+        "Non-null values must be at least 0."
+        in transport_members["male_members"]["description"]
+    )
+    assert (
+        "Transport: -1 means null." in transport_members["male_members"]["description"]
+    )
 
     transport = candidate()
     transport["schedule_fields"]["populated_place_verbatim"] = ""
@@ -202,7 +200,25 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
     ANTHROPIC_API_KEY="",
     CLAUDE_TRANSCRIPTION_MODELS=["test-model"],
     CLAUDE_TRANSCRIPTION_MAX_TOKENS=2048,
-    CLAUDE_TRANSCRIPTION_PRICING={"test-model": {"input_per_million": "1.00"}},
+    CLAUDE_TRANSCRIPTION_PRICING={
+        "schema_version": 1,
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "service_tier": "batch",
+        "effective_date": "2026-08-11",
+        "source": "https://example.test/pricing",
+        "models": {
+            "test-model": {
+                "rates": {
+                    "input_tokens": "1.00",
+                    "output_tokens": "2.00",
+                    "cache_creation_input_tokens": "1.25",
+                    "cache_creation_1h_input_tokens": "2.00",
+                    "cache_read_input_tokens": "0.10",
+                }
+            }
+        },
+    },
     APPLICATION_REVISION="0123456789abcdef0123456789abcdef01234567",
 )
 def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
@@ -231,7 +247,22 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
         run.metadata["application_revision"]
         == "0123456789abcdef0123456789abcdef01234567"
     )
-    assert run.metadata["pricing_snapshot"]["test-model"]["input_per_million"] == "1.00"
+    assert run.metadata["pricing_snapshot"] == {
+        "schema_version": 1,
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "service_tier": "batch",
+        "effective_date": "2026-08-11",
+        "source": "https://example.test/pricing",
+        "model": "test-model",
+        "rates": {
+            "input_tokens": "1.00",
+            "output_tokens": "2.00",
+            "cache_creation_input_tokens": "1.25",
+            "cache_creation_1h_input_tokens": "2.00",
+            "cache_read_input_tokens": "0.10",
+        },
+    }
 
 
 @pytest.mark.django_db
@@ -431,8 +462,9 @@ class SuccessfulBatchClient:
     CLAUDE_TRANSCRIPTION_LEASE_SECONDS=60,
 )
 def test_worker_submits_collects_out_of_order_and_records_usage(
-    tmp_path, settings, monkeypatch
+    tmp_path, settings, monkeypatch, caplog
 ):
+    caplog.set_level("INFO", logger="census.transcription.worker")
     settings.MEDIA_ROOT = tmp_path
     run = TranscriptionRunFactory(metadata=frozen_run_metadata())
     monkeypatch.setattr(
@@ -466,6 +498,16 @@ def test_worker_submits_collects_out_of_order_and_records_usage(
     batch = TranscriptionBatch.objects.get()
     assert batch.state == TranscriptionBatch.State.ENDED
     assert batch.collected_at is not None
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "work claimed" in message and "job_count=2" in message for message in messages
+    )
+    assert any(
+        "batch submitted" in message and "provider_batch=msgbatch_test" in message
+        for message in messages
+    )
+    assert sum("result returned" in message for message in messages) == 2
+    assert all("image bytes" not in message for message in messages)
 
 
 class AmbiguousClient:
