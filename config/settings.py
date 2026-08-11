@@ -54,11 +54,11 @@ CLAUDE_TRANSCRIPTION_MODELS = env.list(
 CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=4096
 )
-CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT = env.int(
-    "CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT", default=10
+CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS", default=10000
 )
-CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT = env.int(
-    "CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT", default=100
+CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD = env.int(
+    "CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD", default=100
 )
 CLAUDE_TRANSCRIPTION_BATCH_SIZE = env.int("CLAUDE_TRANSCRIPTION_BATCH_SIZE", default=25)
 CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES = env.int(
@@ -395,14 +395,9 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Transcriptions",
+                "title": "Project Management",
                 "separator": True,
                 "items": [
-                    {
-                        "title": "Census Schedules",
-                        "icon": "description",
-                        "link": lambda request: "/admin/census/censusschedule/",
-                    },
                     {
                         "title": "Review Queue",
                         "icon": "rate_review",
@@ -419,9 +414,26 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=completed",
                     },
                     {
+                        "title": "AI Transcriptions - Ready for Review",
+                        "icon": "smart_toy",
+                        "link": lambda request: "/admin/census/censusschedule/?ai_status=transcribed",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
                         "title": "Assigned to Me",
                         "icon": "assignment_ind",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=assigned_to_me",
+                    },
+                ],
+            },
+            {
+                "title": "Transcriptions",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Census Schedules",
+                        "icon": "description",
+                        "link": lambda request: "/admin/census/censusschedule/",
                     },
                     {
                         "title": "Religious Bodies",

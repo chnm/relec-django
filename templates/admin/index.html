@@ -3,32 +3,120 @@
 
 {% block extrahead %}
     {{ block.super }}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
     <div class="dashboard-container">
-    <!-- Project Overview -->
         <div class="dashboard-card">
-            <h2>Transcription Project Overview</h2>
+            <div class="dashboard-section-heading">
+                <div>
+                    <h2>Transcription Project Overview</h2>
+                    <p class="dashboard-muted">Approval is the final canonical workflow state; human and AI review readiness are tracked separately.</p>
+                </div>
+            </div>
 
-            <div class="dashboard-grid">
+            <div class="dashboard-grid dashboard-overview-grid">
                 <div class="dashboard-stat">
-                    <h3>{{ total_records }}</h3>
-                    <p>Total Census Records</p>
+                    <h3>{{ total_records|intcomma }}</h3>
+                    <p>Total Schedules</p>
                 </div>
-                <div class="dashboard-stat">
-                    <h3>{{ transcribed_count }}</h3>
-                    <p>Submitted / Approved</p>
+                <div class="dashboard-stat dashboard-stat-review">
+                    <h3>{{ ready_for_review_count|intcomma }}</h3>
+                    <p>Ready for Human Review</p>
                 </div>
-                <div class="dashboard-stat">
-                    <h3>{{ needs_review_count }}</h3>
-                    <p>Awaiting Review</p>
+                {% if show_ai_usage %}
+                    <div class="dashboard-stat dashboard-stat-ai">
+                        <h3>{{ ai_ready_review_count|intcomma }}</h3>
+                        <p>AI Candidates Ready</p>
+                    </div>
+                {% endif %}
+                <div class="dashboard-stat dashboard-stat-approved">
+                    <h3>{{ approved_count|intcomma }}</h3>
+                    <p>Approved</p>
                 </div>
-                <div class="dashboard-stat">
-                    <h3>{{ completion_percentage }}%</h3>
-                    <p>Project Complete</p>
+                <div class="dashboard-stat dashboard-stat-approved">
+                    <h3>{{ approval_percentage }}%</h3>
+                    <p>Schedules Approved</p>
                 </div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="dashboard-section-heading">
+                <div>
+                    <h2>Needs Attention</h2>
+                    <p class="dashboard-muted">Open the working queues directly; these counts do not change schedule status.</p>
+                </div>
+            </div>
+            <div class="attention-grid">
+                <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=review_queue">
+                    <span>Review Queue</span>
+                    <strong>{{ needs_review_count|intcomma }}</strong>
+                    <small>Imported and student work awaiting human review</small>
+                </a>
+                {% if show_ai_usage %}
+                    <a class="attention-card attention-card-ai" href="{% url 'admin:census_censusschedule_changelist' %}?ai_status=transcribed">
+                        <span>AI Review Queue</span>
+                        <strong>{{ ai_ready_review_count|intcomma }}</strong>
+                        <small>Successful candidates available for comparison</small>
+                    </a>
+                {% endif %}
+                <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=needs_review">
+                    <span>Imported - Needs Review</span>
+                    <strong>{{ imported_needs_review_count|intcomma }}</strong>
+                    <small>Imported records requiring canonical review</small>
+                </a>
+                <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=unassigned">
+                    <span>Unassigned Records</span>
+                    <strong>{{ unassigned_count|intcomma }}</strong>
+                    <small>Schedules without a human assignment</small>
+                </a>
+            </div>
+            <div class="dashboard-tools">
+                <span>Data tools</span>
+                <a href="{% url 'admin:census_schedule_gap_analysis' %}">Schedule ID gaps</a>
+                <a href="{% url 'admin:census_schedule_missing_county_analysis' %}">Missing counties</a>
+                <a href="{% url 'admin:census_schedule_location_export' %}">Export by location</a>
+            </div>
+        </div>
+
+        <div class="dashboard-grid dashboard-chart-grid">
+            <div class="dashboard-card">
+                <h3>Workflow Status</h3>
+                <p class="dashboard-muted">Canonical schedules at each transcription stage.</p>
+                <div class="chart-container">
+                    <canvas id="statusChart" role="img" aria-label="Horizontal bar chart of schedules by workflow status"></canvas>
+                </div>
+                <details class="chart-fallback">
+                    <summary>View workflow counts as text</summary>
+                    <ul>
+                        <li>Unassigned: {{ status_counts.unassigned|intcomma }}</li>
+                        <li>Assigned: {{ status_counts.assigned|intcomma }}</li>
+                        <li>In Progress: {{ status_counts.in_progress|intcomma }}</li>
+                        <li>Imported - Needs Review: {{ status_counts.needs_review|intcomma }}</li>
+                        <li>Ready for Review: {{ status_counts.completed|intcomma }}</li>
+                        <li>Approved: {{ status_counts.approved|intcomma }}</li>
+                    </ul>
+                </details>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>Work Distribution</h3>
+                <p class="dashboard-muted">Schedules assigned to the five largest assignee workloads.</p>
+                <div class="chart-container">
+                    <canvas id="assignmentChart" role="img" aria-label="Horizontal bar chart of assigned schedules by assignee"></canvas>
+                </div>
+                <details class="chart-fallback">
+                    <summary>View assignment counts as text</summary>
+                    <ul>
+                        {% for user in top_transcribers %}
+                            <li>{{ user.user__username }}: {{ user.count|intcomma }}</li>
+                        {% empty %}
+                            <li>No assigned schedules.</li>
+                        {% endfor %}
+                    </ul>
+                </details>
             </div>
         </div>
 
@@ -43,11 +131,11 @@
                 </div>
                 <div class="dashboard-grid">
                     <div class="dashboard-stat">
-                        <h3>{{ ai_usage_report.overall.total_runs }}</h3>
+                        <h3>{{ ai_usage_report.overall.total_runs|intcomma }}</h3>
                         <p>Agent Runs</p>
                     </div>
                     <div class="dashboard-stat">
-                        <h3>{{ ai_usage_report.overall.succeeded }}</h3>
+                        <h3>{{ ai_usage_report.overall.succeeded|intcomma }}</h3>
                         <p>Successful Jobs</p>
                     </div>
                     <div class="dashboard-stat">
@@ -67,26 +155,8 @@
             </div>
         {% endif %}
 
-    <!-- Charts Row -->
-        <div class="dashboard-grid">
-            <div class="dashboard-card">
-                <h3>Transcription Status</h3>
-                <div class="chart-container">
-                    <canvas id="statusChart"></canvas>
-                </div>
-            </div>
-
-            <div class="dashboard-card">
-                <h3>Work Distribution</h3>
-                <div class="chart-container">
-                    <canvas id="assignmentChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-    <!-- Recent Activity -->
         <div class="dashboard-card">
-            <h3>Recent Activity</h3>
+            <h3>Recently Updated Schedules</h3>
             <div class="recent-activity-list">
                 {% for activity in recent_activity %}
                     <div class="recent-activity-item">
@@ -103,39 +173,8 @@
                         <br><small class="dashboard-muted">Updated: {{ activity.updated_at|timesince }} ago</small>
                     </div>
                 {% empty %}
-                    <p class="dashboard-empty">No recent activity</p>
+                    <p class="dashboard-empty">No recently updated schedules</p>
                 {% endfor %}
-            </div>
-        </div>
-
-    <!-- Quick Actions -->
-        <div class="dashboard-card">
-            <h3>Quick Actions</h3>
-            <div class="quick-actions">
-                <a href="/admin/census/censusschedule/?workflow_view=review_queue"
-                   class="button default quick-action">
-                    Review Queue ({{ needs_review_count }})
-                </a>
-                <a href="/admin/census/censusschedule/?workflow_view=assigned_to_me"
-                   class="button default quick-action">
-                    Assigned to Me
-                </a>
-                <a href="/admin/census/censusschedule/?workflow_view=unassigned"
-                   class="button default quick-action">
-                    Unassigned Records ({{ unassigned_count }})
-                </a>
-                <a href="{% url 'admin:census_schedule_gap_analysis' %}"
-                   class="button default quick-action">
-                    Schedule ID Gap Analysis
-                </a>
-                <a href="{% url 'admin:census_schedule_missing_county_analysis' %}"
-                   class="button default quick-action">
-                    Missing County Analysis
-                </a>
-                <a href="{% url 'admin:census_schedule_location_export' %}"
-                   class="button default quick-action">
-                    Export by Location
-                </a>
             </div>
         </div>
     </div>
@@ -143,67 +182,86 @@
     {{ block.super }}
 
     <script>
-// Status Chart
-        const statusCtx = document.getElementById('statusChart').getContext('2d');
-        new Chart(statusCtx, {
-            type: 'doughnut',
-            data: {
-                labels: [
-                    'Unassigned', 'Assigned', 'In Progress',
-                    'Imported - Needs Review', 'Ready for Review', 'Approved'
-                ],
-                datasets: [{
-                    data: [
-                        {{ status_counts.unassigned }}, {{ status_counts.assigned }},
-                        {{ status_counts.in_progress }}, {{ status_counts.needs_review }},
-                        {{ status_counts.completed }}, {{ status_counts.approved }}
-                    ],
-                    backgroundColor: [
-                        '#6c757d', '#007bff', '#fd7e14',
-                        '#ffc107', '#0f766e', '#155724'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
-        });
+        (() => {
+            if (typeof Chart === "undefined") return;
 
-// Assignment Chart
-        const assignmentCtx = document.getElementById('assignmentChart').getContext('2d');
-        new Chart(assignmentCtx, {
-            type: 'bar',
-            data: {
-                labels: [
-                    {% for user in top_transcribers %}
-                        '{{ user.user__username|escapejs }}',
-                    {% endfor %}
-                ],
-                datasets: [{
-                    label: 'Assigned Records',
-                    data: [
+            const darkMode = document.documentElement.classList.contains("dark") ||
+                window.matchMedia("(prefers-color-scheme: dark)").matches;
+            const textColor = darkMode ? "#e5e7eb" : "#374151";
+            const gridColor = darkMode ? "rgba(148, 163, 184, .18)" : "rgba(107, 114, 128, .18)";
+            const horizontalScales = () => ({
+                x: {
+                    beginAtZero: true,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, precision: 0 },
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: textColor },
+                },
+            });
+
+            new Chart(document.getElementById("statusChart"), {
+                type: "bar",
+                data: {
+                    labels: [
+                        "Unassigned", "Assigned", "In Progress",
+                        "Imported - Needs Review", "Ready for Review", "Approved",
+                    ],
+                    datasets: [{
+                        label: "Schedules",
+                        data: [
+                            {{ status_counts.unassigned }}, {{ status_counts.assigned }},
+                            {{ status_counts.in_progress }}, {{ status_counts.needs_review }},
+                            {{ status_counts.completed }}, {{ status_counts.approved }},
+                        ],
+                        backgroundColor: [
+                            "#6b7280", "#0060b1", "#f97316",
+                            "#d97706", "#0f766e", "#166534",
+                        ],
+                        borderSkipped: false,
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    indexAxis: "y",
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: horizontalScales(),
+                },
+            });
+
+            new Chart(document.getElementById("assignmentChart"), {
+                type: "bar",
+                data: {
+                    labels: [
                         {% for user in top_transcribers %}
-                            {{ user.count }},
+                            "{{ user.user__username|escapejs }}",
                         {% endfor %}
                     ],
-                    backgroundColor: '#0060b1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
+                    datasets: [{
+                        label: "Assigned schedules",
+                        data: [
+                            {% for user in top_transcribers %}
+                                {{ user.count }},
+                            {% endfor %}
+                        ],
+                        backgroundColor: "#0060b1",
+                        borderSkipped: false,
+                        borderRadius: 4,
+                    }],
+                },
+                options: {
+                    indexAxis: "y",
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: {
+                        legend: { labels: { color: textColor } },
+                    },
+                    scales: horizontalScales(),
+                },
+            });
+        })();
     </script>
 {% endblock %}

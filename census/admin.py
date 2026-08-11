@@ -12,7 +12,7 @@ from django.contrib.admin import helpers
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, models
+from django.db import IntegrityError, models, transaction
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
@@ -21,6 +21,7 @@ from django.utils.html import format_html
 from import_export.admin import ImportExportModelAdmin
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
+from simple_history.utils import bulk_update_with_history
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from urllib3.util.retry import Retry
@@ -45,11 +46,14 @@ from .transcription.contracts import CONTRACT_VERSION
 from .transcription.services import (
     LaunchError,
     launch_transcription_run,
+    transcription_selection_summary,
     worker_status,
 )
+from .transcription.status import AI_STATUS_LABELS, with_ai_status
 from .transcription.usage import (
     USAGE_EXPORT_FIELDS,
     configured_pricing_snapshots,
+    historical_cost_estimates,
     usage_export_rows,
     usage_report,
 )
@@ -123,66 +127,6 @@ class CensusScheduleLocationFilter(admin.SimpleListFilter):
         if self.value() == "missing_location":
             return queryset.filter(county__isnull=True, populated_place__isnull=True)
         return queryset
-
-
-AI_STATUS_LABELS = {
-    "not_queued": "Not queued",
-    "queued": "Queued",
-    "processing": "Processing",
-    "transcribed": "AI transcribed",
-    "failed": "Failed",
-    "needs_recovery": "Needs recovery",
-}
-
-
-def with_ai_status(queryset):
-    """Annotate the mutually exclusive latest AI workflow state."""
-    latest_job = TranscriptionJob.objects.filter(
-        census_schedule_id=models.OuterRef("pk"),
-        run__kind="agent",
-    ).order_by("-queued_at", "-pk")
-    agent_candidate = ScheduleTranscription.objects.filter(
-        census_schedule_id=models.OuterRef("pk"),
-        run__kind="agent",
-    )
-    return queryset.annotate(
-        _latest_ai_job_state=models.Subquery(latest_job.values("state")[:1]),
-        _has_ai_candidate=models.Exists(agent_candidate),
-    ).annotate(
-        _ai_status=models.Case(
-            models.When(
-                _latest_ai_job_state__in=[
-                    TranscriptionJob.State.QUEUED,
-                    TranscriptionJob.State.PREPARING,
-                ],
-                then=models.Value("queued"),
-            ),
-            models.When(
-                _latest_ai_job_state=TranscriptionJob.State.SUBMITTED,
-                then=models.Value("processing"),
-            ),
-            models.When(
-                _latest_ai_job_state=TranscriptionJob.State.SUCCEEDED,
-                then=models.Value("transcribed"),
-            ),
-            models.When(
-                _latest_ai_job_state__in=[
-                    TranscriptionJob.State.FAILED,
-                    TranscriptionJob.State.EXPIRED,
-                    TranscriptionJob.State.CANCELED,
-                    TranscriptionJob.State.INVALID,
-                ],
-                then=models.Value("failed"),
-            ),
-            models.When(
-                _latest_ai_job_state=TranscriptionJob.State.NEEDS_RECOVERY,
-                then=models.Value("needs_recovery"),
-            ),
-            models.When(_has_ai_candidate=True, then=models.Value("transcribed")),
-            default=models.Value("not_queued"),
-            output_field=models.CharField(max_length=20),
-        )
-    )
 
 
 class AITranscriptionFilter(admin.SimpleListFilter):
@@ -410,7 +354,7 @@ class ReviewerReadOnlyModelAdmin(ModelAdmin):
 
 @admin.register(TranscriptionRun)
 class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
-    list_display = ["key", "kind", "job_summary", "token_summary", "created_at"]
+    list_display = ["key", "kind", "job_progress", "token_summary", "created_at"]
     list_filter = ["kind"]
     search_fields = ["key"]
     readonly_fields = ["key", "kind", "metadata", "created_at", "token_usage"]
@@ -483,6 +427,39 @@ class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
             .get_queryset(request)
             .annotate(
                 job_count=models.Count("transcription_jobs"),
+                queued_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state=TranscriptionJob.State.QUEUED
+                    ),
+                ),
+                active_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state__in=(
+                            TranscriptionJob.State.PREPARING,
+                            TranscriptionJob.State.SUBMITTED,
+                        )
+                    ),
+                ),
+                succeeded_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state=TranscriptionJob.State.SUCCEEDED
+                    ),
+                ),
+                attention_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state__in=(
+                            TranscriptionJob.State.FAILED,
+                            TranscriptionJob.State.EXPIRED,
+                            TranscriptionJob.State.CANCELED,
+                            TranscriptionJob.State.INVALID,
+                            TranscriptionJob.State.NEEDS_RECOVERY,
+                        )
+                    ),
+                ),
                 aggregate_input_tokens=models.Sum("transcription_jobs__input_tokens"),
                 aggregate_cache_creation_tokens=models.Sum(
                     "transcription_jobs__cache_creation_input_tokens"
@@ -494,9 +471,13 @@ class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
             )
         )
 
-    @admin.display(description="Jobs")
-    def job_summary(self, obj):
-        return obj.job_count
+    @admin.display(description="Progress")
+    def job_progress(self, obj):
+        return (
+            f"{obj.succeeded_job_count:,}/{obj.job_count:,} succeeded · "
+            f"{obj.active_job_count:,} active · {obj.queued_job_count:,} queued · "
+            f"{obj.attention_job_count:,} attention"
+        )
 
     @admin.display(description="Tokens")
     def token_summary(self, obj):
@@ -529,6 +510,7 @@ class TranscriptionBatchAdmin(ReviewerReadOnlyModelAdmin):
 
 @admin.register(TranscriptionJob)
 class TranscriptionJobAdmin(ReviewerReadOnlyModelAdmin):
+    actions = ["cancel_queued_jobs"]
     list_display = [
         "custom_id",
         "census_schedule",
@@ -553,6 +535,58 @@ class TranscriptionJobAdmin(ReviewerReadOnlyModelAdmin):
     @admin.display(description="Input tokens")
     def total_input_tokens_display(self, obj):
         return obj.total_input_tokens
+
+    @admin.action(
+        description="Cancel selected locally queued jobs", permissions=["view"]
+    )
+    def cancel_queued_jobs(self, request, queryset):
+        """Cancel only jobs that have not been claimed or submitted."""
+        if not is_reviewer(request.user):
+            self.message_user(
+                request,
+                "Only reviewers can cancel queued Claude jobs.",
+                level=messages.ERROR,
+            )
+            return
+        selected_count = queryset.count()
+        with transaction.atomic():
+            queued_jobs = list(
+                queryset.select_for_update(skip_locked=True).filter(
+                    state=TranscriptionJob.State.QUEUED,
+                    batch__isnull=True,
+                    raw_result__isnull=True,
+                )
+            )
+            completed_at = timezone.now()
+            for job in queued_jobs:
+                job.state = TranscriptionJob.State.CANCELED
+                job.completed_at = completed_at
+                job.error_type = "canceled_by_reviewer"
+                job.error_message = (
+                    f"Canceled by {request.user.get_username()} before claim."
+                )
+            if queued_jobs:
+                bulk_update_with_history(
+                    queued_jobs,
+                    TranscriptionJob,
+                    fields=[
+                        "state",
+                        "completed_at",
+                        "error_type",
+                        "error_message",
+                    ],
+                    batch_size=1000,
+                    default_user=request.user,
+                    default_change_reason="Canceled locally queued Claude job",
+                )
+        canceled_count = len(queued_jobs)
+        skipped_count = selected_count - canceled_count
+        self.message_user(
+            request,
+            f"Canceled {canceled_count:,} locally queued job(s); "
+            f"skipped {skipped_count:,} claimed or completed job(s).",
+            level=messages.SUCCESS if canceled_count else messages.WARNING,
+        )
 
 
 @admin.action(description="Fetch denominations from Apiary")
@@ -869,22 +903,52 @@ class ClaudeTranscriptionRunForm(forms.Form):
             "pricing is validated and frozen with the run."
         )
     )
-    limit = forms.IntegerField(
+    pilot_size = forms.IntegerField(
+        required=False,
         min_value=1,
         help_text=(
-            "The maximum number of eligible selected schedules to queue, in "
-            "internal record-ID order. This is a job count—not a provider batch "
-            "count, token budget, or spending cap."
+            "Optional. Queue only this many ready schedules as a smaller test. "
+            "Leave blank to queue the complete ready selection."
+        ),
+    )
+    confirmation_job_count = forms.IntegerField(
+        required=False,
+        min_value=1,
+        label="Confirm planned job count",
+        help_text=(
+            "For a large run, type the exact number shown under Will queue. "
+            "This confirms the campaign size; it is not a spending cap."
         ),
     )
 
     def __init__(self, *args, **kwargs):
+        self.eligible_count = kwargs.pop("eligible_count", 0)
         super().__init__(*args, **kwargs)
         self.fields["model"].choices = [
             (model, model) for model in settings.CLAUDE_TRANSCRIPTION_MODELS
         ]
-        self.fields["limit"].max_value = settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT
-        self.fields["limit"].initial = settings.CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT
+        self.fields["pilot_size"].max_value = settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS
+
+    def clean(self):
+        cleaned_data = super().clean()
+        pilot_size = cleaned_data.get("pilot_size")
+        planned_count = (
+            min(self.eligible_count, pilot_size) if pilot_size else self.eligible_count
+        )
+        if planned_count > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:
+            raise ValidationError(
+                f"This run would queue {planned_count:,} jobs, above the emergency "
+                f"ceiling of {settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:,}."
+            )
+        if (
+            planned_count >= settings.CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD
+            and cleaned_data.get("confirmation_job_count") != planned_count
+        ):
+            self.add_error(
+                "confirmation_job_count",
+                f"Enter {planned_count:,} to confirm this large run.",
+            )
+        return cleaned_data
 
 
 @admin.action(description="Queue selected schedules for Claude transcription")
@@ -897,14 +961,15 @@ def queue_claude_transcription(modeladmin, request, queryset):
         )
         return HttpResponseRedirect(reverse("admin:census_censusschedule_changelist"))
 
+    selection = transcription_selection_summary(queryset)
     initial = {
         "run_key": timezone.now().strftime("claude-%Y%m%d-%H%M%S"),
         "model": settings.CLAUDE_TRANSCRIPTION_MODELS[0],
-        "limit": settings.CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT,
     }
     form = ClaudeTranscriptionRunForm(
         request.POST if request.POST.get("apply") else None,
         initial=initial,
+        eligible_count=selection["eligible_count"],
     )
     if request.POST.get("apply") and form.is_valid():
         try:
@@ -912,7 +977,8 @@ def queue_claude_transcription(modeladmin, request, queryset):
                 queryset=queryset,
                 key=form.cleaned_data["run_key"],
                 model=form.cleaned_data["model"],
-                limit=form.cleaned_data["limit"],
+                pilot_size=form.cleaned_data["pilot_size"],
+                confirmed_job_count=form.cleaned_data["confirmation_job_count"],
                 user=request.user,
             )
         except (LaunchError, ValidationError, IntegrityError) as exc:
@@ -927,9 +993,6 @@ def queue_claude_transcription(modeladmin, request, queryset):
             )
 
     selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
-    eligible_count = (
-        queryset.exclude(original_image="").exclude(original_image__isnull=True).count()
-    )
     pricing_snapshots, pricing_errors = configured_pricing_snapshots(
         settings.CLAUDE_TRANSCRIPTION_PRICING,
         settings.CLAUDE_TRANSCRIPTION_MODELS,
@@ -941,9 +1004,8 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "form": form,
             "objects": queryset[:100],
             "selected": selected,
-            "selected_count": queryset.count(),
-            "eligible_count": eligible_count,
-            "ineligible_count": queryset.count() - eligible_count,
+            **selection,
+            "select_across": request.POST.get("select_across", "0"),
             "opts": modeladmin.model._meta,
             "title": "Queue Claude transcription run",
             "application_revision": settings.APPLICATION_REVISION,
@@ -953,9 +1015,11 @@ def queue_claude_transcription(modeladmin, request, queryset):
             "prompt_version": CONTRACT_VERSION,
             "max_tokens": settings.CLAUDE_TRANSCRIPTION_MAX_TOKENS,
             "batch_size": settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE,
-            "max_run_limit": settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT,
+            "max_run_jobs": settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS,
+            "large_run_threshold": (settings.CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD),
             "pricing_snapshots": pricing_snapshots,
             "pricing_errors": pricing_errors,
+            "historical_cost_estimates": historical_cost_estimates(),
         },
     )
 

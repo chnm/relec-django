@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.db.models import Count
 
 from census.models import CensusSchedule
+from census.transcription.status import with_ai_status
 from census.transcription.usage import usage_report
 from census.workflow import is_reviewer
 
@@ -35,11 +36,16 @@ def _get_dashboard_data_sync(include_ai_usage=False):
 
     # Calculate totals
     total_records = CensusSchedule.objects.count()
-    transcribed_count = (
-        status_counts_complete["completed"] + status_counts_complete["approved"]
+    approved_count = status_counts_complete["approved"]
+    approval_percentage = round(
+        (approved_count / total_records * 100) if total_records > 0 else 0, 1
     )
-    completion_percentage = round(
-        (transcribed_count / total_records * 100) if total_records > 0 else 0, 1
+    ai_ready_review_count = (
+        with_ai_status(CensusSchedule.objects.all())
+        .filter(_ai_status="transcribed")
+        .count()
+        if include_ai_usage
+        else None
     )
 
     # Get top transcribers
@@ -69,13 +75,16 @@ def _get_dashboard_data_sync(include_ai_usage=False):
 
     context = {
         "total_records": total_records,
-        "transcribed_count": transcribed_count,
+        "ready_for_review_count": status_counts_complete["completed"],
+        "imported_needs_review_count": status_counts_complete["needs_review"],
         "needs_review_count": (
             status_counts_complete["needs_review"] + status_counts_complete["completed"]
         ),
+        "ai_ready_review_count": ai_ready_review_count,
+        "approved_count": approved_count,
         "unassigned_count": status_counts_complete["unassigned"],
         "assigned_count": status_counts_complete["assigned"],
-        "completion_percentage": completion_percentage,
+        "approval_percentage": approval_percentage,
         "status_counts": status_counts_complete,
         "top_transcribers": top_transcribers_list,
         "recent_activity": recent_activity,

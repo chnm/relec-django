@@ -344,20 +344,20 @@ button.bg-primary-600 {
 }
 
 .dashboard-section-heading {
-    align-items: flex-start;
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
 }
 
 .dashboard-warning {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    border-radius: 0.5rem;
-    color: #92400e;
-    font-size: 0.875rem;
-    margin-top: 1rem;
-    padding: 0.75rem 1rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.5rem;
+  color: #92400e;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
 }
 
 .dashboard-card h2,
@@ -371,6 +371,14 @@ button.bg-primary-600 {
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   margin: 1rem 0;
+}
+
+.dashboard-overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.dashboard-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .dashboard-stat {
@@ -394,10 +402,112 @@ button.bg-primary-600 {
   opacity: 0.92;
 }
 
+.dashboard-stat-review {
+  background: #0f766e;
+}
+
+.dashboard-stat-ai {
+  background: #7c3aed;
+}
+
+.dashboard-stat-approved {
+  background: #166534;
+}
+
+.attention-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 1rem;
+}
+
+.attention-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  color: #334155 !important;
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.attention-card:hover {
+  border-color: #0060b1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.attention-card span {
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.attention-card strong {
+  color: #111827;
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.attention-card small {
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.attention-card-ai {
+  border-left: 4px solid #7c3aed;
+}
+
+.dashboard-tools {
+  align-items: center;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.dashboard-tools span {
+  color: #6b7280;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dashboard-tools a {
+  font-size: 0.8rem;
+}
+
 .chart-container {
   height: 300px;
   margin: 1rem 0 0;
   position: relative;
+}
+
+.chart-fallback {
+  border-top: 1px solid #e5e7eb;
+  color: #4b5563;
+  font-size: 0.8rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+.chart-fallback summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.chart-fallback ul {
+  display: grid;
+  gap: 0.25rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: disc;
+  margin: 0.75rem 0 0 1.25rem;
 }
 
 .recent-activity-list {
@@ -410,6 +520,16 @@ button.bg-primary-600 {
   border-left: 4px solid #0060b1;
   margin: 0.75rem 0;
   padding: 0.75rem;
+}
+
+/* Unfold uses `deletelink` on deleted Recent Actions rows. Keep our global
+   white delete-button text from turning those white history cards invisible. */
+#recent-actions-module .actionlist > li {
+  color: #111827 !important;
+}
+
+#recent-actions-module .actionlist > li a {
+  color: #0060b1 !important;
 }
 
 .dashboard-muted {
@@ -520,5 +640,81 @@ button.bg-primary-600 {
 
   .recent-activity-item {
     background-color: #1f2937;
+  }
+
+  .attention-card {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb !important;
+  }
+
+  .attention-card span,
+  .attention-card small,
+  .dashboard-muted,
+  .chart-fallback {
+    color: #cbd5e1;
+  }
+
+  .attention-card strong {
+    color: #f9fafb;
+  }
+
+  .dashboard-tools,
+  .chart-fallback {
+    border-color: #374151;
+  }
+}
+
+.dark .dashboard-card {
+  background: #111827;
+  border-color: #374151;
+}
+
+.dark .dashboard-card h2,
+.dark .dashboard-card h3 {
+  color: #f9fafb;
+}
+
+.dark .recent-activity-item,
+.dark .attention-card {
+  background: #1f2937;
+}
+
+.dark .attention-card {
+  border-color: #374151;
+  color: #e5e7eb !important;
+}
+
+.dark .attention-card span,
+.dark .attention-card small,
+.dark .dashboard-muted,
+.dark .chart-fallback {
+  color: #cbd5e1;
+}
+
+.dark .attention-card strong {
+  color: #f9fafb;
+}
+
+.dark .dashboard-tools,
+.dark .chart-fallback {
+  border-color: #374151;
+}
+
+.dark #recent-actions-module .actionlist > li {
+  color: #f3f4f6 !important;
+}
+
+.dark #recent-actions-module .actionlist > li a {
+  color: #60a5fa !important;
+}
+
+@media (max-width: 900px) {
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-fallback ul {
+    grid-template-columns: 1fr;
   }
 }
