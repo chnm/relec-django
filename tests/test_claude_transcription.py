@@ -221,7 +221,7 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
     },
     APPLICATION_REVISION="0123456789abcdef0123456789abcdef01234567",
 )
-def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
+def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
     settings.MEDIA_ROOT = tmp_path
     schedules = [
         CensusScheduleFactory(
@@ -236,11 +236,21 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
         queryset=CensusSchedule.objects.filter(pk__in=[item.pk for item in schedules]),
         key="claude-test-run",
         model="test-model",
-        limit=2,
+        pilot_size=2,
     )
 
     contract = load_contract()
     assert run.transcription_jobs.count() == 2
+    assert (
+        TranscriptionJob.history.filter(
+            id__in=run.transcription_jobs.values_list("pk", flat=True),
+            history_type="+",
+        ).count()
+        == 2
+    )
+    assert run.metadata["selection_count"] == 3
+    assert run.metadata["eligible_count"] == 3
+    assert run.metadata["pilot_size"] == 2
     assert run.metadata["prompt"] == contract["prompt"]
     assert run.metadata["schema_sha256"] == contract["schema_sha256"]
     assert (
@@ -266,6 +276,148 @@ def test_launch_freezes_contract_and_honors_limit(tmp_path, settings):
 
 
 @pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
+def test_launch_queues_the_complete_ready_selection_by_default():
+    schedules = [
+        CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+        for _ in range(3)
+    ]
+
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(
+            pk__in=[schedule.pk for schedule in schedules]
+        ),
+        key="complete-selection",
+        model="claude-sonnet-4-6",
+    )
+
+    assert set(run.transcription_jobs.values_list("census_schedule_id", flat=True)) == {
+        schedule.pk for schedule in schedules
+    }
+    assert run.metadata["pilot_size"] is None
+    assert run.metadata["schedule_count"] == 3
+
+
+@pytest.mark.django_db
+@override_settings(
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=5000,
+    CLAUDE_TRANSCRIPTION_BATCH_SIZE=25,
+)
+def test_launch_creates_one_denomination_scale_campaign():
+    CensusSchedule.objects.bulk_create(
+        [
+            CensusSchedule(
+                resource_id=50_000 + index,
+                schedule_id=f"scale-{index}",
+                schedule_title=f"Scale schedule {index}",
+                original_image=f"census_images/originals/scale-{index}.jpg",
+            )
+            for index in range(2000)
+        ],
+        batch_size=1000,
+    )
+
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(schedule_id__startswith="scale-"),
+        key="denomination-scale-campaign",
+        model="claude-sonnet-4-6",
+    )
+
+    assert run.transcription_jobs.count() == 2000
+    assert run.metadata["schedule_count"] == 2000
+    assert run.metadata["estimated_batch_count"] == 80
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
+def test_launch_excludes_active_work_but_allows_retranscription():
+    queued = CensusScheduleFactory(original_image="census_images/originals/queued.jpg")
+    recovering = CensusScheduleFactory(
+        original_image="census_images/originals/recovering.jpg"
+    )
+    succeeded = CensusScheduleFactory(
+        original_image="census_images/originals/succeeded.jpg"
+    )
+    TranscriptionJobFactory(
+        census_schedule=queued,
+        state=TranscriptionJob.State.QUEUED,
+    )
+    TranscriptionJobFactory(
+        census_schedule=recovering,
+        state=TranscriptionJob.State.NEEDS_RECOVERY,
+    )
+    TranscriptionJobFactory(
+        census_schedule=succeeded,
+        state=TranscriptionJob.State.SUCCEEDED,
+    )
+
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(
+            pk__in=[queued.pk, recovering.pk, succeeded.pk]
+        ),
+        key="retranscription-is-allowed",
+        model="claude-sonnet-4-6",
+    )
+
+    assert list(
+        run.transcription_jobs.values_list("census_schedule_id", flat=True)
+    ) == [succeeded.pk]
+
+
+@pytest.mark.django_db
+@override_settings(
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=2,
+)
+def test_launch_requires_exact_confirmation_for_a_large_run():
+    schedules = [
+        CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+        for _ in range(2)
+    ]
+    queryset = CensusSchedule.objects.filter(
+        pk__in=[schedule.pk for schedule in schedules]
+    )
+
+    with pytest.raises(LaunchError, match="Confirm the exact planned job count"):
+        launch_transcription_run(
+            queryset=queryset,
+            key="unconfirmed-large-run",
+            model="claude-sonnet-4-6",
+        )
+
+    run = launch_transcription_run(
+        queryset=queryset,
+        key="confirmed-large-run",
+        model="claude-sonnet-4-6",
+        confirmed_job_count=2,
+    )
+    assert run.transcription_jobs.count() == 2
+
+
+@pytest.mark.django_db
+@override_settings(
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=2,
+    CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=100,
+)
+def test_launch_enforces_the_emergency_job_ceiling():
+    schedules = [
+        CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+        for _ in range(3)
+    ]
+
+    with pytest.raises(LaunchError, match="emergency ceiling"):
+        launch_transcription_run(
+            queryset=CensusSchedule.objects.filter(
+                pk__in=[schedule.pk for schedule in schedules]
+            ),
+            key="above-ceiling",
+            model="claude-sonnet-4-6",
+        )
+
+
+@pytest.mark.django_db
 @override_settings(
     CLAUDE_TRANSCRIPTION_ENABLED=True,
     ANTHROPIC_API_KEY="",
@@ -278,7 +430,6 @@ def test_launch_allows_missing_application_revision():
         queryset=CensusSchedule.objects.filter(pk=schedule.pk),
         key="missing-application-revision",
         model="claude-sonnet-4-6",
-        limit=1,
     )
 
     assert run.metadata["application_revision"] is None
@@ -295,7 +446,6 @@ def test_launch_does_not_require_an_api_key_in_the_web_process():
         queryset=CensusSchedule.objects.filter(pk=schedule.pk),
         key="no-api-key-in-web-process",
         model="claude-sonnet-4-6",
-        limit=1,
     )
 
     assert run.transcription_jobs.count() == 1
@@ -312,7 +462,6 @@ def test_launch_refuses_when_the_workflow_is_disabled():
             queryset=CensusSchedule.objects.filter(pk=schedule.pk),
             key="workflow-disabled",
             model="claude-sonnet-4-6",
-            limit=1,
         )
 
     assert not TranscriptionJob.objects.exists()
@@ -409,11 +558,19 @@ def test_payload_contains_base64_image_context_and_structured_output(
 class SuccessfulBatchClient:
     def __init__(self, candidate_data):
         self.candidate_data = candidate_data
+        self.batch_count = 0
+        self.batch_sizes = []
 
     def create_batch(self, requests_payload):
+        self.batch_count += 1
+        self.batch_sizes.append(len(requests_payload))
         self.custom_ids = [item["custom_id"] for item in requests_payload]
         return {
-            "id": "msgbatch_test",
+            "id": (
+                "msgbatch_test"
+                if self.batch_count == 1
+                else f"msgbatch_test_{self.batch_count}"
+            ),
             "processing_status": "in_progress",
             "request_counts": {"processing": len(requests_payload)},
             "expires_at": "2026-08-07T00:00:00Z",
@@ -421,7 +578,7 @@ class SuccessfulBatchClient:
         }
 
     def retrieve_batch(self, provider_batch_id):
-        assert provider_batch_id == "msgbatch_test"
+        assert provider_batch_id.startswith("msgbatch_test")
         return {
             "id": provider_batch_id,
             "processing_status": "ended",
@@ -508,6 +665,36 @@ def test_worker_submits_collects_out_of_order_and_records_usage(
     )
     assert sum("result returned" in message for message in messages) == 2
     assert all("image bytes" not in message for message in messages)
+
+
+@pytest.mark.django_db(transaction=True)
+@override_settings(
+    CLAUDE_TRANSCRIPTION_BATCH_SIZE=2,
+    CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES=1,
+    CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES=1024 * 1024,
+    CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=1024,
+    CLAUDE_TRANSCRIPTION_LEASE_SECONDS=60,
+)
+def test_worker_auto_chunks_one_run_into_multiple_provider_batches(tmp_path, settings):
+    settings.MEDIA_ROOT = tmp_path
+    run = TranscriptionRunFactory(metadata=frozen_run_metadata())
+    for index in range(5):
+        schedule = CensusScheduleFactory(
+            original_image=SimpleUploadedFile(
+                f"schedule-{index}.jpg", b"image bytes", content_type="image/jpeg"
+            )
+        )
+        TranscriptionJobFactory(census_schedule=schedule, run=run)
+    client = SuccessfulBatchClient(candidate())
+    worker = ClaudeTranscriptionWorker(client=client)
+
+    for _ in range(6):
+        assert worker.run_once()
+
+    assert client.batch_sizes == [2, 2, 1]
+    assert run.transcription_batches.count() == 3
+    assert set(run.transcription_jobs.values_list("state", flat=True)) == {"succeeded"}
+    assert not worker.run_once()
 
 
 class AmbiguousClient:

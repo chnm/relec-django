@@ -63,6 +63,39 @@
       </section>
     </div>
 
+    <section class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700" aria-labelledby="cost-chart-title">
+      <div class="flex flex-col gap-1 mb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="cost-chart-title" class="text-base font-semibold text-gray-800 dark:text-gray-100">Cost per successful transcription</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The ten most recent priced runs; longer bars cost more per successful schedule.</p>
+        </div>
+        <span class="text-xs text-gray-500">Estimated USD from frozen Batch rates</span>
+      </div>
+      {% if report.cost_per_success_chart %}
+        <div class="cost-chart" role="list">
+          {% for item in report.cost_per_success_chart %}
+            <div class="cost-chart-row" role="listitem">
+              <div class="cost-chart-label">
+                <a href="{% url 'admin:census_transcriptionrun_change' item.run.pk %}">{{ item.run.key }}</a>
+                <span><i style="background-color: {{ item.color }}"></i>{{ item.model }}</span>
+              </div>
+              <div class="cost-chart-plot">
+                <div class="cost-chart-track" role="img" aria-label="{{ item.run.key }} cost per success: ${{ item.cost_per_success|floatformat:6 }} {{ item.currency }}">
+                  <div class="cost-chart-bar" style="background-color: {{ item.color }}; width: {{ item.width_percent }}%"></div>
+                </div>
+                <strong>${{ item.cost_per_success|floatformat:6 }}</strong>
+              </div>
+              <div class="cost-chart-note">${{ item.total_cost|floatformat:6 }} total · {{ item.priced_successes|intcomma }} priced success{{ item.priced_successes|pluralize:"es" }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="p-4 text-sm text-gray-500 rounded-md bg-gray-50 dark:bg-gray-800 dark:text-gray-400">
+          No priced successful runs are available yet. The chart will appear after a run records provider usage against frozen pricing.
+        </p>
+      {% endif %}
+    </section>
+
     <section class="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
       <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">Runs</h2>
@@ -111,9 +144,26 @@
     .usage-card strong { color: #1f2937; display: block; font-size: 1.4rem; margin-top: .3rem; }
     .usage-summary-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
     .usage-token-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    .cost-chart { display: grid; gap: 1rem; }
+    .cost-chart-row { align-items: center; display: grid; gap: .35rem 1rem; grid-template-columns: minmax(160px, 1fr) minmax(240px, 3fr) minmax(180px, auto); }
+    .cost-chart-label a { color: #0060b1; display: block; font-size: .875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cost-chart-label span { align-items: center; color: #6b7280; display: flex; font-size: .7rem; gap: .35rem; margin-top: .2rem; }
+    .cost-chart-label i { border-radius: 9999px; display: inline-block; height: .5rem; width: .5rem; }
+    .cost-chart-plot { align-items: center; display: grid; gap: .75rem; grid-template-columns: 1fr 6.5rem; }
+    .cost-chart-plot strong { color: #1f2937; font-size: .8rem; text-align: right; }
+    .cost-chart-track { background: #e5e7eb; border-radius: 9999px; height: .8rem; overflow: hidden; }
+    .cost-chart-bar { border-radius: inherit; height: 100%; min-width: 2px; }
+    .cost-chart-note { color: #6b7280; font-size: .72rem; text-align: right; white-space: nowrap; }
     .button.secondary { background: #fff; border: 1px solid #d1d5db; border-radius: .375rem; color: #374151; display: inline-block; font-size: .875rem; font-weight: 600; padding: .6rem .9rem; text-decoration: none; }
     .button.secondary:hover { background: #f3f4f6; }
     .dark .usage-card { background: #111827; border-color: #374151; }
     .dark .usage-card strong { color: #f3f4f6; }
+    .dark .cost-chart-label a { color: #60a5fa; }
+    .dark .cost-chart-plot strong { color: #f3f4f6; }
+    .dark .cost-chart-track { background: #374151; }
+    @media (max-width: 900px) {
+      .cost-chart-row { grid-template-columns: 1fr; }
+      .cost-chart-note { text-align: left; }
+    }
   </style>
 {% endblock %}

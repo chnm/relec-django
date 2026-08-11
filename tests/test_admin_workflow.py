@@ -7,17 +7,19 @@ from django.test import RequestFactory, override_settings
 from census.admin import (
     AITranscriptionFilter,
     CensusScheduleAdmin,
+    TranscriptionJobAdmin,
     TranscriptionRunAdmin,
     assign_to_me,
     mark_completed,
     mark_needs_review,
     queue_claude_transcription,
 )
-from census.models import CensusSchedule, TranscriptionRun
+from census.models import CensusSchedule, TranscriptionJob, TranscriptionRun
 from tests.factories import (
     CensusScheduleFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
+    TranscriptionBatchFactory,
     TranscriptionJobFactory,
     TranscriptionRunFactory,
 )
@@ -172,9 +174,25 @@ def test_reviewer_can_view_read_only_transcription_runs(reviewer):
 
 
 @pytest.mark.django_db
+def test_transcription_run_list_summarizes_campaign_progress(reviewer):
+    run = TranscriptionRunFactory()
+    TranscriptionJobFactory(run=run, state=TranscriptionJob.State.QUEUED)
+    TranscriptionJobFactory(run=run, state=TranscriptionJob.State.SUBMITTED)
+    TranscriptionJobFactory(run=run, state=TranscriptionJob.State.SUCCEEDED)
+    TranscriptionJobFactory(run=run, state=TranscriptionJob.State.NEEDS_RECOVERY)
+    model_admin = TranscriptionRunAdmin(TranscriptionRun, admin.site)
+
+    annotated = model_admin.get_queryset(admin_request(reviewer)).get(pk=run.pk)
+
+    assert model_admin.job_progress(annotated) == (
+        "1/4 succeeded · 1 active · 1 queued · 1 attention"
+    )
+
+
+@pytest.mark.django_db
 @override_settings(APPLICATION_REVISION="revision-for-admin-preview")
 def test_claude_action_confirmation_uses_initial_values(reviewer):
-    schedule = CensusScheduleFactory()
+    schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
     request = admin_post_request(
         reviewer,
@@ -191,9 +209,131 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert b"This field is required" not in response.content
     assert b"claude-" in response.content
     assert b"revision-for-admin-preview" in response.content
-    assert b"This is a job count" in response.content
+    assert b"Leave blank to queue the complete ready selection" in response.content
     assert b"predicted usage amount" in response.content
     assert b"Frozen pricing estimate" in response.content
+    assert b"Pilot size" in response.content
+    assert b"Limit" not in response.content
+
+
+@pytest.mark.django_db
+def test_claude_confirmation_preserves_select_across_django_action_round_trip(
+    reviewer,
+):
+    schedules = [
+        CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+        for _ in range(2)
+    ]
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {
+            "_selected_action": [schedules[0].pk],
+            "action": "queue_claude_transcription",
+            "index": "0",
+            "select_across": "1",
+        },
+    )
+
+    response = model_admin.response_action(
+        request,
+        CensusSchedule.objects.filter(pk__in=[item.pk for item in schedules]),
+    )
+
+    assert response.status_code == 200
+    assert b'name="select_across" value="1"' in response.content
+    assert b"All matching records" in response.content
+
+    confirmation_request = admin_post_request(
+        reviewer,
+        {
+            "_selected_action": [schedules[0].pk],
+            "action": "queue_claude_transcription",
+            "index": "0",
+            "select_across": "1",
+            "apply": "1",
+            "run_key": "select-across-round-trip",
+            "model": "claude-sonnet-4-6",
+            "pilot_size": "",
+            "confirmation_job_count": "",
+        },
+    )
+    confirmation_response = model_admin.response_action(
+        confirmation_request,
+        CensusSchedule.objects.filter(pk__in=[item.pk for item in schedules]),
+    )
+
+    assert confirmation_response.status_code == 302
+    assert (
+        TranscriptionRun.objects.get(
+            key="select-across-round-trip"
+        ).transcription_jobs.count()
+        == 2
+    )
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
+def test_claude_action_queues_the_full_ready_queryset_without_a_pilot(reviewer):
+    schedules = [
+        CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+        for _ in range(2)
+    ]
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {
+            "_selected_action": [schedules[0].pk],
+            "action": "queue_claude_transcription",
+            "select_across": "1",
+            "apply": "1",
+            "run_key": "full-denomination-campaign",
+            "model": "claude-sonnet-4-6",
+            "pilot_size": "",
+            "confirmation_job_count": "",
+        },
+    )
+
+    response = queue_claude_transcription(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk__in=[item.pk for item in schedules]),
+    )
+
+    assert response.status_code == 302
+    run = TranscriptionRun.objects.get(key="full-denomination-campaign")
+    assert run.transcription_jobs.count() == 2
+
+
+@pytest.mark.django_db
+def test_reviewer_can_cancel_only_unclaimed_queued_jobs(reviewer):
+    queued = TranscriptionJobFactory(state=TranscriptionJob.State.QUEUED)
+    submitted = TranscriptionJobFactory(state=TranscriptionJob.State.SUBMITTED)
+    batch = TranscriptionBatchFactory()
+    claimed = TranscriptionJobFactory(
+        run=batch.run,
+        batch=batch,
+        state=TranscriptionJob.State.PREPARING,
+    )
+    model_admin = TranscriptionJobAdmin(TranscriptionJob, admin.site)
+    request = admin_post_request(reviewer, {})
+
+    assert "cancel_queued_jobs" in model_admin.get_actions(request)
+
+    model_admin.cancel_queued_jobs(
+        request,
+        TranscriptionJob.objects.filter(pk__in=[queued.pk, submitted.pk, claimed.pk]),
+    )
+
+    queued.refresh_from_db()
+    submitted.refresh_from_db()
+    claimed.refresh_from_db()
+    assert queued.state == TranscriptionJob.State.CANCELED
+    assert queued.error_type == "canceled_by_reviewer"
+    assert queued.completed_at is not None
+    assert queued.history.first().history_user == reviewer
+    assert submitted.state == TranscriptionJob.State.SUBMITTED
+    assert claimed.state == TranscriptionJob.State.PREPARING
 
 
 @pytest.mark.django_db

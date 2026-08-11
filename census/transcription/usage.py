@@ -20,6 +20,14 @@ RATE_FIELDS = (
 )
 MILLION = Decimal("1000000")
 MONEY_QUANTUM = Decimal("0.000001")
+COST_CHART_COLORS = (
+    "#0060b1",
+    "#7c3aed",
+    "#0f766e",
+    "#b45309",
+    "#be123c",
+    "#4d7c0f",
+)
 USAGE_EXPORT_FIELDS = (
     "run_key",
     "model",
@@ -324,6 +332,40 @@ def _summarize_jobs(jobs):
     }
 
 
+def _cost_per_success_chart(run_summaries, *, limit=10):
+    """Prepare a compact, dependency-free chart from recent priced runs."""
+    priced_runs = [
+        summary for summary in run_summaries if summary["cost_per_success"] is not None
+    ][:limit]
+    if not priced_runs:
+        return []
+
+    maximum = max(summary["cost_per_success"] for summary in priced_runs)
+    model_colors = {}
+    chart = []
+    for summary in priced_runs:
+        model = summary["model"] or "Unknown model"
+        if model not in model_colors:
+            model_colors[model] = COST_CHART_COLORS[
+                len(model_colors) % len(COST_CHART_COLORS)
+            ]
+        value = summary["cost_per_success"]
+        width = Decimal("0") if maximum == 0 else value * 100 / maximum
+        chart.append(
+            {
+                "run": summary["run"],
+                "model": model,
+                "color": model_colors[model],
+                "cost_per_success": value,
+                "total_cost": summary["total_cost"],
+                "priced_successes": summary["priced_successes"],
+                "width_percent": format(width.quantize(Decimal("0.01")), "f"),
+                "currency": summary["currency"],
+            }
+        )
+    return chart
+
+
 def usage_report():
     """Build overall and per-run efficiency reporting from immutable evidence."""
     runs = list(
@@ -363,7 +405,47 @@ def usage_report():
 
     overall = _summarize_jobs(all_jobs)
     overall["total_runs"] = len(runs)
-    return {"overall": overall, "runs": run_summaries}
+    return {
+        "overall": overall,
+        "runs": run_summaries,
+        "cost_per_success_chart": _cost_per_success_chart(run_summaries),
+    }
+
+
+def historical_cost_estimates(*, report=None, minimum_successes=3):
+    """Return model-level cost-per-success estimates when evidence is sufficient."""
+    report = report or usage_report()
+    aggregates = {}
+    for summary in report["runs"]:
+        model = summary["model"]
+        if not model or not summary["priced_successes"]:
+            continue
+        aggregate = aggregates.setdefault(
+            model,
+            {
+                "total_cost": Decimal("0"),
+                "priced_successes": 0,
+                "currencies": set(),
+            },
+        )
+        aggregate["total_cost"] += summary["total_cost"]
+        aggregate["priced_successes"] += summary["priced_successes"]
+        aggregate["currencies"].add(summary["currency"])
+
+    estimates = {}
+    for model, aggregate in aggregates.items():
+        successes = aggregate["priced_successes"]
+        if successes < minimum_successes or len(aggregate["currencies"]) != 1:
+            continue
+        estimates[model] = {
+            "cost_per_success": format(
+                (aggregate["total_cost"] / successes).quantize(MONEY_QUANTUM),
+                "f",
+            ),
+            "priced_successes": successes,
+            "currency": next(iter(aggregate["currencies"])),
+        }
+    return estimates
 
 
 def usage_export_rows():

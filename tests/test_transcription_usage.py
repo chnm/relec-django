@@ -16,6 +16,7 @@ from census.admin import TranscriptionRunAdmin
 from census.models import TranscriptionJob, TranscriptionRun
 from census.transcription.usage import (
     PricingConfigurationError,
+    historical_cost_estimates,
     job_cost_breakdown,
     pricing_snapshot_for_model,
     usage_export_rows,
@@ -137,6 +138,49 @@ def test_admin_sidebar_sections_are_always_expanded():
     assert all("collapsible" not in section for section in navigation)
 
 
+def test_admin_sidebar_separates_project_management_from_data_models():
+    navigation = {
+        section["title"]: [item["title"] for item in section["items"]]
+        for section in settings.UNFOLD["SIDEBAR"]["navigation"]
+    }
+
+    assert navigation["Project Management"] == [
+        "Review Queue",
+        "Imported - Needs Review",
+        "Student Work - Ready",
+        "AI Transcriptions - Ready for Review",
+        "Assigned to Me",
+    ]
+    assert not set(navigation["Project Management"]).intersection(
+        navigation["Transcriptions"]
+    )
+    assert "Census Schedules" in navigation["Transcriptions"]
+
+    project_items = next(
+        section["items"]
+        for section in settings.UNFOLD["SIDEBAR"]["navigation"]
+        if section["title"] == "Project Management"
+    )
+    ai_review_item = next(
+        item
+        for item in project_items
+        if item["title"] == "AI Transcriptions - Ready for Review"
+    )
+    assert ai_review_item["link"](None) == (
+        "/admin/census/censusschedule/?ai_status=transcribed"
+    )
+    assert callable(ai_review_item["permission"])
+
+
+def test_recent_admin_actions_have_explicit_light_and_dark_text_contrast():
+    css = (settings.BASE_DIR / "static/css/custom_unfold.css").read_text()
+
+    assert "#recent-actions-module .actionlist > li {" in css
+    assert "color: #111827 !important;" in css
+    assert ".dark #recent-actions-module .actionlist > li {" in css
+    assert "color: #f3f4f6 !important;" in css
+
+
 @pytest.mark.django_db
 def test_job_cost_uses_frozen_cache_specific_rates():
     cost = job_cost_breakdown(usage_job(priced_run()))
@@ -186,6 +230,41 @@ def test_usage_report_keeps_unpriced_history_visible():
 
 
 @pytest.mark.django_db
+def test_usage_report_builds_recent_run_cost_chart_without_unpriced_runs():
+    older = priced_run()
+    newer = priced_run()
+    usage_job(older)
+    usage_job(newer, output_tokens=200_000)
+    usage_job(TranscriptionRunFactory(metadata={"model": "legacy-model"}))
+
+    chart = usage_report()["cost_per_success_chart"]
+
+    assert [item["run"] for item in chart] == [newer, older]
+    assert chart[0]["cost_per_success"] == Decimal("1.563750")
+    assert chart[0]["width_percent"] == "100.00"
+    assert chart[1]["width_percent"] == "87.21"
+    assert all(item["model"] == "test-model" for item in chart)
+
+
+@pytest.mark.django_db
+def test_historical_cost_estimate_requires_three_priced_successes_per_model():
+    run = priced_run()
+    usage_job(run)
+    usage_job(run)
+    assert historical_cost_estimates() == {}
+
+    usage_job(run)
+
+    assert historical_cost_estimates() == {
+        "test-model": {
+            "cost_per_success": "1.363750",
+            "priced_successes": 3,
+            "currency": "USD",
+        }
+    }
+
+
+@pytest.mark.django_db
 def test_usage_export_is_flat_and_reproducible():
     job = usage_job(priced_run())
 
@@ -214,6 +293,8 @@ def test_reviewer_can_open_usage_dashboard_and_exports(reviewer):
 
     assert dashboard.status_code == 200
     assert b"Claude usage &amp; cost reporting" in dashboard.content
+    assert b"Cost per successful transcription" in dashboard.content
+    assert b"cost-chart-bar" in dashboard.content
     rows = list(csv.DictReader(io.StringIO(csv_response.content.decode())))
     assert rows[0]["estimated_cost"] == "1.363750"
     assert json.loads(json_response.content)[0]["estimated_cost"] == "1.363750"

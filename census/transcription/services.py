@@ -3,8 +3,9 @@
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.utils import timezone
+from simple_history.utils import bulk_create_with_history
 
 from census.models import TranscriptionBatch, TranscriptionJob, TranscriptionRun
 
@@ -14,10 +15,50 @@ from .usage import PricingConfigurationError, pricing_snapshot_for_model
 #: How many lease periods an active batch may go without a heartbeat before the
 #: worker holding it is treated as stuck rather than merely slow.
 STALE_LEASE_PERIODS = 2
+# Serialize launch eligibility checks so two reviewers cannot queue the same
+# schedule concurrently in separate runs.
+LAUNCH_ADVISORY_LOCK_ID = 6401927
 
 
 class LaunchError(ValueError):
     pass
+
+
+ACTIVE_JOB_STATES = (
+    TranscriptionJob.State.QUEUED,
+    TranscriptionJob.State.PREPARING,
+    TranscriptionJob.State.SUBMITTED,
+    TranscriptionJob.State.NEEDS_RECOVERY,
+)
+
+
+def eligible_transcription_schedules(queryset):
+    """Return selected schedules that can safely start another attempt."""
+    active_job = TranscriptionJob.objects.filter(
+        census_schedule_id=models.OuterRef("pk"),
+        state__in=ACTIVE_JOB_STATES,
+    )
+    return (
+        queryset.exclude(original_image="")
+        .exclude(original_image__isnull=True)
+        .annotate(_has_active_transcription_job=models.Exists(active_job))
+        .filter(_has_active_transcription_job=False)
+    )
+
+
+def transcription_selection_summary(queryset):
+    """Return mutually exclusive counts for the run confirmation screen."""
+    selected_count = queryset.count()
+    missing_image_count = queryset.filter(
+        models.Q(original_image="") | models.Q(original_image__isnull=True)
+    ).count()
+    eligible_count = eligible_transcription_schedules(queryset).count()
+    return {
+        "selected_count": selected_count,
+        "eligible_count": eligible_count,
+        "missing_image_count": missing_image_count,
+        "active_work_count": selected_count - missing_image_count - eligible_count,
+    }
 
 
 def worker_status(now=None):
@@ -84,8 +125,16 @@ def worker_status(now=None):
 
 
 @transaction.atomic
-def launch_transcription_run(*, queryset, key, model, limit, user=None):
-    """Freeze provenance and queue one job per selected schedule."""
+def launch_transcription_run(
+    *,
+    queryset,
+    key,
+    model,
+    pilot_size=None,
+    confirmed_job_count=None,
+    user=None,
+):
+    """Freeze one campaign and queue every eligible schedule, or a pilot."""
     # Deliberately does not check ANTHROPIC_API_KEY. Only the worker talks to
     # the provider, so the key belongs in the worker's environment alone and
     # the web process must never require it.
@@ -93,9 +142,12 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
         raise LaunchError("Claude transcription is disabled by configuration.")
     if model not in settings.CLAUDE_TRANSCRIPTION_MODELS:
         raise LaunchError("The selected Claude model is not allowed.")
-    if limit < 1 or limit > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT:
+    if pilot_size is not None and (
+        pilot_size < 1 or pilot_size > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS
+    ):
         raise LaunchError(
-            f"Limit must be between 1 and {settings.CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT}."
+            "Pilot size must be between 1 and "
+            f"{settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS}."
         )
     try:
         pricing_snapshot = pricing_snapshot_for_model(
@@ -104,14 +156,38 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
     except PricingConfigurationError as exc:
         raise LaunchError(str(exc)) from exc
 
-    schedules = list(
-        queryset.select_related("county__state", "schedule_denomination")
-        .exclude(original_image="")
-        .exclude(original_image__isnull=True)
-        .order_by("pk")[:limit]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            [LAUNCH_ADVISORY_LOCK_ID],
+        )
+
+    selection_count = queryset.count()
+    eligible = eligible_transcription_schedules(queryset.select_for_update()).order_by(
+        "pk"
     )
+    eligible_count = eligible.count()
+    planned_count = min(eligible_count, pilot_size) if pilot_size else eligible_count
+    if planned_count > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:
+        raise LaunchError(
+            f"This run would queue {planned_count:,} jobs, above the emergency "
+            f"ceiling of {settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:,}."
+        )
+    if (
+        planned_count >= settings.CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD
+        and confirmed_job_count != planned_count
+    ):
+        raise LaunchError(
+            f"Confirm the exact planned job count ({planned_count:,}) for this "
+            "large run."
+        )
+
+    schedules = list(eligible[:planned_count])
     if not schedules:
-        raise LaunchError("None of the selected schedules has an original image.")
+        raise LaunchError(
+            "None of the selected schedules is ready. Each needs an original "
+            "image and no active Claude job."
+        )
 
     contract = load_contract()
     metadata = {
@@ -128,13 +204,22 @@ def launch_transcription_run(*, queryset, key, model, limit, user=None):
         "transport_schema": contract["transport_schema"],
         "transport_schema_sha256": contract["transport_schema_sha256"],
         "pricing_snapshot": pricing_snapshot,
-        "requested_limit": limit,
+        "selection_count": selection_count,
+        "eligible_count": eligible_count,
+        "pilot_size": pilot_size,
         "schedule_count": len(schedules),
+        "estimated_batch_count": (
+            len(schedules) + settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE - 1
+        )
+        // settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE,
         "schedule_ids": [schedule.pk for schedule in schedules],
         "launched_at": timezone.now().isoformat(),
         "launched_by": user.get_username() if user and user.is_authenticated else None,
     }
     run = TranscriptionRun.objects.create(key=key, kind="agent", metadata=metadata)
-    for schedule in schedules:
-        TranscriptionJob.objects.create(census_schedule=schedule, run=run)
+    bulk_create_with_history(
+        [TranscriptionJob(census_schedule=schedule, run=run) for schedule in schedules],
+        TranscriptionJob,
+        batch_size=1000,
+    )
     return run

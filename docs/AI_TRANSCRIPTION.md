@@ -53,8 +53,8 @@ Optional controls:
 ANTHROPIC_API_BASE_URL=https://api.anthropic.com
 APPLICATION_REVISION=<deployed-git-commit-or-image-digest>
 CLAUDE_TRANSCRIPTION_MAX_TOKENS=4096
-CLAUDE_TRANSCRIPTION_DEFAULT_RUN_LIMIT=10
-CLAUDE_TRANSCRIPTION_MAX_RUN_LIMIT=100
+CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=100
+CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=10000
 CLAUDE_TRANSCRIPTION_BATCH_SIZE=25
 CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES=1
 CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES=209715200
@@ -104,7 +104,14 @@ three components separately on every job and in the exact raw `usage` object.
 Reviewers select schedules in the Census Schedule changelist and choose **Queue
 selected schedules for Claude transcription**. The confirmation page reports:
 
-- selected and image-eligible schedule counts;
+Django's **Select all matching records** choice is preserved through the
+confirmation form, so reviewers may filter to a denomination, select the whole
+result set across every admin page, and launch it as one campaign.
+
+- selected, ready, missing-image, and already-active schedule counts. A schedule is
+  ready when it has an original image and no queued, preparing, submitted, or
+  manual-recovery job. Successful and other terminal attempts remain eligible for
+  intentional retranscription in a new run;
 - the prompt/schema version;
 - whether the workflow is enabled, plus an optional application revision when one
   was supplied automatically. It reports nothing about the API key: the key is held
@@ -115,23 +122,38 @@ selected schedules for Claude transcription**. The confirmation page reports:
   tier), and **Needs recovery** counts batches awaiting manual intervention.
   **Idle** means no batch is active; because the worker writes only while it holds
   work, that is not evidence the process is running;
-- run key, allowed model, and a hard-bounded schedule limit. The page defines the
-  limit as the maximum number of eligible selected schedules queued as jobs—not a
-  provider batch count, token budget, or spending cap—and previews the resulting
-  job count;
+- run key, allowed model, and an optional **Pilot size**. Leaving Pilot size blank
+  queues the complete ready selection under one run key. Entering a value creates a
+  smaller record-ID-ordered trial without changing the meaning of the selection;
+- the resulting job count and estimated provider-batch count. Runs at or above the
+  configured large-run threshold require the reviewer to type the exact job count,
+  and the server enforces a separate emergency per-run ceiling;
 - the per-schedule output-token ceiling, worker batch size, selection order, skip
   behavior, and the selected model's frozen Batch rates.
 
 The confirmation page deliberately makes no provider request: the web tier has no
 API key, and image-dependent input usage cannot be known exactly before the worker
 builds the request. Exact encoded request bytes are calculated, bounded, and
-recorded by the worker after it reads each image. The limit is therefore a bounded
-job-count control, while the reviewer usage report records actual provider usage and
-derived cost after processing.
+recorded by the worker after it reads each image. When at least three priced
+successes exist for the selected model, the page extrapolates a clearly labeled
+historical planning estimate; the reviewer usage report remains the source for
+actual provider usage and derived cost after processing.
 
 Confirmation only creates the immutable run and queued jobs. It does not make a
-provider request from the web process. Run, batch, and job admin pages are read-only
-and expose progress, errors, and token usage.
+provider request from the web process. The worker automatically claims the run in
+chunks of `CLAUDE_TRANSCRIPTION_BATCH_SIZE`, so a 2,000-schedule campaign keeps one
+run key while producing as many provider batches as needed. Run, batch, and job
+admin pages expose progress, errors, and token usage. Reviewers may cancel only jobs
+that are still locally queued and have not been claimed into a batch; submitted and
+evidence-bearing jobs remain protected.
+
+A successful candidate never changes the canonical `transcription_status` by
+itself. Reviewers reach those schedules through **Project Management → AI
+Transcriptions - Ready for Review**, which applies the `AI transcribed` schedule
+filter and opens the read-only comparison workflow. The ordinary Review Queue
+continues to mean canonical human/imported work. The admin Overview reports human
+review readiness, AI candidate readiness, approvals, and approval percentage as
+separate measures; only `approved` schedules count toward project approval.
 
 ## Usage, cost, and benchmark reporting
 
@@ -140,7 +162,9 @@ admin sidebar. The admin home also shows a compact cost summary. Reporting inclu
 run/job counts, success and failure counts, success rate, total/mean/median/P95 token
 usage, elapsed throughput, estimated cost, cost per successful transcription, and
 per-run model/contract/pricing provenance. CSV and JSON exports provide one row per
-job for reproducible outside analysis.
+job for reproducible outside analysis. A dependency-free horizontal chart compares
+cost per successful transcription across the ten most recent priced runs, with model
+labels and the underlying totals retained as text.
 
 Costs are derived with `Decimal` arithmetic from the untouched provider usage and
 the rates frozen on that job's run. Cache categories are priced separately when the
@@ -366,9 +390,9 @@ Before queueing the pilot:
 3. Restart the Django development server after environment changes. Stop and restart
    the worker after code or contract changes because the management-command process
    does not auto-reload.
-4. In the Census Schedule changelist, select only the representative sample, choose
-   the Claude queue action, give the run a unique key, and keep the explicit limit no
-   larger than the intended sample.
+4. In the Census Schedule changelist, select the representative sample, choose the
+   Claude queue action, give the run a unique key, and use **Pilot size** only if the
+   selected set is broader than the intended sample.
 5. Start `run_transcription_worker` separately. Monitor the read-only Runs, Batches,
    and Jobs pages until every request reaches a terminal or manual-recovery state.
 
@@ -436,9 +460,10 @@ promote any candidate values into canonical census models.
 
 Tests use fake clients and local media storage. They make no live Anthropic or S3
 requests. Covered behavior includes contract validation, payload construction,
-selection limits, out-of-order results, usage aggregation, provider-evidence
-immutability, ambiguous submissions, stale submission leases, and protected raw
-outputs.
+selection-driven runs, active-work exclusion, intentional retranscription, pilot
+sizing, large-run confirmation, auto-chunking, out-of-order results, usage
+aggregation, provider-evidence immutability, ambiguous submissions, stale submission
+leases, and protected raw outputs.
 
 Provider references: [Message Batches API](https://platform.claude.com/docs/en/api/messages/batches/create)
 and [Structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).

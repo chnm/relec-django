@@ -14,20 +14,26 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-7">
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
+        {% if select_across == "1" %}<div class="mt-1 text-xs text-gray-500">All matching records</div>{% endif %}
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Eligible</div>
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Ready</div>
         <div class="mt-1 text-2xl font-semibold text-gray-800">{{ eligible_count }}</div>
-        <div class="mt-1 text-xs text-gray-500">Has an original image</div>
+        <div class="mt-1 text-xs text-gray-500">Image and no active job</div>
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Will queue</div>
         <div id="planned-job-count" class="mt-1 text-2xl font-semibold text-gray-800">—</div>
-        <div class="mt-1 text-xs text-gray-500">At most the limit</div>
+        <div class="mt-1 text-xs text-gray-500">One job per schedule</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Provider batches</div>
+        <div id="planned-batch-count" class="mt-1 text-2xl font-semibold text-gray-800">—</div>
+        <div class="mt-1 text-xs text-gray-500">Up to {{ batch_size }} jobs each</div>
       </div>
       <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Contract</div>
@@ -104,9 +110,9 @@
           These values become permanent provenance for the run.
         </p>
 
-        <div class="grid grid-cols-1 gap-6 mt-5 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-6 mt-5 md:grid-cols-2 xl:grid-cols-4">
           {% for field in form %}
-            <div>
+            <div id="field-{{ field.name }}">
               <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
                 {{ field.label }}{% if field.field.required %}<span class="text-red-600"> *</span>{% endif %}
               </label>
@@ -127,19 +133,21 @@
           <h2 class="text-lg font-semibold text-gray-800">What will happen</h2>
           <ol class="mt-3 space-y-3 text-sm leading-6 text-gray-600 list-decimal list-inside">
             <li>
-              Only selected schedules with an original image are eligible.
-              {% if ineligible_count %}<strong>{{ ineligible_count }}</strong> selected schedule{{ ineligible_count|pluralize }} will be skipped.{% endif %}
+              Every ready selected schedule is queued under the single run key above.
+              {% if missing_image_count %}<strong>{{ missing_image_count }}</strong> without an original image will be skipped.{% endif %}
+              {% if active_work_count %}<strong>{{ active_work_count }}</strong> with already queued or active work will be skipped.{% endif %}
             </li>
             <li>
-              <strong>Limit</strong> caps the number of eligible schedules queued as
-              individual jobs, ordered by the schedule’s internal database ID. If
-              fewer than the limit are eligible, only that smaller number is queued.
-              The deployment hard maximum is {{ max_run_limit }} jobs per run.
+              Leave <strong>Pilot size</strong> blank for the complete ready selection.
+              Enter a number only when you intentionally want a smaller trial, chosen
+              in internal record-ID order. Successfully transcribed schedules may be
+              queued again in a new run; only active work is excluded.
             </li>
             <li>
               The worker groups those jobs into provider batches of up to
               {{ batch_size }} requests, subject to the encoded-size safety limit.
-              One run may therefore create several provider batches.
+              All of those batches still belong to this one named run. The emergency
+              ceiling is {{ max_run_jobs|intcomma }} jobs per run.
             </li>
             <li>
               <strong>{{ max_tokens|intcomma }} max output tokens</strong> is applied to
@@ -164,6 +172,7 @@
           <div id="pricing-details" class="mt-4 text-sm text-gray-600">
             Select a configured model to see its rates.
           </div>
+          <div id="historical-cost-details" class="p-3 mt-4 text-sm text-gray-600 rounded-md bg-gray-50"></div>
           <p class="mt-4 text-xs leading-5 text-gray-500">
             The selected rates are copied into this run. Future pricing changes do
             not alter historical estimates.
@@ -174,6 +183,7 @@
       {% for object_id in selected %}
         <input type="hidden" name="_selected_action" value="{{ object_id }}">
       {% endfor %}
+      <input type="hidden" name="select_across" value="{{ select_across }}">
       <input type="hidden" name="action" value="queue_claude_transcription">
       <input type="hidden" name="apply" value="1">
 
@@ -207,6 +217,7 @@
   </div>
 
   {{ pricing_snapshots|json_script:"claude-pricing-snapshots" }}
+  {{ historical_cost_estimates|json_script:"claude-historical-cost-estimates" }}
 
   <style>
     .claude-run-form input[type="text"],
@@ -266,12 +277,20 @@
   <script>
     (() => {
       const eligibleCount = {{ eligible_count }};
-      const limitInput = document.getElementById("id_limit");
+      const pilotInput = document.getElementById("id_pilot_size");
+      const confirmationField = document.getElementById("field-confirmation_job_count");
       const modelInput = document.getElementById("id_model");
       const plannedCount = document.getElementById("planned-job-count");
+      const plannedBatchCount = document.getElementById("planned-batch-count");
       const pricingDetails = document.getElementById("pricing-details");
+      const historicalCostDetails = document.getElementById("historical-cost-details");
+      const batchSize = {{ batch_size }};
+      const largeRunThreshold = {{ large_run_threshold }};
       const snapshots = JSON.parse(
         document.getElementById("claude-pricing-snapshots").textContent
+      );
+      const historicalEstimates = JSON.parse(
+        document.getElementById("claude-historical-cost-estimates").textContent
       );
 
       const money = (value) => Number(value).toLocaleString(undefined, {
@@ -280,14 +299,31 @@
       });
 
       const updatePlan = () => {
-        const requested = Math.max(Number.parseInt(limitInput.value, 10) || 0, 0);
-        plannedCount.textContent = Math.min(eligibleCount, requested).toLocaleString();
+        const pilot = Number.parseInt(pilotInput.value, 10);
+        const jobs = Number.isFinite(pilot) && pilot > 0
+          ? Math.min(eligibleCount, pilot)
+          : eligibleCount;
+        plannedCount.textContent = jobs.toLocaleString();
+        plannedBatchCount.textContent = Math.ceil(jobs / batchSize).toLocaleString();
+        confirmationField.classList.toggle("hidden", jobs < largeRunThreshold);
+        updateHistoricalCost(jobs);
+      };
+
+      const updateHistoricalCost = (jobs) => {
+        const estimate = historicalEstimates[modelInput.value];
+        if (!estimate) {
+          historicalCostDetails.innerHTML = "No historical total is shown yet. At least three priced successful jobs for this model are required before extrapolating.";
+          return;
+        }
+        const total = Number(estimate.cost_per_success) * jobs;
+        historicalCostDetails.innerHTML = `<strong>Historical planning estimate:</strong> about $${money(total)} ${estimate.currency} for ${jobs.toLocaleString()} successful schedules, based on ${estimate.priced_successes.toLocaleString()} prior priced successes. This is an extrapolation, not a quote or spending cap.`;
       };
 
       const updatePricing = () => {
         const snapshot = snapshots[modelInput.value];
         if (!snapshot) {
           pricingDetails.innerHTML = '<span class="text-red-700">No valid pricing is configured for this model. The run cannot be queued.</span>';
+          updatePlan();
           return;
         }
         const rates = snapshot.rates;
@@ -302,9 +338,10 @@
           </dl>
           <p class="mt-3 text-xs text-gray-500">${snapshot.service_tier} · ${snapshot.currency} · <a class="text-primary-600 underline" href="${snapshot.source}" target="_blank" rel="noopener">pricing source</a></p>
         `;
+        updatePlan();
       };
 
-      limitInput.addEventListener("input", updatePlan);
+      pilotInput.addEventListener("input", updatePlan);
       modelInput.addEventListener("change", updatePricing);
       updatePlan();
       updatePricing();
