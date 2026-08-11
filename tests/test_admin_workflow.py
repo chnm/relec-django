@@ -191,6 +191,9 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert b"This field is required" not in response.content
     assert b"claude-" in response.content
     assert b"revision-for-admin-preview" in response.content
+    assert b"This is a job count" in response.content
+    assert b"predicted usage amount" in response.content
+    assert b"Frozen pricing estimate" in response.content
 
 
 @pytest.mark.django_db

@@ -1,0 +1,119 @@
+{% extends "unfold/layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-400">
+          Efficiency metrics derived from immutable provider token usage and the
+          pricing snapshot frozen when each run was created. These are estimates,
+          not an Anthropic invoice or a transcription-quality score.
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <a class="button secondary" href="{% url 'admin:census_transcription_usage_csv' %}">Export CSV</a>
+        <a class="button secondary" href="{% url 'admin:census_transcription_usage_json' %}">Export JSON</a>
+      </div>
+    </div>
+
+    {% if report.overall.unpriced_jobs %}
+      <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+        <strong>{{ report.overall.unpriced_jobs }} completed usage record{{ report.overall.unpriced_jobs|pluralize }} cannot be priced.</strong>
+        Those jobs belong to a run without a valid frozen pricing snapshot. They
+        remain visible in token totals and exports, but are intentionally excluded
+        from cost totals.
+      </div>
+    {% endif %}
+
+    <div class="usage-summary-grid mb-6">
+      <div class="usage-card"><span>Agent runs</span><strong>{{ report.overall.total_runs|intcomma }}</strong></div>
+      <div class="usage-card"><span>Jobs</span><strong>{{ report.overall.total_jobs|intcomma }}</strong></div>
+      <div class="usage-card"><span>Succeeded</span><strong>{{ report.overall.succeeded|intcomma }}</strong></div>
+      <div class="usage-card"><span>Success rate</span><strong>{% if report.overall.success_rate is not None %}{{ report.overall.success_rate|floatformat:1 }}%{% else %}—{% endif %}</strong></div>
+      <div class="usage-card"><span>Estimated cost</span><strong>${{ report.overall.total_cost|floatformat:6 }}</strong></div>
+      <div class="usage-card"><span>Cost / success</span><strong>{% if report.overall.cost_per_success is not None %}${{ report.overall.cost_per_success|floatformat:6 }}{% else %}—{% endif %}</strong></div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 mb-6 lg:grid-cols-2">
+      <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
+        <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">Token profile</h2>
+        <dl class="usage-token-grid mt-4 text-sm">
+          <div><dt class="text-gray-500">Total input</dt><dd class="mt-1 font-semibold">{{ report.overall.total_input_tokens|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">Total output</dt><dd class="mt-1 font-semibold">{{ report.overall.total_output_tokens|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">Mean input</dt><dd class="mt-1 font-semibold">{{ report.overall.mean_input_tokens|floatformat:0|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">Median input</dt><dd class="mt-1 font-semibold">{{ report.overall.median_input_tokens|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">P95 input</dt><dd class="mt-1 font-semibold">{{ report.overall.p95_input_tokens|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">Mean output</dt><dd class="mt-1 font-semibold">{{ report.overall.mean_output_tokens|floatformat:0|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">Median output</dt><dd class="mt-1 font-semibold">{{ report.overall.median_output_tokens|intcomma }}</dd></div>
+          <div><dt class="text-gray-500">P95 output</dt><dd class="mt-1 font-semibold">{{ report.overall.p95_output_tokens|intcomma }}</dd></div>
+        </dl>
+      </section>
+      <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
+        <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">How to read this</h2>
+        <ul class="mt-3 space-y-2 text-sm leading-6 text-gray-600 dark:text-gray-400 list-disc list-inside">
+          <li>Costs use each run’s own Batch rates; current rates are never applied retroactively.</li>
+          <li>Prompt-cache reads and 5-minute/1-hour cache writes use separate rates when the provider reports them.</li>
+          <li>Failed jobs can incur tokens and cost, so they remain in totals.</li>
+          <li>Quality must be evaluated separately against the frozen human benchmark.</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
+      <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">Runs</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs tracking-wide text-gray-500 uppercase bg-gray-50 dark:bg-gray-800">
+            <tr>
+              <th class="px-4 py-3">Run</th><th class="px-4 py-3">Model / contract</th>
+              <th class="px-4 py-3 text-right">Jobs</th><th class="px-4 py-3 text-right">Succeeded</th>
+              <th class="px-4 py-3 text-right">Throughput</th>
+              <th class="px-4 py-3 text-right">Input / output</th><th class="px-4 py-3 text-right">Est. cost</th>
+              <th class="px-4 py-3">Pricing</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for item in report.runs %}
+              <tr>
+                <td class="px-4 py-3"><a class="font-medium text-primary-600" href="{% url 'admin:census_transcriptionrun_change' item.run.pk %}">{{ item.run.key }}</a><br><span class="text-xs text-gray-500">{{ item.run.created_at }}</span></td>
+                <td class="px-4 py-3">{{ item.model|default:"Unknown" }}<br><span class="text-xs text-gray-500">{{ item.prompt_version|default:"Unknown contract" }}</span></td>
+                <td class="px-4 py-3 text-right">{{ item.total_jobs|intcomma }}</td>
+                <td class="px-4 py-3 text-right">{{ item.succeeded|intcomma }}</td>
+                <td class="px-4 py-3 text-right">{% if item.throughput_per_minute is not None %}{{ item.throughput_per_minute|floatformat:2 }}/min{% else %}—{% endif %}</td>
+                <td class="px-4 py-3 text-right">{{ item.total_input_tokens|intcomma }} / {{ item.total_output_tokens|intcomma }}</td>
+                <td class="px-4 py-3 text-right">{% if item.priced_jobs %}${{ item.total_cost|floatformat:6 }}{% else %}—{% endif %}</td>
+                <td class="px-4 py-3 text-xs text-gray-500">
+                  {% if item.pricing_snapshot.schema_version == 1 %}
+                    {{ item.pricing_snapshot.service_tier|title }} · {{ item.pricing_snapshot.effective_date }}{% if item.pricing_snapshot.valid_through %}–{{ item.pricing_snapshot.valid_through }}{% endif %}
+                  {% else %}
+                    <span class="text-amber-700">Unpriced</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No Claude transcription runs yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <style>
+    .usage-card { background: #fff; border: 1px solid #e5e7eb; border-radius: .5rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 1rem; }
+    .usage-card span { color: #6b7280; display: block; font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .usage-card strong { color: #1f2937; display: block; font-size: 1.4rem; margin-top: .3rem; }
+    .usage-summary-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+    .usage-token-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    .button.secondary { background: #fff; border: 1px solid #d1d5db; border-radius: .375rem; color: #374151; display: inline-block; font-size: .875rem; font-weight: 600; padding: .6rem .9rem; text-decoration: none; }
+    .button.secondary:hover { background: #f3f4f6; }
+    .dark .usage-card { background: #111827; border-color: #374151; }
+    .dark .usage-card strong { color: #f3f4f6; }
+  </style>
+{% endblock %}

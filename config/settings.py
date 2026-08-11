@@ -48,7 +48,8 @@ ANTHROPIC_API_BASE_URL = env(
 )
 CLAUDE_TRANSCRIPTION_ENABLED = env.bool("CLAUDE_TRANSCRIPTION_ENABLED", default=False)
 CLAUDE_TRANSCRIPTION_MODELS = env.list(
-    "CLAUDE_TRANSCRIPTION_MODELS", default=["claude-sonnet-4-6"]
+    "CLAUDE_TRANSCRIPTION_MODELS",
+    default=["claude-sonnet-4-6", "claude-sonnet-5"],
 )
 CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=4096
@@ -78,7 +79,43 @@ CLAUDE_TRANSCRIPTION_POLL_SECONDS = env.int(
 CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT = env.int(
     "CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT", default=120
 )
-CLAUDE_TRANSCRIPTION_PRICING = env.json("CLAUDE_TRANSCRIPTION_PRICING", default={})
+DEFAULT_CLAUDE_TRANSCRIPTION_PRICING = {
+    "schema_version": 1,
+    "currency": "USD",
+    "unit": "per_million_tokens",
+    "service_tier": "batch",
+    "effective_date": "2026-08-11",
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "models": {
+        "claude-sonnet-4-6": {
+            "rates": {
+                "input_tokens": "1.50",
+                "output_tokens": "7.50",
+                "cache_creation_input_tokens": "1.875",
+                "cache_creation_1h_input_tokens": "3.00",
+                "cache_read_input_tokens": "0.15",
+            }
+        },
+        "claude-sonnet-5": {
+            "effective_date": "2026-08-11",
+            "valid_through": "2026-08-31",
+            "rates": {
+                "input_tokens": "1.00",
+                "output_tokens": "5.00",
+                "cache_creation_input_tokens": "1.25",
+                "cache_creation_1h_input_tokens": "2.00",
+                "cache_read_input_tokens": "0.10",
+            },
+        },
+    },
+}
+CLAUDE_TRANSCRIPTION_PRICING = (
+    env.json(
+        "CLAUDE_TRANSCRIPTION_PRICING",
+        default=DEFAULT_CLAUDE_TRANSCRIPTION_PRICING,
+    )
+    or DEFAULT_CLAUDE_TRANSCRIPTION_PRICING
+)
 APPLICATION_REVISION = env("APPLICATION_REVISION", default="").strip()
 
 # Application definition
@@ -324,7 +361,6 @@ UNFOLD = {
             {
                 "title": "Analytics & Reporting",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Analytics Home",
@@ -361,7 +397,6 @@ UNFOLD = {
             {
                 "title": "Transcriptions",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Census Schedules",
@@ -418,8 +453,13 @@ UNFOLD = {
             {
                 "title": "AI Transcription",
                 "separator": True,
-                "collapsible": True,
                 "items": [
+                    {
+                        "title": "Usage & Costs",
+                        "icon": "payments",
+                        "link": lambda request: "/admin/census/transcriptionrun/usage/",
+                        "permission": can_view_ai_transcription,
+                    },
                     {
                         "title": "Transcription Runs",
                         "icon": "history",
@@ -443,7 +483,6 @@ UNFOLD = {
             {
                 "title": "Location Data",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "States",
@@ -465,7 +504,6 @@ UNFOLD = {
             {
                 "title": "Content Management",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Blog Posts",
@@ -492,7 +530,6 @@ UNFOLD = {
             {
                 "title": "System Administration",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Users",
