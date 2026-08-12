@@ -163,9 +163,12 @@ def launch_transcription_run(
         )
 
     selection_count = queryset.count()
-    eligible = eligible_transcription_schedules(queryset.select_for_update()).order_by(
-        "pk"
-    )
+    # Admin querysets eagerly join nullable assignment and location relations for
+    # list display. PostgreSQL cannot apply an unrestricted FOR UPDATE to the
+    # nullable side of those outer joins, and launch eligibility needs to lock only
+    # CensusSchedule rows in any case.
+    locked_schedules = queryset.select_related(None).select_for_update(of=("self",))
+    eligible = eligible_transcription_schedules(locked_schedules).order_by("pk")
     eligible_count = eligible.count()
     planned_count = min(eligible_count, pilot_size) if pilot_size else eligible_count
     if planned_count > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:
