@@ -306,6 +306,34 @@ def test_claude_action_queues_the_full_ready_queryset_without_a_pilot(reviewer):
 
 
 @pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
+def test_claude_action_locks_only_schedule_rows_from_admin_queryset(reviewer):
+    schedule = CensusScheduleFactory(original_image="census_images/originals/test.jpg")
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {
+            "_selected_action": [schedule.pk],
+            "action": "queue_claude_transcription",
+            "apply": "1",
+            "run_key": "admin-queryset-locking",
+            "model": "claude-sonnet-4-6",
+            "pilot_size": "1",
+            "confirmation_job_count": "",
+        },
+    )
+    queryset = model_admin.get_queryset(request).filter(pk=schedule.pk)
+
+    response = queue_claude_transcription(model_admin, request, queryset)
+
+    assert response.status_code == 302
+    run = TranscriptionRun.objects.get(key="admin-queryset-locking")
+    assert list(
+        run.transcription_jobs.values_list("census_schedule_id", flat=True)
+    ) == [schedule.pk]
+
+
+@pytest.mark.django_db
 def test_reviewer_can_cancel_only_unclaimed_queued_jobs(reviewer):
     queued = TranscriptionJobFactory(state=TranscriptionJob.State.QUEUED)
     submitted = TranscriptionJobFactory(state=TranscriptionJob.State.SUBMITTED)
