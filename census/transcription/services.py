@@ -18,6 +18,7 @@ STALE_LEASE_PERIODS = 2
 # Serialize launch eligibility checks so two reviewers cannot queue the same
 # schedule concurrently in separate runs.
 LAUNCH_ADVISORY_LOCK_ID = 6401927
+SONNET_5_MODEL = "claude-sonnet-5"
 
 
 class LaunchError(ValueError):
@@ -30,6 +31,16 @@ ACTIVE_JOB_STATES = (
     TranscriptionJob.State.SUBMITTED,
     TranscriptionJob.State.NEEDS_RECOVERY,
 )
+
+
+def thinking_config_for_model(model):
+    """Return the request behavior that must be frozen for this model."""
+    if model == SONNET_5_MODEL:
+        # Sonnet 5 otherwise enables high-effort adaptive thinking by default.
+        # Thinking shares max_tokens with the structured response and can consume
+        # the entire budget before the JSON is complete.
+        return {"type": "disabled"}
+    return None
 
 
 def eligible_transcription_schedules(queryset):
@@ -219,6 +230,9 @@ def launch_transcription_run(
         "launched_at": timezone.now().isoformat(),
         "launched_by": user.get_username() if user and user.is_authenticated else None,
     }
+    thinking = thinking_config_for_model(model)
+    if thinking is not None:
+        metadata["thinking"] = thinking
     run = TranscriptionRun.objects.create(key=key, kind="agent", metadata=metadata)
     bulk_create_with_history(
         [TranscriptionJob(census_schedule=schedule, run=run) for schedule in schedules],

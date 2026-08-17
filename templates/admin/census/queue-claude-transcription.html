@@ -152,7 +152,9 @@
             <li>
               <strong>{{ max_tokens|intcomma }} max output tokens</strong> is applied to
               each schedule. It limits generated response length; it is not an input
-              limit, a predicted usage amount, or a spending cap.
+              limit, a predicted usage amount, or a spending cap. Claude Sonnet 5
+              adaptive thinking is disabled so this budget remains available for
+              the structured transcription; that behavior is frozen with the run.
             </li>
             <li>
               The run key, model, prompt/schema contract, application revision, and

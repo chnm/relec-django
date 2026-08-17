@@ -95,6 +95,15 @@ before changing the catalog.
 `CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES` applies to the base64-encoded image, matching
 the direct Claude API's image-size definition.
 
+Claude Sonnet 5 enables high-effort adaptive thinking by default when a request
+omits `thinking`. Thinking tokens and structured response text share the hard
+`CLAUDE_TRANSCRIPTION_MAX_TOKENS` ceiling. New Sonnet 5 runs therefore freeze
+`thinking: {"type": "disabled"}` in their immutable metadata, and the worker copies
+that exact setting into every provider request. This reserves the output budget for
+the transcription JSON and restores the non-thinking behavior used by Sonnet 4.6.
+Historical runs without a frozen `thinking` key retain their original request
+behavior; a deployment never silently rewrites their provenance.
+
 Anthropic defines total input usage as ordinary input tokens plus cache-creation and
 cache-read input tokens. The admin run total uses that sum while preserving all
 three components separately on every job and in the exact raw `usage` object.
@@ -129,7 +138,9 @@ result set across every admin page, and launch it as one campaign.
   configured large-run threshold require the reviewer to type the exact job count,
   and the server enforces a separate emergency per-run ceiling;
 - the per-schedule output-token ceiling, worker batch size, selection order, skip
-  behavior, and the selected model's frozen Batch rates.
+  behavior, selected model's frozen Batch rates, and model-specific thinking
+  behavior. Sonnet 5 runs explicitly disable adaptive thinking so its output budget
+  remains available for the structured transcription.
 
 The confirmation page deliberately makes no provider request: the web tier has no
 API key, and image-dependent input usage cannot be known exactly before the worker
@@ -406,6 +417,11 @@ Keep provider rejections and invalid results as evidence. After correcting code 
 contract, create a new immutable run rather than editing or resubmitting the failed
 one. Do not automatically retry `needs_recovery` work until provider acceptance is
 resolved; doing so can duplicate paid requests.
+
+A provider result with `stop_reason=max_tokens` is retained and marked `invalid`;
+truncated JSON never becomes a candidate. Once the Sonnet 5 disabled-thinking fix is
+deployed, affected terminal schedules are eligible for intentional retranscription
+in a new run. Do not mutate the original job or raw response.
 
 Do not expand the batch until all pilot jobs are accounted for, differences have
 been reviewed, unexpected failures have an explanation, and observed usage remains
