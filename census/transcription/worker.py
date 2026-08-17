@@ -10,11 +10,7 @@ from django.db import connection, models, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from census.models import (
-    ScheduleTranscription,
-    TranscriptionBatch,
-    TranscriptionJob,
-)
+from census.models import ScheduleTranscription, TranscriptionBatch, TranscriptionJob
 
 from .client import AmbiguousSubmissionError, ClaudeAPIError, ClaudeBatchClient
 from .contracts import (
@@ -26,6 +22,7 @@ from .payloads import PayloadError, build_batch_request
 
 ACTIVE_BATCH_STATES = TranscriptionBatch.ACTIVE_STATES
 SCHEDULER_ADVISORY_LOCK_ID = 6401926
+PROGRESS_LOG_INTERVAL = timedelta(minutes=10)
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +33,7 @@ class ClaudeTranscriptionWorker:
             settings.ANTHROPIC_API_BASE_URL,
             timeout=settings.CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT,
         )
+        self._last_progress_log_at = {}
 
     def run_once(self):
         """Perform bounded work; safe to call repeatedly after restarts."""
@@ -44,11 +42,11 @@ class ClaudeTranscriptionWorker:
         batch = self._claim_pollable_batch()
         if batch:
             try:
-                self._poll_or_collect(batch)
+                polled_to_completion = self._poll_or_collect(batch)
             except ClaudeAPIError:
                 self._release_lease(batch)
                 raise
-            return True
+            return polled_to_completion or changed
         if (
             self._active_batch_count()
             < settings.CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES
@@ -201,9 +199,25 @@ class ClaudeTranscriptionWorker:
             snapshot = self.client.create_batch(payloads)
         except AmbiguousSubmissionError as exc:
             self._mark_ambiguous(batch, exc)
+            logger.error(
+                "Claude transcription submission outcome is ambiguous "
+                "run=%s batch=%s status_code=%s error=%s",
+                batch.run.key,
+                batch.pk,
+                exc.status_code,
+                exc,
+            )
             return True
         except ClaudeAPIError as exc:
             self._mark_rejected(batch, exc)
+            logger.warning(
+                "Claude transcription batch rejected run=%s batch=%s "
+                "status_code=%s error=%s",
+                batch.run.key,
+                batch.pk,
+                exc.status_code,
+                exc,
+            )
             return True
 
         self._record_submission(batch, snapshot)
@@ -216,6 +230,7 @@ class ClaudeTranscriptionWorker:
             len(payloads),
             encoded_size,
         )
+        self._last_progress_log_at[batch.pk] = timezone.now()
         return True
 
     @transaction.atomic
@@ -302,16 +317,27 @@ class ClaudeTranscriptionWorker:
 
     def _poll_or_collect(self, batch):
         if batch.state == TranscriptionBatch.State.IN_PROGRESS:
+            previous_snapshot = batch.provider_snapshot or {}
+            previous_status = previous_snapshot.get("processing_status")
+            previous_counts = batch.request_counts or {}
             snapshot = self.client.retrieve_batch(batch.provider_batch_id)
             batch.provider_snapshot = snapshot
             batch.request_counts = snapshot.get("request_counts", {})
             batch.provider_expires_at = _datetime(snapshot.get("expires_at"))
             batch.provider_ended_at = _datetime(snapshot.get("ended_at"))
+            self._log_batch_progress(
+                batch,
+                previous_status=previous_status,
+                previous_counts=previous_counts,
+            )
             if snapshot.get("processing_status") != "ended":
                 batch.lease_token = None
                 batch.lease_expires_at = None
                 batch.save()
-                return
+                # An unchanged provider poll is intentionally idle work. Returning
+                # False makes the management command honor the configured interval
+                # instead of immediately polling the same batch again.
+                return False
             batch.state = TranscriptionBatch.State.COLLECTING
             batch.save()
 
@@ -356,6 +382,34 @@ class ClaudeTranscriptionWorker:
         batch.lease_token = None
         batch.lease_expires_at = None
         batch.save()
+        self._last_progress_log_at.pop(batch.pk, None)
+        return True
+
+    def _log_batch_progress(self, batch, *, previous_status, previous_counts):
+        """Log changed provider counts or a bounded still-processing heartbeat."""
+        now = timezone.now()
+        provider_status = (batch.provider_snapshot or {}).get("processing_status")
+        counts_changed = batch.request_counts != previous_counts
+        status_changed = provider_status != previous_status
+        last_logged_at = self._last_progress_log_at.get(batch.pk)
+        interval_elapsed = (
+            last_logged_at is None or now - last_logged_at >= PROGRESS_LOG_INTERVAL
+        )
+        if not counts_changed and not status_changed and not interval_elapsed:
+            return
+
+        reason = "changed" if counts_changed or status_changed else "periodic"
+        logger.info(
+            "Claude transcription batch status run=%s batch=%s provider_batch=%s "
+            "provider_status=%s request_counts=%s reason=%s",
+            batch.run.key,
+            batch.pk,
+            batch.provider_batch_id,
+            provider_status,
+            json.dumps(batch.request_counts, sort_keys=True),
+            reason,
+        )
+        self._last_progress_log_at[batch.pk] = now
 
     @transaction.atomic
     def _record_result(self, batch, raw_result):

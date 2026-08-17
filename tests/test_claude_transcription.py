@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import timedelta
 
 import pytest
@@ -45,6 +46,16 @@ def local_media_storage(settings, tmp_path):
         },
     }
     settings.MEDIA_ROOT = tmp_path
+
+
+@pytest.fixture
+def worker_logs(caplog):
+    """Capture a non-propagating production worker logger in tests."""
+    worker_logger = logging.getLogger("census.transcription.worker")
+    worker_logger.addHandler(caplog.handler)
+    caplog.set_level("INFO", logger="census.transcription.worker")
+    yield caplog
+    worker_logger.removeHandler(caplog.handler)
 
 
 def candidate(place_id=None):
@@ -610,6 +621,77 @@ class SuccessfulBatchClient:
             }
 
 
+class InProgressBatchClient:
+    def __init__(self, request_counts):
+        self.request_counts = request_counts
+
+    def retrieve_batch(self, provider_batch_id):
+        return {
+            "id": provider_batch_id,
+            "processing_status": "in_progress",
+            "request_counts": self.request_counts,
+            "expires_at": "2026-08-13T15:27:57Z",
+            "ended_at": None,
+        }
+
+    def iter_results(self, provider_batch_id):
+        raise AssertionError("Results are unavailable while the batch is in progress")
+
+
+@pytest.mark.django_db
+def test_in_progress_poll_is_idle_and_progress_logging_is_bounded(worker_logs):
+    request_counts = {
+        "errored": 0,
+        "expired": 0,
+        "canceled": 0,
+        "succeeded": 0,
+        "processing": 15,
+    }
+    batch = TranscriptionBatchFactory(
+        state=TranscriptionBatch.State.IN_PROGRESS,
+        provider_batch_id="msgbatch_slow",
+        provider_snapshot={
+            "id": "msgbatch_slow",
+            "processing_status": "in_progress",
+            "request_counts": request_counts,
+        },
+        request_counts=request_counts,
+        submitted_at=timezone.now() - timedelta(hours=1),
+    )
+    client = InProgressBatchClient(request_counts)
+    worker = ClaudeTranscriptionWorker(client=client)
+
+    assert not worker.run_once()
+    messages = [record.getMessage() for record in worker_logs.records]
+    assert any(
+        "batch status" in message and "reason=periodic" in message
+        for message in messages
+    )
+
+    worker_logs.clear()
+    assert not worker.run_once()
+    assert not any(
+        "batch status" in record.getMessage() for record in worker_logs.records
+    )
+
+    client.request_counts = {**request_counts, "succeeded": 1, "processing": 14}
+    assert not worker.run_once()
+    messages = [record.getMessage() for record in worker_logs.records]
+    assert any(
+        "batch status" in message and "reason=changed" in message
+        for message in messages
+    )
+
+    worker_logs.clear()
+    worker._last_progress_log_at[batch.pk] = timezone.now() - timedelta(minutes=11)
+    assert not worker.run_once()
+    messages = [record.getMessage() for record in worker_logs.records]
+    assert any(
+        "batch status" in message and "reason=periodic" in message
+        for message in messages
+    )
+
+
 @pytest.mark.django_db(transaction=True)
 @override_settings(
     CLAUDE_TRANSCRIPTION_BATCH_SIZE=25,
@@ -619,9 +701,8 @@ class SuccessfulBatchClient:
     CLAUDE_TRANSCRIPTION_LEASE_SECONDS=60,
 )
 def test_worker_submits_collects_out_of_order_and_records_usage(
-    tmp_path, settings, monkeypatch, caplog
+    tmp_path, settings, monkeypatch, worker_logs
 ):
-    caplog.set_level("INFO", logger="census.transcription.worker")
     settings.MEDIA_ROOT = tmp_path
     run = TranscriptionRunFactory(metadata=frozen_run_metadata())
     monkeypatch.setattr(
@@ -655,7 +736,7 @@ def test_worker_submits_collects_out_of_order_and_records_usage(
     batch = TranscriptionBatch.objects.get()
     assert batch.state == TranscriptionBatch.State.ENDED
     assert batch.collected_at is not None
-    messages = [record.getMessage() for record in caplog.records]
+    messages = [record.getMessage() for record in worker_logs.records]
     assert any(
         "work claimed" in message and "job_count=2" in message for message in messages
     )

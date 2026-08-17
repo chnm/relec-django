@@ -301,12 +301,24 @@ provider batch ID is persisted before polling. Results are matched by opaque
 `custom_id`, because Anthropic does not guarantee result ordering. Collection is
 idempotent and already-recorded raw results are skipped.
 
-At `INFO` level, the worker records three operational lifecycle events: a local
-batch claiming queued jobs, successful submission with the provider batch ID and
-encoded request size, and each returned job result with terminal state and token
-counts. These entries include run, batch, opaque job, and schedule identifiers for
-correlation. They never include API credentials, image data, prompts, raw provider
-responses, or transcription content.
+The transcription logging namespaces are explicitly routed to stdout at `INFO`, so
+the normal container log reports worker startup, local batch claims, successful
+provider submission, provider errors, and each returned job result with terminal
+state and token counts. While a provider batch remains active, the worker logs when
+its status or request counts change and emits one bounded still-processing entry
+every ten minutes. These entries include run, batch, opaque job, and schedule
+identifiers for correlation. They never include API credentials, image data,
+prompts, raw provider responses, or transcription content.
+
+`CLAUDE_TRANSCRIPTION_POLL_SECONDS` controls the delay after an unchanged provider
+poll (60 seconds by default). A successful heartbeat therefore normally advances
+about once per polling interval. Lifecycle changes are handled immediately within
+the current bounded iteration; an unchanged `in_progress` response is treated as
+idle work so the worker cannot busy-poll Anthropic.
+
+The admin AI Transcription navigation and run-confirmation worker card link directly
+to `https://status.claude.com/` for provider incident checks. Database batch state
+and `heartbeat_at` remain the authoritative application-side evidence.
 
 Preparation has its own lease. If a worker dies while reading or encoding images,
 the expired preparation is marked failed and its unsubmitted jobs are safely

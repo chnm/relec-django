@@ -118,6 +118,39 @@ CLAUDE_TRANSCRIPTION_PRICING = (
 )
 APPLICATION_REVISION = env("APPLICATION_REVISION", default="").strip()
 
+# Worker lifecycle and provider progress belong in normal container output.
+# Django's default logging only enables INFO for its own namespace, so the
+# transcription namespaces need explicit console handlers.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "worker": {
+            "format": "{levelname} {asctime} {name} {message}",
+            "style": "{",
+        }
+    },
+    "handlers": {
+        "transcription_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "worker",
+            "stream": "ext://sys.stdout",
+        }
+    },
+    "loggers": {
+        "census.transcription": {
+            "handlers": ["transcription_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "census.management.commands.run_transcription_worker": {
+            "handlers": ["transcription_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -488,6 +521,12 @@ UNFOLD = {
                         "title": "Jobs",
                         "icon": "checklist",
                         "link": lambda request: "/admin/census/transcriptionjob/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Claude Status",
+                        "icon": "monitor_heart",
+                        "link": lambda request: "https://status.claude.com/",
                         "permission": can_view_ai_transcription,
                     },
                 ],

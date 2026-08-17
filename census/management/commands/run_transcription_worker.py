@@ -65,6 +65,13 @@ class Command(BaseCommand):
                 time.sleep(min(max(options["poll_seconds"], 1), 60))
 
         worker = ClaudeTranscriptionWorker()
+        logger.info(
+            "Claude transcription worker started poll_seconds=%s "
+            "batch_size=%s max_active_batches=%s",
+            options["poll_seconds"],
+            settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE,
+            settings.CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES,
+        )
         if options["once"]:
             worker.run_once()
             self.mark_alive(liveness)

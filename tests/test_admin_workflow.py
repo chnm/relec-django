@@ -214,6 +214,7 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert b"Frozen pricing estimate" in response.content
     assert b"Pilot size" in response.content
     assert b"Limit" not in response.content
+    assert b'href="https://status.claude.com/"' in response.content
 
 
 @pytest.mark.django_db
