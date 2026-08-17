@@ -7,6 +7,7 @@ from django.test import RequestFactory, override_settings
 from census.admin import (
     AITranscriptionFilter,
     CensusScheduleAdmin,
+    CensusScheduleDenominationFilter,
     TranscriptionJobAdmin,
     TranscriptionRunAdmin,
     assign_to_me,
@@ -17,6 +18,7 @@ from census.admin import (
 from census.models import CensusSchedule, TranscriptionJob, TranscriptionRun
 from tests.factories import (
     CensusScheduleFactory,
+    DenominationFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
     TranscriptionBatchFactory,
@@ -55,6 +57,31 @@ def admin_post_request(user, data):
     request.session = {}
     request._messages = FallbackStorage(request)
     return request
+
+
+@pytest.mark.django_db
+def test_schedule_denomination_filter_includes_denomination_id(reviewer):
+    denomination = DenominationFactory(
+        name="Advent Christian Church",
+        denomination_id="0-0-0",
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_request(reviewer)
+    field = CensusSchedule._meta.get_field("schedule_denomination")
+
+    denomination_filter = CensusScheduleDenominationFilter(
+        field,
+        request,
+        {},
+        CensusSchedule,
+        model_admin,
+        "schedule_denomination",
+    )
+
+    assert (
+        denomination.pk,
+        "Advent Christian Church (0-0-0)",
+    ) in denomination_filter.lookup_choices
 
 
 def ai_status_filter(user, value):
