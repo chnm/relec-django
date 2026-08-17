@@ -211,6 +211,7 @@ def test_claude_action_confirmation_uses_initial_values(reviewer):
     assert b"revision-for-admin-preview" in response.content
     assert b"Leave blank to queue the complete ready selection" in response.content
     assert b"predicted usage amount" in response.content
+    assert b"adaptive thinking is disabled" in response.content
     assert b"Frozen pricing estimate" in response.content
     assert b"Pilot size" in response.content
     assert b"Limit" not in response.content

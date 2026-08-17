@@ -900,7 +900,7 @@ class ClaudeTranscriptionRunForm(forms.Form):
     model = forms.ChoiceField(
         help_text=(
             "The provider model used for every schedule in this run. Its Batch "
-            "pricing is validated and frozen with the run."
+            "pricing and model-specific inference behavior are frozen with the run."
         )
     )
     pilot_size = forms.IntegerField(

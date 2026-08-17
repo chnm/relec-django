@@ -251,6 +251,7 @@ def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
     assert run.metadata["selection_count"] == 3
     assert run.metadata["eligible_count"] == 3
     assert run.metadata["pilot_size"] == 2
+    assert "thinking" not in run.metadata
     assert run.metadata["prompt"] == contract["prompt"]
     assert run.metadata["schema_sha256"] == contract["schema_sha256"]
     assert (
@@ -273,6 +274,33 @@ def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
             "cache_read_input_tokens": "0.10",
         },
     }
+
+
+@pytest.mark.django_db
+@override_settings(
+    CLAUDE_TRANSCRIPTION_ENABLED=True,
+    CLAUDE_TRANSCRIPTION_MODELS=["claude-sonnet-5"],
+)
+def test_sonnet_5_run_freezes_disabled_thinking_in_payload(monkeypatch):
+    monkeypatch.setattr(
+        "census.transcription.services.pricing_snapshot_for_model",
+        lambda catalog, model: {"model": model},
+    )
+    schedule = CensusScheduleFactory(
+        original_image=SimpleUploadedFile(
+            "schedule.jpg", b"image bytes", content_type="image/jpeg"
+        )
+    )
+
+    run = launch_transcription_run(
+        queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+        key="sonnet-5-thinking-disabled",
+        model="claude-sonnet-5",
+    )
+
+    assert run.metadata["thinking"] == {"type": "disabled"}
+    payload = build_batch_request(run.transcription_jobs.get())
+    assert payload["params"]["thinking"] == {"type": "disabled"}
 
 
 @pytest.mark.django_db
@@ -547,6 +575,7 @@ def test_payload_contains_base64_image_context_and_structured_output(
     payload = build_batch_request(job)
 
     params = payload["params"]
+    assert "thinking" not in params
     assert len(payload["custom_id"]) <= 64
     assert params["messages"][0]["content"][0]["type"] == "image"
     assert params["system"] == frozen_prompt
@@ -608,6 +637,57 @@ class SuccessfulBatchClient:
                     },
                 },
             }
+
+
+@pytest.mark.django_db
+def test_max_tokens_result_is_retained_as_invalid_without_candidate():
+    batch = TranscriptionBatchFactory(state=TranscriptionBatch.State.COLLECTING)
+    job = TranscriptionJobFactory(
+        run=batch.run,
+        batch=batch,
+        state=TranscriptionJob.State.SUBMITTED,
+    )
+    raw_result = {
+        "custom_id": job.custom_id,
+        "result": {
+            "type": "succeeded",
+            "message": {
+                "id": "msg_truncated",
+                "stop_reason": "max_tokens",
+                "content": [
+                    {"type": "thinking", "thinking": "", "signature": "opaque"},
+                    {
+                        "type": "text",
+                        "text": '{"schema_version":"relec-1926-v1","ai_notes":"A red pencil ',
+                    },
+                ],
+                "usage": {
+                    "input_tokens": 16056,
+                    "output_tokens": 4096,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "output_tokens_details": {"thinking_tokens": 3756},
+                },
+            },
+        },
+    }
+
+    recorded = ClaudeTranscriptionWorker(client=object())._record_result(
+        batch, raw_result
+    )
+
+    job.refresh_from_db()
+    assert recorded.pk == job.pk
+    assert job.state == TranscriptionJob.State.INVALID
+    assert job.stop_reason == "max_tokens"
+    assert job.error_type == "unexpected_stop_reason"
+    assert job.output_tokens == 4096
+    assert job.usage["output_tokens_details"]["thinking_tokens"] == 3756
+    assert job.raw_result == raw_result
+    assert not ScheduleTranscription.objects.filter(
+        census_schedule=job.census_schedule,
+        run=job.run,
+    ).exists()
 
 
 @pytest.mark.django_db(transaction=True)

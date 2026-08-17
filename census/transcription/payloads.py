@@ -67,36 +67,38 @@ def build_batch_request(job):
     metadata = job.run.metadata
     media_type, image_data = read_schedule_image(job.census_schedule)
     context = json.dumps(schedule_context(job.census_schedule), sort_keys=True)
-    return {
-        "custom_id": job.custom_id,
-        "params": {
-            "model": job.run.metadata["model"],
-            "max_tokens": job.run.metadata["max_tokens"],
-            "system": metadata["prompt"],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
-                            },
+    params = {
+        "model": metadata["model"],
+        "max_tokens": metadata["max_tokens"],
+        "system": metadata["prompt"],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": image_data,
                         },
-                        {
-                            "type": "text",
-                            "text": "Transcribe this schedule. Context:\n" + context,
-                        },
-                    ],
-                }
-            ],
-            "output_config": {
-                "format": {
-                    "type": "json_schema",
-                    "schema": metadata["transport_schema"],
-                }
-            },
+                    },
+                    {
+                        "type": "text",
+                        "text": "Transcribe this schedule. Context:\n" + context,
+                    },
+                ],
+            }
+        ],
+        "output_config": {
+            "format": {
+                "type": "json_schema",
+                "schema": metadata["transport_schema"],
+            }
         },
     }
+    # Historical runs intentionally omit this key and retain the request behavior
+    # frozen when they were launched. New model-specific controls are provenance.
+    if "thinking" in metadata:
+        params["thinking"] = metadata["thinking"]
+    return {"custom_id": job.custom_id, "params": params}
