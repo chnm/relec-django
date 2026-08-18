@@ -106,6 +106,29 @@ class HasCountyFilter(admin.SimpleListFilter):
         return queryset
 
 
+class CensusScheduleDenominationFilter(admin.RelatedFieldListFilter):
+    """Include the census denomination ID in schedule filter labels."""
+
+    def field_choices(self, field, request, model_admin):
+        choices = list(super().field_choices(field, request, model_admin))
+        denomination_ids = {
+            denomination.pk: denomination.denomination_id
+            for denomination in Denomination.objects.filter(
+                pk__in=[pk for pk, _label in choices]
+            )
+        }
+
+        return [
+            (
+                pk,
+                f"{label} ({denomination_ids[pk]})"
+                if denomination_ids.get(pk)
+                else label,
+            )
+            for pk, label in choices
+        ]
+
+
 class CensusScheduleLocationFilter(admin.SimpleListFilter):
     """Custom filter for Census Schedules based on their Religious Body locations"""
 
@@ -1063,7 +1086,7 @@ class CensusScheduleAdmin(ModelAdmin):
         "assigned_transcriber",
         "assigned_reviewer",
         "county__state",
-        "schedule_denomination",
+        ("schedule_denomination", CensusScheduleDenominationFilter),
         CensusScheduleLocationFilter,
     ]
     actions = [
