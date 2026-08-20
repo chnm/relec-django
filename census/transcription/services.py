@@ -33,14 +33,16 @@ ACTIVE_JOB_STATES = (
 )
 
 
-def thinking_config_for_model(model):
+def inference_config_for_model(model):
     """Return the request behavior that must be frozen for this model."""
     if model == SONNET_5_MODEL:
-        # Sonnet 5 otherwise enables high-effort adaptive thinking by default.
-        # Thinking shares max_tokens with the structured response and can consume
-        # the entire budget before the JSON is complete.
-        return {"type": "disabled"}
-    return None
+        # Sonnet 5 otherwise enables high-effort adaptive thinking by default,
+        # and thinking shares max_tokens with the structured response. Disabling
+        # thinking entirely (the previous approach) degraded reading quality and
+        # produced near-empty candidates on legible schedules; low effort keeps
+        # thinking brief enough that the JSON still fits within the budget.
+        return {"thinking": {"type": "adaptive"}, "output_effort": "low"}
+    return {}
 
 
 def eligible_transcription_schedules(queryset):
@@ -230,9 +232,7 @@ def launch_transcription_run(
         "launched_at": timezone.now().isoformat(),
         "launched_by": user.get_username() if user and user.is_authenticated else None,
     }
-    thinking = thinking_config_for_model(model)
-    if thinking is not None:
-        metadata["thinking"] = thinking
+    metadata.update(inference_config_for_model(model))
     run = TranscriptionRun.objects.create(key=key, kind="agent", metadata=metadata)
     bulk_create_with_history(
         [TranscriptionJob(census_schedule=schedule, run=run) for schedule in schedules],
