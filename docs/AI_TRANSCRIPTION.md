@@ -52,7 +52,7 @@ Optional controls:
 ```text
 ANTHROPIC_API_BASE_URL=https://api.anthropic.com
 APPLICATION_REVISION=<deployed-git-commit-or-image-digest>
-CLAUDE_TRANSCRIPTION_MAX_TOKENS=4096
+CLAUDE_TRANSCRIPTION_MAX_TOKENS=8192
 CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=100
 CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=10000
 CLAUDE_TRANSCRIPTION_BATCH_SIZE=25
@@ -97,12 +97,17 @@ the direct Claude API's image-size definition.
 
 Claude Sonnet 5 enables high-effort adaptive thinking by default when a request
 omits `thinking`. Thinking tokens and structured response text share the hard
-`CLAUDE_TRANSCRIPTION_MAX_TOKENS` ceiling. New Sonnet 5 runs therefore freeze
-`thinking: {"type": "disabled"}` in their immutable metadata, and the worker copies
-that exact setting into every provider request. This reserves the output budget for
-the transcription JSON and restores the non-thinking behavior used by Sonnet 4.6.
-Historical runs without a frozen `thinking` key retain their original request
-behavior; a deployment never silently rewrites their provenance.
+`CLAUDE_TRANSCRIPTION_MAX_TOKENS` ceiling. An earlier fix froze
+`thinking: {"type": "disabled"}` to stop thinking from exhausting that budget, but
+disabling thinking degrades Sonnet 5's reading of schedule images: some legible,
+fully filled schedules came back as near-empty candidates rejected by validation
+(`religious_bodies: [] should be non-empty`). New Sonnet 5 runs therefore freeze
+`thinking: {"type": "adaptive"}` together with `output_config.effort: "low"` in
+their immutable metadata, and the worker copies both into every provider request.
+Low effort keeps thinking brief enough that the structured JSON fits within the
+raised default ceiling (8192). Historical runs without frozen `thinking` or
+`output_effort` keys retain their original request behavior; a deployment never
+silently rewrites their provenance.
 
 Anthropic defines total input usage as ordinary input tokens plus cache-creation and
 cache-read input tokens. The admin run total uses that sum while preserving all

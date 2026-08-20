@@ -97,8 +97,11 @@ def build_batch_request(job):
             }
         },
     }
-    # Historical runs intentionally omit this key and retain the request behavior
-    # frozen when they were launched. New model-specific controls are provenance.
+    # Historical runs intentionally omit these keys and retain the request
+    # behavior frozen when they were launched. New model-specific controls are
+    # provenance.
     if "thinking" in metadata:
         params["thinking"] = metadata["thinking"]
+    if "output_effort" in metadata:
+        params["output_config"]["effort"] = metadata["output_effort"]
     return {"custom_id": job.custom_id, "params": params}

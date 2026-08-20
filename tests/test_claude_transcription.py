@@ -281,7 +281,7 @@ def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
     CLAUDE_TRANSCRIPTION_ENABLED=True,
     CLAUDE_TRANSCRIPTION_MODELS=["claude-sonnet-5"],
 )
-def test_sonnet_5_run_freezes_disabled_thinking_in_payload(monkeypatch):
+def test_sonnet_5_run_freezes_low_effort_adaptive_thinking_in_payload(monkeypatch):
     monkeypatch.setattr(
         "census.transcription.services.pricing_snapshot_for_model",
         lambda catalog, model: {"model": model},
@@ -294,13 +294,15 @@ def test_sonnet_5_run_freezes_disabled_thinking_in_payload(monkeypatch):
 
     run = launch_transcription_run(
         queryset=CensusSchedule.objects.filter(pk=schedule.pk),
-        key="sonnet-5-thinking-disabled",
+        key="sonnet-5-adaptive-thinking",
         model="claude-sonnet-5",
     )
 
-    assert run.metadata["thinking"] == {"type": "disabled"}
+    assert run.metadata["thinking"] == {"type": "adaptive"}
+    assert run.metadata["output_effort"] == "low"
     payload = build_batch_request(run.transcription_jobs.get())
-    assert payload["params"]["thinking"] == {"type": "disabled"}
+    assert payload["params"]["thinking"] == {"type": "adaptive"}
+    assert payload["params"]["output_config"]["effort"] == "low"
 
 
 @pytest.mark.django_db
@@ -576,6 +578,7 @@ def test_payload_contains_base64_image_context_and_structured_output(
 
     params = payload["params"]
     assert "thinking" not in params
+    assert "effort" not in params["output_config"]
     assert len(payload["custom_id"]) <= 64
     assert params["messages"][0]["content"][0]["type"] == "image"
     assert params["system"] == frozen_prompt
