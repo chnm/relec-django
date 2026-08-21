@@ -1,7 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}
-    Page not found
+    404 Page Not Found
 {% endblock title %}
 {% block content %}
-    <h1>Page not found.</h1>
+    <div class="container mx-auto px-4 py-16 text-center">
+        <h1 class="text-4xl font-bold mb-4">404 &mdash; Page Not Found</h1>
+        <p class="text-lg text-gray-600 mb-8">
+            The page you're looking for doesn't exist or may have moved.
+            Try one of the links below to find what you need.
+        </p>
+        <div class="flex flex-wrap justify-center gap-4">
+            <a href="{% url 'index' %}" class="inline-block bg-religious-primary text-white px-6 py-3 rounded hover:opacity-90 transition">
+                Home
+            </a>
+            <a href="{% url 'census_browser' %}" class="inline-block border border-religious-primary text-religious-primary px-6 py-3 rounded hover:bg-gray-100 transition">
+                Browse Schedules
+            </a>
+            <a href="{% url 'blog-list' %}" class="inline-block border border-religious-primary text-religious-primary px-6 py-3 rounded hover:bg-gray-100 transition">
+                Blog
+            </a>
+            <a href="{% url 'visualization-list' %}" class="inline-block border border-religious-primary text-religious-primary px-6 py-3 rounded hover:bg-gray-100 transition">
+                Visualizations
+            </a>
+        </div>
+    </div>
 {% endblock content %}
