@@ -4,7 +4,7 @@
 {% block object-tools-items %}
   {% if show_transcription_comparison %}
     {% url "admin:census_censusschedule_compare_transcriptions" original.pk as comparison_url %}
-    {% include "unfold/helpers/tab_action.html" with title="Compare transcriptions" link=comparison_url icon="difference" %}
+    {% include "unfold/helpers/tab_action.html" with title="Reconcile & approve" link=comparison_url icon="difference" %}
   {% endif %}
   {{ block.super }}
 {% endblock %}

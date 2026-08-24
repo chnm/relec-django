@@ -456,6 +456,12 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/clergy/",
                     },
                     {
+                        "title": "Reconciliation History",
+                        "icon": "verified",
+                        "link": lambda request: "/admin/census/schedulereconciliation/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
                         "title": "Missing Location",
                         "icon": "wrong_location",
                         "link": lambda request: "/admin/census/censusschedule/?schedule_location_status=missing_location",

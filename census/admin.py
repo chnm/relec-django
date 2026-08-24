@@ -34,15 +34,23 @@ from .models import (
     Denomination,
     DenominationCensusReport,
     Membership,
+    ReconciliationSource,
     ReligiousBody,
+    ScheduleReconciliation,
     ScheduleTranscription,
     TranscriptionBatch,
     TranscriptionJob,
     TranscriptionRun,
 )
 from .resources import CensusScheduleResource, DenominationResource
-from .transcription.comparison import build_comparison, source_raw_json
+from .transcription.comparison import source_raw_json
 from .transcription.contracts import CONTRACT_VERSION
+from .transcription.reconciliation import (
+    ReconciliationError,
+    apply_reconciliation,
+    build_reconciliation_preview,
+    decisions_fingerprint,
+)
 from .transcription.services import (
     LaunchError,
     launch_transcription_run,
@@ -515,6 +523,46 @@ class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
         return f"in {total_input:,} / out {obj.aggregate_output_tokens or 0:,}"
 
 
+@admin.register(ScheduleReconciliation)
+class ScheduleReconciliationAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = [
+        "census_schedule",
+        "outcome",
+        "reviewer",
+        "applied_at",
+    ]
+    list_filter = ["outcome", "applied_at"]
+    search_fields = [
+        "census_schedule__schedule_id",
+        "census_schedule__resource_id",
+        "reviewer__username",
+    ]
+    readonly_fields = [
+        "census_schedule",
+        "reviewer",
+        "outcome",
+        "notes",
+        "canonical_before",
+        "canonical_after",
+        "before_fingerprint",
+        "after_fingerprint",
+        "decisions",
+        "reverses",
+        "applied_at",
+    ]
+
+
+@admin.register(ReconciliationSource)
+class ReconciliationSourceAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = ["transcription", "disposition", "reconciliation"]
+    list_filter = ["disposition"]
+    search_fields = [
+        "transcription__run__key",
+        "transcription__census_schedule__schedule_id",
+    ]
+    readonly_fields = ["reconciliation", "transcription", "disposition"]
+
+
 @admin.register(TranscriptionBatch)
 class TranscriptionBatchAdmin(ReviewerReadOnlyModelAdmin):
     list_display = [
@@ -794,15 +842,6 @@ def mark_completed(modeladmin, request, queryset):
 
 
 mark_completed.short_description = "Mark as ready for review"
-
-
-def mark_approved(modeladmin, request, queryset):
-    """Admin action to approve transcribed records"""
-    count = queryset.update(transcription_status="approved")
-    modeladmin.message_user(request, f"{count} records approved.")
-
-
-mark_approved.short_description = "Mark as approved"
 
 
 # Assignment actions
@@ -1096,7 +1135,6 @@ class CensusScheduleAdmin(ModelAdmin):
         mark_in_progress,
         mark_needs_review,
         mark_completed,
-        mark_approved,
         # Assignments
         assign_to_me,
         unassign_transcriber,
@@ -1175,7 +1213,7 @@ class CensusScheduleAdmin(ModelAdmin):
         )
 
     def compare_transcriptions_view(self, request, object_id):
-        """Compare immutable human and agent outputs without changing either."""
+        """Preview and apply one reviewer-controlled reconciliation decision."""
         if not is_reviewer(request.user):
             raise PermissionDenied
 
@@ -1190,14 +1228,8 @@ class CensusScheduleAdmin(ModelAdmin):
         transcriptions = list(
             schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
         )
-        human_sources = [
-            source for source in transcriptions if source.run.kind == "human_snapshot"
-        ]
-        agent_sources = [
-            source for source in transcriptions if source.run.kind == "agent"
-        ]
-        human_source = self._comparison_source(human_sources, request.GET.get("human"))
-        agent_source = self._comparison_source(agent_sources, request.GET.get("agent"))
+        requested_source = request.POST.get("source") or request.GET.get("source")
+        selected = self._comparison_source(transcriptions, requested_source)
 
         jobs = {
             job.run_id: job
@@ -1205,10 +1237,92 @@ class CensusScheduleAdmin(ModelAdmin):
                 state=TranscriptionJob.State.SUCCEEDED
             ).select_related("run")
         }
-        comparison = build_comparison(
-            human_source.data if human_source else None,
-            agent_source.data if agent_source else None,
-        )
+        reconciliation_error = ""
+        candidate_can_promote = bool(selected)
+        selected_outcome = request.POST.get("outcome", "")
+        posted_decisions = self._reconciliation_decisions(request)
+        reviewed_decisions_fingerprint = ""
+        mixed_preview_ready = False
+        try:
+            preview = build_reconciliation_preview(schedule, selected)
+        except ReconciliationError as exc:
+            preview = build_reconciliation_preview(schedule, validate=False)
+            reconciliation_error = str(exc)
+            candidate_can_promote = False
+        comparison = preview["comparison"]
+
+        if request.method == "POST":
+            action = request.POST.get("action", "apply")
+            if selected_outcome == ScheduleReconciliation.Outcome.RETAINED_CURRENT:
+                try:
+                    preview = build_reconciliation_preview(schedule)
+                except ReconciliationError as exc:
+                    reconciliation_error = str(exc)
+                else:
+                    reconciliation_error = ""
+                    comparison = preview["comparison"]
+            elif selected_outcome == ScheduleReconciliation.Outcome.MIXED:
+                try:
+                    preview = build_reconciliation_preview(
+                        schedule,
+                        selected,
+                        decisions=posted_decisions,
+                        mixed=True,
+                    )
+                except ReconciliationError as exc:
+                    reconciliation_error = str(exc)
+                else:
+                    reconciliation_error = ""
+                    comparison = preview["comparison"]
+                    if action == "preview":
+                        reviewed_decisions_fingerprint = preview[
+                            "decisions_fingerprint"
+                        ]
+                        mixed_preview_ready = True
+                    elif request.POST.get(
+                        "reviewed_decisions_fingerprint", ""
+                    ) != decisions_fingerprint(preview["decisions"]):
+                        reconciliation_error = (
+                            "Preview this mixed selection again before applying it."
+                        )
+
+            if action == "preview":
+                pass
+            elif request.POST.get("confirmed") != "yes":
+                reconciliation_error = (
+                    "Confirm that you reviewed the source image and proposed data."
+                )
+            elif not reconciliation_error:
+                try:
+                    reconciliation = apply_reconciliation(
+                        schedule_id=schedule.pk,
+                        reviewer=request.user,
+                        outcome=request.POST.get("outcome", ""),
+                        expected_fingerprint=request.POST.get(
+                            "expected_fingerprint", ""
+                        ),
+                        transcription_id=selected.pk if selected else None,
+                        notes=request.POST.get("notes", ""),
+                        decisions=posted_decisions,
+                        reviewed_decisions_fingerprint=request.POST.get(
+                            "reviewed_decisions_fingerprint", ""
+                        ),
+                    )
+                except ReconciliationError as exc:
+                    reconciliation_error = str(exc)
+                else:
+                    self.message_user(
+                        request,
+                        f"Reconciliation #{reconciliation.pk} applied; "
+                        f"{schedule} is approved.",
+                        level=messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect(
+                        reverse(
+                            "admin:census_censusschedule_change",
+                            args=[schedule.pk],
+                        )
+                    )
         try:
             image_url = schedule.original_image.url if schedule.original_image else ""
         except ValueError:
@@ -1216,19 +1330,24 @@ class CensusScheduleAdmin(ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Compare transcriptions: {schedule}",
+            "title": f"Reconcile and approve: {schedule}",
             "opts": self.model._meta,
             "schedule": schedule,
             "image_url": image_url,
-            "human_sources": human_sources,
-            "agent_sources": agent_sources,
-            "human_source": self._comparison_source_details(
-                human_source, jobs.get(human_source.run_id) if human_source else None
-            ),
-            "agent_source": self._comparison_source_details(
-                agent_source, jobs.get(agent_source.run_id) if agent_source else None
+            "sources": transcriptions,
+            "selected_source": self._comparison_source_details(
+                selected, jobs.get(selected.run_id) if selected else None
             ),
             "comparison": comparison,
+            "preview": preview,
+            "reconciliation_error": reconciliation_error,
+            "candidate_can_promote": candidate_can_promote,
+            "selected_outcome": selected_outcome,
+            "mixed_preview_ready": mixed_preview_ready,
+            "reviewed_decisions_fingerprint": reviewed_decisions_fingerprint,
+            "recent_reconciliations": schedule.reconciliations.select_related(
+                "reviewer"
+            )[:5],
         }
         return render(
             request,
@@ -1246,6 +1365,15 @@ class CensusScheduleAdmin(ModelAdmin):
             if selected:
                 return selected
         return sources[0] if sources else None
+
+    @staticmethod
+    def _reconciliation_decisions(request):
+        prefix = "choice__"
+        return {
+            key.removeprefix(prefix): value
+            for key, value in request.POST.items()
+            if key.startswith(prefix)
+        }
 
     @staticmethod
     def _comparison_source_details(source, job):

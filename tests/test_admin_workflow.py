@@ -185,10 +185,10 @@ def test_transcriber_cannot_edit_workflow_assignment_fields(transcriber):
 
 
 @pytest.mark.django_db
-def test_reviewer_can_access_approval_action(reviewer):
+def test_reviewer_must_use_reconciliation_instead_of_bulk_approval(reviewer):
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
-    assert "mark_approved" in model_admin.get_actions(admin_request(reviewer))
+    assert "mark_approved" not in model_admin.get_actions(admin_request(reviewer))
 
 
 @pytest.mark.django_db
@@ -418,12 +418,12 @@ def test_claude_action_treats_application_revision_as_optional(reviewer):
 
 
 @pytest.mark.django_db
-def test_dual_role_staff_can_access_approval_action(transcriber):
+def test_dual_role_staff_must_use_reconciliation_instead_of_bulk_approval(transcriber):
     reviewer_group, _ = Group.objects.get_or_create(name="Reviewers")
     transcriber.groups.add(reviewer_group)
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
-    assert "mark_approved" in model_admin.get_actions(admin_request(transcriber))
+    assert "mark_approved" not in model_admin.get_actions(admin_request(transcriber))
 
 
 @pytest.mark.django_db

@@ -141,7 +141,8 @@ IT/infrastructure administrators with full Django admin access.
 - Both `needs_review` and `completed` appear in the PI/editor review queue
 - Status can be set backward by Reviewers (e.g., returning a record to `in_progress`)
 - A schedule is **automatically** moved from `unassigned` to `assigned` when a transcriber is assigned
-- Transcribers submit finished work as `completed`; only Reviewers can set `approved`
+- Transcribers submit finished work as `completed`; only Reviewers can set `approved`, through the schedule-level reconciliation workflow
+- Mixed reconciliations record every field and related-row source decision as append-only provenance; repeated entities are matched by stable identity or unique signatures, never silently by list order
 - A schedule must have at least one `ReligiousBody` record before it can be marked `completed` or `needs_review`
 
 ### Location Hierarchy
@@ -209,7 +210,7 @@ Provides a professional, organized interface for managing the transcription proj
 
 **Success Criteria:**
 - Transcribers can complete a record without PI assistance
-- Reviewers can approve a batch of 20 records in under 30 minutes
+- Reviewers can make an audited schedule-level approval decision without changing immutable transcription evidence
 - Dashboard accurately reflects real-time project status
 
 ---
@@ -436,13 +437,15 @@ Record has `transcription_status = completed` and at least one complete `Religio
 **Steps:**
 1. Dashboard shows the combined review queue count
 2. Reviewer navigates to Census Schedules → filters by "Review Queue"
-3. Opens a record → compares transcribed data against the original schedule image
-4. If correct: Changes status to `approved` → saves
-5. If needs correction: Changes status back to `in_progress` → adds note in `transcription_notes` → saves
+3. Opens a record → selects **Reconcile & approve** and compares the live canonical graph, immutable transcription evidence, and original schedule image
+4. If the canonical record is correct: Chooses **Keep current canonical data and approve**
+5. If one immutable candidate is correct: Chooses **Use selected evidence and approve**, reviews all row and geocoding consequences, and confirms the decision
+6. If the best result combines sources: Chooses **Combine current and selected evidence**, selects current or candidate values field by field, explicitly retains/adds/removes unmatched related rows, previews that exact mixed result, and confirms the decision. AI-specific marginalia and agent notes come from the selected evidence automatically and are not presented as source decisions.
+7. If neither is correct: Returns the record to `in_progress` and adds a note in `transcription_notes`
    - Transcriber will see the record reappear in their list with the reviewer's note
 
 **Success Outcome:**
-Record has `transcription_status = approved`; all data has been verified against source image.
+Record has `transcription_status = approved`; all data has been verified against the source image and the decision is preserved as append-only reconciliation evidence.
 
 ---
 

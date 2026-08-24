@@ -1,1 +1,1 @@
-<div class="comparison-value comparison-value-{{ value.kind }}">{{ value.text }}</div>
+<div class="comparison-value comparison-value-{{ value.kind }}{% if source_side %} comparison-source-value comparison-source-value-{{ source_side }}{% endif %}">{{ value.text }}</div>

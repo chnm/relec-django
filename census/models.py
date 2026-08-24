@@ -20,6 +20,9 @@ class ImmutableQuerySet(models.QuerySet):
     def delete(self):
         raise ValidationError("Immutable records cannot be deleted.")
 
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError("Immutable records cannot be updated in bulk.")
+
 
 class ProtectedTranscriptionJobQuerySet(models.QuerySet):
     """Keep raw provider evidence immutable while allowing workflow updates."""
@@ -476,6 +479,103 @@ class ScheduleTranscription(models.Model):
 
     def __str__(self):
         return f"{self.census_schedule} / {self.run.key}"
+
+
+class ScheduleReconciliation(models.Model):
+    """Append-only evidence for one reviewer approval decision."""
+
+    class Outcome(models.TextChoices):
+        RETAINED_CURRENT = "retained_current", "Kept current canonical data"
+        PROMOTED_CANDIDATE = "promoted_candidate", "Promoted one candidate"
+        MIXED = "mixed", "Combined current and candidate data"
+
+    census_schedule = models.ForeignKey(
+        CensusSchedule,
+        on_delete=models.PROTECT,
+        related_name="reconciliations",
+    )
+    reviewer = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="schedule_reconciliations",
+    )
+    outcome = models.CharField(max_length=30, choices=Outcome.choices)
+    notes = models.TextField(blank=True)
+    canonical_before = models.JSONField()
+    canonical_after = models.JSONField()
+    before_fingerprint = models.CharField(max_length=64)
+    after_fingerprint = models.CharField(max_length=64)
+    decisions = models.JSONField(default=dict)
+    reverses = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversals",
+    )
+    applied_at = models.DateTimeField(auto_now_add=True)
+    objects = ImmutableQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-applied_at", "-pk"]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                "Schedule reconciliation evidence is immutable; create a new event."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Schedule reconciliation evidence is immutable.")
+
+    def __str__(self):
+        return f"{self.census_schedule} / {self.get_outcome_display()}"
+
+
+class ReconciliationSource(models.Model):
+    """Final disposition of an immutable candidate in a reconciliation."""
+
+    class Disposition(models.TextChoices):
+        ACCEPTED = "accepted", "Accepted"
+        INCORPORATED = "incorporated", "Partially incorporated"
+        REJECTED = "rejected", "Rejected"
+        SUPERSEDED = "superseded", "Superseded"
+
+    reconciliation = models.ForeignKey(
+        ScheduleReconciliation,
+        on_delete=models.PROTECT,
+        related_name="sources",
+    )
+    transcription = models.ForeignKey(
+        ScheduleTranscription,
+        on_delete=models.PROTECT,
+        related_name="reconciliation_sources",
+    )
+    disposition = models.CharField(max_length=20, choices=Disposition.choices)
+    objects = ImmutableQuerySet.as_manager()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reconciliation", "transcription"],
+                name="unique_reconciliation_transcription_source",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                "Reconciliation source dispositions are immutable."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Reconciliation source dispositions are immutable.")
+
+    def __str__(self):
+        return f"{self.transcription} / {self.get_disposition_display()}"
 
 
 class TranscriptionBatch(models.Model):

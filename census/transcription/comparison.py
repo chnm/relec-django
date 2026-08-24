@@ -4,7 +4,6 @@ import json
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
-
 MISSING = object()
 
 SCHEDULE_FIELDS = [
@@ -208,6 +207,19 @@ def build_comparison(left_data, right_data):
 
 def source_raw_json(source):
     return json.dumps(source.data, indent=2, sort_keys=True, default=str)
+
+
+def comparison_row(label, left, right, *, decision_key="", selected="candidate"):
+    """Build one display row with optional mixed-source decision metadata."""
+    row = _row(label, left, right)
+    row.update(
+        {
+            "decision_key": decision_key,
+            "selected": selected,
+            "can_choose": bool(decision_key) and row["status"] != "same",
+        }
+    )
+    return row
 
 
 def _section(title, fields, left, right, note=""):
