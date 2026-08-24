@@ -134,13 +134,20 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"Reconcile and approve" in response.content
     assert b"human-review" in response.content
     assert b"Apply and approve" in response.content
+    assert b"Choose what becomes canonical" not in response.content
+    assert b"Preview mixed selection" not in response.content
     assert b"section-selection-status" in response.content
     assert b'aria-pressed="false"' in response.content
     assert b"comparison-source-value-current" in response.content
     assert b"comparison-source-value-candidate" in response.content
     assert b"updateSectionSelection" in response.content
+    assert b"source-value-select" in response.content
+    assert b"edited-choice" in response.content
+    assert b"save-inline-edit" in response.content
+    assert b'addEventListener("dblclick"' in response.content
+    assert b"comparison-decision" not in response.content
     assert b'data-automatic-source="candidate"' in response.content
-    assert b"Included automatically" in response.content
+    assert b"carried from the selected evidence automatically" in response.content
     assert list(
         ScheduleTranscription.objects.filter(census_schedule=schedule).values_list(
             "pk", "data"
@@ -215,7 +222,7 @@ def test_comparison_view_rejects_non_reviewer_directly(transcriber):
 
 
 @pytest.mark.django_db
-def test_reviewer_can_keep_current_data_from_interface(client, reviewer):
+def test_reviewer_can_approve_selected_result_from_interface(client, reviewer):
     schedule = CensusScheduleFactory(transcription_status="completed")
     ReligiousBodyFactory(
         census_record=schedule,
@@ -236,7 +243,6 @@ def test_reviewer_can_keep_current_data_from_interface(client, reviewer):
         ),
         {
             "source": source.pk,
-            "outcome": "retained_current",
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
             "notes": "Checked against the image.",
@@ -246,7 +252,40 @@ def test_reviewer_can_keep_current_data_from_interface(client, reviewer):
     schedule.refresh_from_db()
     assert response.status_code == 302
     assert schedule.transcription_status == "approved"
-    assert schedule.reconciliations.get().notes == "Checked against the image."
+    reconciliation = schedule.reconciliations.get()
+    assert reconciliation.outcome == "promoted_candidate"
+    assert reconciliation.notes == "Checked against the image."
+
+
+@pytest.mark.django_db
+def test_direct_approval_still_requires_reviewer_confirmation(client, reviewer):
+    schedule = CensusScheduleFactory(transcription_status="completed")
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=serialize_canonical(schedule),
+    )
+    preview = build_reconciliation_preview(schedule, source)
+    client.force_login(reviewer)
+
+    response = client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "source": source.pk,
+            "expected_fingerprint": preview["before_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Confirm that you reviewed" in response.content
+    assert not schedule.reconciliations.exists()
 
 
 @pytest.mark.django_db
@@ -272,7 +311,6 @@ def test_reconciliation_post_is_csrf_protected(reviewer):
         ),
         {
             "source": source.pk,
-            "outcome": "retained_current",
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
         },
@@ -284,7 +322,7 @@ def test_reconciliation_post_is_csrf_protected(reviewer):
 
 
 @pytest.mark.django_db
-def test_mixed_interface_requires_preview_of_exact_field_choices(client, reviewer):
+def test_interface_directly_applies_current_cell_selection(client, reviewer):
     schedule = CensusScheduleFactory(
         transcription_status="completed",
         respondent_name="Keep Human",
@@ -308,42 +346,64 @@ def test_mixed_interface_requires_preview_of_exact_field_choices(client, reviewe
     client.force_login(reviewer)
     base_data = {
         "source": source.pk,
-        "outcome": "mixed",
         "expected_fingerprint": initial["before_fingerprint"],
         "confirmed": "yes",
         "choice__schedule.respondent_name": "current",
     }
 
-    unpreviewed = client.post(url, {**base_data, "action": "apply"})
-    assert unpreviewed.status_code == 200
-    assert b"Preview this mixed selection again" in unpreviewed.content
-    assert not schedule.reconciliations.exists()
-
-    preview_response = client.post(
-        url,
-        {**base_data, "action": "preview", "confirmed": ""},
-    )
-    assert preview_response.status_code == 200
-    assert preview_response.context["mixed_preview_ready"]
-    preview = preview_response.context["preview"]
-    choice_data = {
-        f"choice__{key}": value for key, value in preview["decisions"].items()
-    }
-
-    applied = client.post(
-        url,
-        {
-            **base_data,
-            **choice_data,
-            "action": "apply",
-            "reviewed_decisions_fingerprint": preview[
-                "decisions_fingerprint"
-            ],
-        },
-    )
+    applied = client.post(url, base_data)
 
     schedule.refresh_from_db()
     assert applied.status_code == 302
     assert schedule.transcription_status == "approved"
     assert schedule.respondent_name == "Keep Human"
-    assert schedule.reconciliations.get().outcome == "mixed"
+    assert schedule.reconciliations.get().outcome == "retained_current"
+
+
+@pytest.mark.django_db
+def test_interface_directly_applies_inline_edit(client, reviewer):
+    schedule = CensusScheduleFactory(
+        transcription_status="completed",
+        respondent_name="Current Name",
+    )
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    candidate = serialize_canonical(schedule)
+    candidate["schedule_fields"]["respondent_name"] = "Candidate Name"
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=candidate,
+    )
+    initial = build_reconciliation_preview(schedule, source)
+    url = reverse(
+        "admin:census_censusschedule_compare_transcriptions",
+        args=[schedule.pk],
+    )
+    client.force_login(reviewer)
+    base_data = {
+        "source": source.pk,
+        "expected_fingerprint": initial["before_fingerprint"],
+        "choice__schedule.respondent_name": "edited",
+        "edit_base__schedule.respondent_name": "candidate",
+        "edit__schedule.respondent_name": "Reviewer Name",
+        "confirmed": "yes",
+    }
+
+    applied = client.post(url, base_data)
+
+    schedule.refresh_from_db()
+    assert applied.status_code == 302
+    assert schedule.respondent_name == "Reviewer Name"
+    reconciliation = schedule.reconciliations.get()
+    assert reconciliation.outcome == "mixed"
+    assert reconciliation.decisions["reviewer_overrides"] == [
+        {
+            "field": "schedule.respondent_name",
+            "source": "edited",
+            "base": "candidate",
+            "value": "Reviewer Name",
+        }
+    ]

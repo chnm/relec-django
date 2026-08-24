@@ -1,0 +1,69 @@
+<div class="comparison-value comparison-value-{{ value.kind }} comparison-source-value comparison-source-value-{{ source_side }} is-selectable"
+     data-source-cell="{{ source_side }}"
+     data-source-input="{{ value.input }}">
+  <input form="reconciliation-form"
+         type="radio"
+         class="source-choice"
+         name="choice__{{ row.decision_key }}"
+         value="{{ source_side }}"
+         {% if row.selected == source_side %}checked{% endif %}
+         hidden>
+  {% if source_side == "current" %}
+    <input form="reconciliation-form"
+           type="radio"
+           class="edited-choice"
+           name="choice__{{ row.decision_key }}"
+           value="edited"
+           {% if row.selected == "edited" %}checked{% endif %}
+           hidden>
+    <input form="reconciliation-form"
+           type="hidden"
+           name="edit__{{ row.decision_key }}"
+           value="{{ row.edited_input }}">
+    <input form="reconciliation-form"
+           type="hidden"
+           name="edit_base__{{ row.decision_key }}"
+           value="{{ row.edited_base }}">
+  {% endif %}
+
+  <button type="button"
+          class="source-value-select"
+          data-source="{{ source_side }}"
+          aria-pressed="false"
+          aria-label="Use {{ source_side }} value for {{ row.label }}">
+    <span class="source-value-original">{{ value.text }}</span>
+    <span class="edited-value-summary" hidden>
+      <small>Edited</small>
+      <span class="edited-value-text">{{ row.edited_display }}</span>
+    </span>
+  </button>
+  <button type="button"
+          class="edit-value-button"
+          data-edit-source="{{ source_side }}"
+          aria-label="Edit {{ row.label }} starting from the {{ source_side }} value"
+          title="Edit value">
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M13.6 2.6a2 2 0 0 1 2.8 0l1 1a2 2 0 0 1 0 2.8L7.2 16.6 2 18l1.4-5.2L13.6 2.6Zm1.4 1.4L5.2 13.8l-.5 1.8 1.8-.5 9.8-9.8a.5.5 0 0 0 0-.7l-.6-.6a.5.5 0 0 0-.7 0Z" fill="currentColor"/>
+    </svg>
+  </button>
+
+  <div class="inline-value-editor" hidden>
+    {% if row.edit_type == "boolean" %}
+      <select class="inline-value-input" aria-label="Edited value for {{ row.label }}">
+        <option value="" {% if row.selected == "edited" and row.edited_base == source_side and row.edited_value is None %}selected{% elif row.selected != "edited" and not value.input %}selected{% endif %}>Blank</option>
+        <option value="true" {% if row.selected == "edited" and row.edited_base == source_side and row.edited_value is True %}selected{% elif row.selected != "edited" and value.input == "true" %}selected{% endif %}>Yes</option>
+        <option value="false" {% if row.selected == "edited" and row.edited_base == source_side and row.edited_value is False %}selected{% elif row.selected != "edited" and value.input == "false" %}selected{% endif %}>No</option>
+      </select>
+    {% else %}
+      <input class="inline-value-input"
+             type="{% if row.edit_type == 'date' %}date{% elif row.edit_type == 'integer' or row.edit_type == 'decimal' %}number{% else %}text{% endif %}"
+             {% if row.edit_type == "integer" %}step="1" min="0"{% elif row.edit_type == "decimal" %}step="0.01" min="0"{% endif %}
+             value="{% if row.selected == 'edited' and row.edited_base == source_side %}{{ row.edited_input }}{% else %}{{ value.input }}{% endif %}"
+             aria-label="Edited value for {{ row.label }}">
+    {% endif %}
+    <div class="inline-editor-actions">
+      <button type="button" class="save-inline-edit">Save edit</button>
+      <button type="button" class="cancel-inline-edit">Cancel</button>
+    </div>
+  </div>
+</div>

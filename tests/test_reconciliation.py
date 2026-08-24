@@ -13,6 +13,7 @@ from census.transcription.reconciliation import (
     apply_reconciliation,
     build_reconciliation_preview,
     canonical_fingerprint,
+    infer_reconciliation_outcome,
     serialize_canonical,
 )
 from census.transcription.status import with_ai_status
@@ -192,6 +193,9 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
     preview = build_reconciliation_preview(schedule, source)
+    assert infer_reconciliation_outcome(preview) == (
+        ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    )
 
     event = apply_reconciliation(
         schedule_id=schedule.pk,
@@ -318,16 +322,9 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     }
     assert context_sections["Marginalia"]["decision_scope"] == "automatic"
     assert context_sections["Agent notes"]["decision_scope"] == "automatic"
-
-    with pytest.raises(ReconciliationValidationError, match="exact mixed"):
-        apply_reconciliation(
-            schedule_id=schedule.pk,
-            reviewer=reviewer,
-            outcome=ScheduleReconciliation.Outcome.MIXED,
-            expected_fingerprint=preview["before_fingerprint"],
-            transcription_id=source.pk,
-            decisions=decisions,
-        )
+    assert infer_reconciliation_outcome(preview) == (
+        ScheduleReconciliation.Outcome.MIXED
+    )
 
     event = apply_reconciliation(
         schedule_id=schedule.pk,
@@ -336,7 +333,6 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
         decisions=decisions,
-        reviewed_decisions_fingerprint=preview["decisions_fingerprint"],
     )
 
     schedule.refresh_from_db()
@@ -364,6 +360,89 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     assert event.decisions["field_source_decisions"][
         "schedule.respondent_name"
     ] == "current"
+
+
+@pytest.mark.django_db
+def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
+    schedule = canonical_schedule()
+    body = schedule.church_details.get()
+    source = agent_source(schedule)
+    decisions = {
+        "schedule.respondent_name": {
+            "source": "edited",
+            "base": "candidate",
+            "value": "Reviewer Corrected",
+        },
+        f"body.{body.pk}.expenses": {
+            "source": "edited",
+            "base": "current",
+            "value": "1234.50",
+        },
+    }
+
+    preview = build_reconciliation_preview(
+        schedule,
+        source,
+        decisions=decisions,
+        mixed=True,
+    )
+    assert preview["proposed"]["schedule_fields"]["respondent_name"] == (
+        "Reviewer Corrected"
+    )
+    assert preview["proposed"]["religious_bodies"][0]["expenses"] == (
+        "1234.50"
+    )
+    assert preview["decisions"]["schedule.respondent_name"] == decisions[
+        "schedule.respondent_name"
+    ]
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.MIXED,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        decisions=decisions,
+    )
+
+    schedule.refresh_from_db()
+    body.refresh_from_db()
+    assert schedule.respondent_name == "Reviewer Corrected"
+    assert str(body.expenses) == "1234.50"
+    assert event.decisions["reviewer_overrides"] == [
+        {
+            "field": "schedule.respondent_name",
+            "source": "edited",
+            "base": "candidate",
+            "value": "Reviewer Corrected",
+        },
+        {
+            "field": f"body.{body.pk}.expenses",
+            "source": "edited",
+            "base": "current",
+            "value": "1234.50",
+        },
+    ]
+
+
+@pytest.mark.django_db
+def test_inline_edit_rejects_invalid_typed_values(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+
+    with pytest.raises(ReconciliationValidationError, match="whole number"):
+        build_reconciliation_preview(
+            schedule,
+            source,
+            decisions={
+                "schedule.num_assistant_pastors": {
+                    "source": "edited",
+                    "base": "candidate",
+                    "value": "several",
+                }
+            },
+            mixed=True,
+        )
 
 
 @pytest.mark.django_db
@@ -422,7 +501,6 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
         decisions=decisions,
-        reviewed_decisions_fingerprint=preview["decisions_fingerprint"],
     )
 
     assert set(schedule.church_details.values_list("name", flat=True)) == {

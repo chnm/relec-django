@@ -114,10 +114,6 @@
             <span>Live structured data · {{ schedule.get_transcription_status_display }}</span>
           </div>
           {% include "admin/census/censusschedule/includes/source-heading.html" with source=selected_source fallback="No evidence selected" %}
-          <div class="comparison-source-heading">
-            <strong>Mixed result</strong>
-            <span>Choose current or selected evidence for each difference.</span>
-          </div>
         </div>
 
         {% for section in comparison.sections %}
@@ -160,26 +156,13 @@
                         <small>{{ row.status_label }}</small>
                       {% endif %}
                     </div>
-                    {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left source_side="current" %}
-                    {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right source_side="candidate" %}
-                    <div class="comparison-decision">
-                      {% if row.can_choose %}
-                        <label title="Keep the live canonical value">
-                          <input form="reconciliation-form" type="radio" name="choice__{{ row.decision_key }}" value="current" {% if row.selected == "current" %}checked{% endif %}>
-                          Current
-                        </label>
-                        <label title="Use the selected evidence value">
-                          <input form="reconciliation-form" type="radio" name="choice__{{ row.decision_key }}" value="candidate" {% if row.selected == "candidate" %}checked{% endif %}>
-                          Selected
-                        </label>
-                      {% else %}
-                        {% if section.automatic_source == "candidate" %}
-                          <span class="text-xs font-medium text-primary-700 dark:text-primary-300">Included automatically</span>
-                        {% else %}
-                          <span class="text-xs text-gray-500 dark:text-gray-400">No decision needed</span>
-                        {% endif %}
-                      {% endif %}
-                    </div>
+                    {% if row.can_choose %}
+                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.left source_side="current" row=row %}
+                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.right source_side="candidate" row=row %}
+                    {% else %}
+                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left source_side="current" %}
+                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right source_side="candidate" %}
+                    {% endif %}
                   </div>
                 {% endfor %}
               </div>
@@ -195,57 +178,16 @@
           {% include "admin/census/censusschedule/includes/raw-source.html" with source=selected_source title="Selected evidence raw JSON" %}
         </section>
 
-        <section class="comparison-card overflow-hidden" aria-labelledby="decision-heading">
+        <section class="comparison-card overflow-hidden" aria-labelledby="approval-heading">
           <div class="px-5 py-4 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <h2 id="decision-heading" class="font-semibold text-gray-800 dark:text-gray-100">Final reviewer decision</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Both outcomes create append-only provenance and set this schedule to Approved.</p>
+            <h2 id="approval-heading" class="font-semibold text-gray-800 dark:text-gray-100">Approve reconciliation</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The highlighted cells and reviewer edits above will become canonical. The outcome is inferred and preserved as append-only provenance.</p>
           </div>
           <div class="p-5">
-            <div class="grid grid-cols-2 gap-3 mb-5 lg:grid-cols-3 xl:grid-cols-6">
-              <div class="comparison-stat"><span>{{ preview.operations.schedule_fields_changed|length }}</span> schedule fields</div>
-              <div class="comparison-stat"><span>{{ preview.operations.religious_bodies.updated }}</span> bodies updated</div>
-              <div class="comparison-stat"><span>{{ preview.operations.religious_bodies.added }}</span> added / {{ preview.operations.religious_bodies.removed }} removed</div>
-              <div class="comparison-stat"><span>{{ preview.operations.memberships.updated }}</span> memberships updated · {{ preview.operations.memberships.added }} added / {{ preview.operations.memberships.removed }} removed</div>
-              <div class="comparison-stat"><span>{{ preview.operations.clergy.updated }}</span> clergy updated · {{ preview.operations.clergy.added }} added / {{ preview.operations.clergy.removed }} removed</div>
-              <div class="comparison-stat comparison-stat-different"><span>{{ preview.operations.geocoding_resets }}</span> geocoding resets</div>
-            </div>
-
-            {% if preview.warnings %}
-              <div class="p-4 mb-5 text-sm text-amber-900 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-100">
-                <strong>Consistency warnings</strong>
-                <ul class="mt-2 ml-5 list-disc">
-                  {% for warning in preview.warnings %}<li>{{ warning }}</li>{% endfor %}
-                </ul>
-              </div>
-            {% endif %}
-
             <form id="reconciliation-form" method="post" class="space-y-5">
               {% csrf_token %}
               {% if selected_source %}<input type="hidden" name="source" value="{{ selected_source.object.pk }}">{% endif %}
               <input type="hidden" name="expected_fingerprint" value="{{ preview.before_fingerprint }}">
-              {% if reviewed_decisions_fingerprint %}<input type="hidden" name="reviewed_decisions_fingerprint" value="{{ reviewed_decisions_fingerprint }}">{% endif %}
-
-              <fieldset class="space-y-3">
-                <legend class="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-100">Choose what becomes canonical</legend>
-                <label class="decision-option">
-                  <input type="radio" name="outcome" value="retained_current" required {% if selected_outcome == "retained_current" %}checked{% endif %}>
-                  <span><strong>Keep current canonical data and approve</strong><small>Do not replace transcription fields; mark the selected evidence as reviewed and rejected.</small></span>
-                </label>
-                <label class="decision-option">
-                  <input type="radio" name="outcome" value="promoted_candidate" required {% if selected_outcome == "promoted_candidate" %}checked{% endif %} {% if not candidate_can_promote %}disabled{% endif %}>
-                  <span><strong>Use selected evidence and approve</strong><small>Apply the complete proposed schedule shown above, including listed row and geocoding consequences.</small></span>
-                </label>
-                <label class="decision-option">
-                  <input type="radio" name="outcome" value="mixed" required {% if selected_outcome == "mixed" %}checked{% endif %} {% if not candidate_can_promote %}disabled{% endif %}>
-                  <span><strong>Combine current and selected evidence</strong><small>Use the field and entity choices above. Preview the mixed result before applying.</small></span>
-                </label>
-              </fieldset>
-
-              {% if mixed_preview_ready %}
-                <div id="mixed-preview-status" class="p-4 text-sm text-green-800 border border-green-300 rounded-lg bg-green-50 dark:bg-green-950 dark:border-green-800 dark:text-green-200" role="status">
-                  This exact mixed selection has been validated. Review the updated operation summary, then confirm and apply.
-                </div>
-              {% endif %}
 
               <div>
                 <label for="notes" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Reviewer notes <span class="font-normal">(optional)</span></label>
@@ -254,13 +196,10 @@
 
               <label class="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-200">
                 <input type="checkbox" name="confirmed" value="yes" required class="mt-1">
-                <span>I reviewed the source image, the current canonical data, and every proposed change shown on this page.</span>
+                <span>I reviewed the source image and confirm that the highlighted values, entity choices, and edits above should become canonical.</span>
               </label>
 
-              <button id="preview-mixed" type="submit" name="action" value="preview" class="comparison-button" {% if selected_outcome != "mixed" %}disabled{% endif %}>
-                Preview mixed selection
-              </button>
-              <button type="submit" name="action" value="apply" class="comparison-button comparison-button-primary">
+              <button type="submit" class="comparison-button comparison-button-primary" {% if not candidate_can_promote %}disabled{% endif %}>
                 Apply and approve
               </button>
             </form>
@@ -395,6 +334,12 @@
       color: #92400e;
     }
 
+    .section-selection-status[data-state="edited"] {
+      background: #fff7ed;
+      border-color: #fb923c;
+      color: #9a3412;
+    }
+
     .section-source.is-selected {
       background: #0060b1;
       border-color: #0060b1;
@@ -409,27 +354,6 @@
 
     .section-source.is-selected:hover {
       background: #00529a;
-    }
-
-    .decision-option {
-      align-items: flex-start;
-      border: 1px solid #d1d5db;
-      border-radius: .5rem;
-      cursor: pointer;
-      display: flex;
-      gap: .75rem;
-      padding: 1rem;
-    }
-
-    .decision-option:focus-within {
-      border-color: #0060b1;
-      box-shadow: 0 0 0 3px rgba(0, 96, 177, .16);
-    }
-
-    .decision-option small {
-      color: #6b7280;
-      display: block;
-      margin-top: .25rem;
     }
 
     .comparison-stat {
@@ -473,7 +397,7 @@
     .comparison-source-headings,
     .comparison-row {
       display: grid;
-      grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(150px, .75fr);
+      grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) minmax(190px, 1fr);
     }
 
     .comparison-source-headings {
@@ -492,7 +416,7 @@
     }
 
     .comparison-table {
-      min-width: 900px;
+      min-width: 680px;
     }
 
     .comparison-row {
@@ -510,8 +434,7 @@
     .comparison-row-blank_zero { border-left: 4px solid #a855f7; }
 
     .comparison-label,
-    .comparison-value,
-    .comparison-decision {
+    .comparison-value {
       min-width: 0;
       padding: .75rem;
     }
@@ -547,15 +470,125 @@
       font-weight: 600;
     }
 
-    .comparison-decision {
-      align-items: flex-start;
-      border-left: 1px solid #e5e7eb;
-      display: flex;
-      flex-direction: column;
-      gap: .45rem;
+    .comparison-source-value.is-edited {
+      background: #fff7ed;
+      box-shadow: inset 0 0 0 2px #f97316;
+      color: #9a3412;
     }
 
-    .comparison-decision label,
+    .comparison-source-value.is-selectable {
+      align-items: flex-start;
+      cursor: pointer;
+      display: grid;
+      gap: .45rem;
+      grid-template-columns: minmax(0, 1fr);
+      position: relative;
+    }
+
+    .source-value-select {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    .source-value-select:focus-visible {
+      border-radius: .25rem;
+      outline: 3px solid rgba(0, 96, 177, .3);
+      outline-offset: 3px;
+    }
+
+    .edited-value-summary small {
+      display: block;
+      font-size: .6rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      margin-bottom: .2rem;
+      text-transform: uppercase;
+    }
+
+    .edit-value-button {
+      align-items: center;
+      background: #fff;
+      border: 1px solid #80b9e8;
+      border-radius: .3rem;
+      color: #00529a;
+      cursor: pointer;
+      display: none;
+      height: 1.65rem;
+      justify-content: center;
+      padding: 0;
+      position: absolute;
+      right: .45rem;
+      top: .45rem;
+      width: 1.65rem;
+      z-index: 1;
+    }
+
+    .edit-value-button svg {
+      height: .9rem;
+      width: .9rem;
+    }
+
+    .edit-value-button:focus-visible {
+      outline: 3px solid rgba(0, 96, 177, .3);
+      outline-offset: 2px;
+    }
+
+    .comparison-source-value.is-selected .edit-value-button {
+      display: inline-flex;
+    }
+
+    .comparison-source-value.is-selected .source-value-select {
+      padding-right: 2rem;
+    }
+
+    .inline-value-editor {
+      grid-column: 1 / -1;
+    }
+
+    .comparison-source-value.is-editing .source-value-select,
+    .comparison-source-value.is-editing .edit-value-button {
+      display: none;
+    }
+
+    .inline-value-input {
+      background: #fff;
+      border: 1px solid #0060b1;
+      border-radius: .3rem;
+      color: #111827;
+      font: inherit;
+      padding: .45rem .55rem;
+      width: 100%;
+    }
+
+    .inline-editor-actions {
+      display: flex;
+      gap: .4rem;
+      margin-top: .45rem;
+    }
+
+    .inline-editor-actions button {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: .3rem;
+      color: #374151;
+      cursor: pointer;
+      font-size: .68rem;
+      font-weight: 700;
+      padding: .3rem .5rem;
+    }
+
+    .save-inline-edit {
+      border-color: #0060b1 !important;
+      color: #00529a !important;
+    }
+
     .entity-decision label {
       align-items: center;
       display: inline-flex;
@@ -610,30 +643,22 @@
       .section-selection-status[data-state="current"],
       .section-selection-status[data-state="candidate"] { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
       .section-selection-status[data-state="mixed"] { background: #78350f; border-color: #f59e0b; color: #fef3c7; }
+      .section-selection-status[data-state="edited"] { background: #7c2d12; border-color: #fb923c; color: #ffedd5; }
       .comparison-label,
       .comparison-value { color: #e5e7eb; }
       .comparison-source-value.is-selected { background: #0c4a6e; box-shadow: inset 0 0 0 2px #38bdf8; color: #f0f9ff; }
+      .comparison-source-value.is-edited { background: #7c2d12; box-shadow: inset 0 0 0 2px #fb923c; color: #ffedd5; }
+      .edit-value-button,
+      .inline-value-input,
+      .inline-editor-actions button { background: #111827; color: #e5e7eb; }
       .comparison-row,
-      .comparison-value,
-      .comparison-decision { border-color: #374151; }
+      .comparison-value { border-color: #374151; }
       .comparison-image-viewport { background: #030712; }
     }
   </style>
 
   <script>
     (() => {
-      const form = document.getElementById("reconciliation-form");
-      const invalidateMixedPreview = () => {
-        const reviewed = form?.querySelector('[name="reviewed_decisions_fingerprint"]');
-        if (reviewed) reviewed.remove();
-        const status = document.getElementById("mixed-preview-status");
-        if (status) {
-          status.textContent = "The mixed selection changed. Preview it again before applying.";
-          status.classList.remove("text-green-800", "border-green-300", "bg-green-50");
-          status.classList.add("text-amber-900", "border-amber-300", "bg-amber-50");
-        }
-      };
-
       const updateSectionSelection = (section) => {
         const automaticSource = section.dataset.automaticSource;
         const inputs = Array.from(
@@ -644,12 +669,16 @@
         let state = "none";
 
         if (decisionNames.size && checked.length === decisionNames.size) {
-          const selectedSources = new Set(
-            checked.map((input) => input.value)
-          );
-          state = selectedSources.size === 1
-            ? checked[0].value
-            : "mixed";
+          if (checked.some((input) => input.value === "edited")) {
+            state = "edited";
+          } else {
+            const selectedSources = new Set(
+              checked.map((input) => input.value)
+            );
+            state = selectedSources.size === 1
+              ? checked[0].value
+              : "mixed";
+          }
         }
 
         const status = section.querySelector(".section-selection-status");
@@ -658,6 +687,7 @@
             current: "All current",
             candidate: "All selected",
             mixed: "Mixed",
+            edited: "Contains edits",
             none: "No choices",
           };
           status.dataset.state = state;
@@ -681,47 +711,157 @@
           const rowChoice = row.querySelector(
             'input[name^="choice__"]:checked'
           ) || entityChoice || automaticChoice;
+          const editedBase = row.querySelector(
+            'input[name^="edit_base__"]'
+          )?.value;
+          const selectedSource = rowChoice?.value === "edited"
+            ? editedBase
+            : rowChoice?.value;
           row.querySelectorAll(".comparison-source-value").forEach((value) => {
+            const selected = Boolean(selectedSource)
+            && value.dataset.sourceCell === selectedSource;
             value.classList.toggle(
               "is-selected",
-              Boolean(rowChoice) && value.classList.contains(
-                `comparison-source-value-${rowChoice.value}`
-              )
+              selected
             );
+            value.classList.toggle(
+              "is-edited",
+              selected && rowChoice?.value === "edited"
+            );
+            value.querySelector(".source-value-select")?.setAttribute(
+              "aria-pressed",
+              selected ? "true" : "false"
+            );
+            const editedSummary = value.querySelector(
+              ".edited-value-summary"
+            );
+            const originalValue = value.querySelector(
+              ".source-value-original"
+            );
+            if (editedSummary) {
+              const showEdited = selected && rowChoice?.value === "edited";
+              editedSummary.hidden = !showEdited;
+              originalValue.hidden = showEdited;
+            }
           });
         });
       };
 
+      const closeEditor = (cell) => {
+        cell.classList.remove("is-editing");
+        cell.querySelector(".inline-value-editor").hidden = true;
+      };
+
+      const startEditing = (cell) => {
+        document.querySelectorAll(".comparison-source-value.is-editing")
+          .forEach(closeEditor);
+        const row = cell.closest(".comparison-row");
+        const source = cell.dataset.sourceCell;
+        const editedChoice = row.querySelector(".edited-choice");
+        const editedBase = row.querySelector('input[name^="edit_base__"]');
+        const editedValue = row.querySelector('input[name^="edit__"]');
+        const input = cell.querySelector(".inline-value-input");
+        const continuingEdit = editedChoice.checked
+        && editedBase.value === source;
+        input.value = continuingEdit
+          ? editedValue.value
+          : cell.dataset.sourceInput;
+        cell.classList.add("is-editing");
+        cell.querySelector(".inline-value-editor").hidden = false;
+        input.focus();
+        if (input.select) input.select();
+      };
+
+      const editedDisplay = (input) => {
+        if (input.value === "") return "Blank";
+        if (input.tagName === "SELECT") {
+          return input.options[input.selectedIndex].text;
+        }
+        return input.value;
+      };
+
+      const saveEdit = (cell) => {
+        const row = cell.closest(".comparison-row");
+        const input = cell.querySelector(".inline-value-input");
+        const editedChoice = row.querySelector(".edited-choice");
+        row.querySelector('input[name^="edit__"]').value = input.value;
+        row.querySelector('input[name^="edit_base__"]').value = (
+          cell.dataset.sourceCell
+        );
+        row.querySelectorAll(".edited-value-text").forEach((display) => {
+          display.textContent = editedDisplay(input);
+        });
+        editedChoice.checked = true;
+        closeEditor(cell);
+        updateSectionSelection(cell.closest("[data-decision-section]"));
+      };
+
+      document.querySelectorAll(".source-value-select").forEach((button) => {
+        button.addEventListener("click", () => {
+          const cell = button.closest(".comparison-source-value");
+          cell.querySelector(
+            `.source-choice[value="${button.dataset.source}"]`
+          ).checked = true;
+          updateSectionSelection(cell.closest("[data-decision-section]"));
+        });
+      });
+
+      document.querySelectorAll(".comparison-source-value.is-selectable")
+        .forEach((cell) => {
+          cell.addEventListener("dblclick", (event) => {
+            if (!event.target.closest(".inline-value-editor")) {
+              startEditing(cell);
+            }
+          });
+          cell.querySelector(".edit-value-button").addEventListener(
+            "click",
+            () => startEditing(cell)
+          );
+          cell.querySelector(".save-inline-edit").addEventListener(
+            "click",
+            () => saveEdit(cell)
+          );
+          cell.querySelector(".cancel-inline-edit").addEventListener(
+            "click",
+            () => closeEditor(cell)
+          );
+          cell.querySelector(".inline-value-input").addEventListener(
+            "keydown",
+            (event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                saveEdit(cell);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeEditor(cell);
+              }
+            }
+          );
+        });
+
       document.querySelectorAll(".section-source").forEach((button) => {
         button.addEventListener("click", () => {
           const section = button.closest("[data-decision-section]");
+          section.querySelectorAll(".comparison-source-value.is-editing")
+            .forEach(closeEditor);
           section.querySelectorAll(
             `input[type="radio"][value="${button.dataset.source}"]`
           ).forEach((input) => {
             input.checked = true;
           });
           updateSectionSelection(section);
-          invalidateMixedPreview();
         });
       });
 
       document.querySelectorAll('input[name^="choice__"]').forEach((input) => {
         input.addEventListener("change", () => {
           updateSectionSelection(input.closest("[data-decision-section]"));
-          invalidateMixedPreview();
         });
       });
 
       document.querySelectorAll("[data-decision-section]").forEach(
         updateSectionSelection
       );
-
-      const previewButton = document.getElementById("preview-mixed");
-      document.querySelectorAll('input[name="outcome"]').forEach((input) => {
-        input.addEventListener("change", () => {
-          previewButton.disabled = input.value !== "mixed" || !input.checked;
-        });
-      });
     })();
   </script>
 

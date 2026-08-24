@@ -209,14 +209,30 @@ def source_raw_json(source):
     return json.dumps(source.data, indent=2, sort_keys=True, default=str)
 
 
-def comparison_row(label, left, right, *, decision_key="", selected="candidate"):
+def comparison_row(
+    label,
+    left,
+    right,
+    *,
+    decision_key="",
+    selected="candidate",
+    edited_base="",
+    edited_value="",
+    edit_type="text",
+):
     """Build one display row with optional mixed-source decision metadata."""
     row = _row(label, left, right)
+    edited_display = _display_value(edited_value)
     row.update(
         {
             "decision_key": decision_key,
             "selected": selected,
             "can_choose": bool(decision_key) and row["status"] != "same",
+            "edited_base": edited_base,
+            "edited_value": edited_value,
+            "edited_display": edited_display["text"],
+            "edited_input": edited_display["input"],
+            "edit_type": edit_type,
         }
     )
     return row
@@ -292,17 +308,22 @@ def _equivalent(left, right):
 
 def _display_value(value):
     if value is MISSING:
-        return {"text": "Not captured", "kind": "missing"}
+        return {"text": "Not captured", "kind": "missing", "input": ""}
     if _is_blank(value):
-        return {"text": "Blank", "kind": "blank"}
+        return {"text": "Blank", "kind": "blank", "input": ""}
     if isinstance(value, bool):
-        return {"text": "Yes" if value else "No", "kind": "value"}
+        return {
+            "text": "Yes" if value else "No",
+            "kind": "value",
+            "input": "true" if value else "false",
+        }
     if isinstance(value, (dict, list)):
         return {
             "text": json.dumps(value, indent=2, sort_keys=True, default=str),
             "kind": "structured",
+            "input": json.dumps(value, sort_keys=True, default=str),
         }
-    return {"text": str(value), "kind": "value"}
+    return {"text": str(value), "kind": "value", "input": str(value)}
 
 
 def _is_blank(value):

@@ -40,7 +40,7 @@ from census.transcription.contracts import (
 )
 from location.models import PopulatedPlace
 
-DECISION_VERSION = "schedule-reconciliation-v2"
+DECISION_VERSION = "schedule-reconciliation-v3"
 SCHEDULE_FIELDS = (
     "num_assistant_pastors",
     "respondent_name",
@@ -109,6 +109,22 @@ NONNEGATIVE_FIELDS = {
     "num_other_churches_served",
     *MEMBERSHIP_FIELDS,
 }
+DECIMAL_FIELDS = {
+    "edifice_value",
+    "edifice_debt",
+    "residence_value",
+    "residence_debt",
+    "expenses",
+    "benevolences",
+    "total_expenditures",
+}
+BOOLEAN_FIELDS = {
+    "has_pastors_residence",
+    "is_assistant",
+    "serving_congregation",
+}
+INTEGER_FIELDS = (NONNEGATIVE_FIELDS - DECIMAL_FIELDS) | {"populated_place_id"}
+DATE_FIELDS = {"date_received"}
 SCHEDULE_FIELD_GROUPS = (
     (
         "Schedule",
@@ -257,6 +273,7 @@ def build_reconciliation_preview(
     )
     return {
         "before": before,
+        "candidate": candidate,
         "proposed": proposed,
         "before_fingerprint": canonical_fingerprint(before),
         "operations": operations,
@@ -278,6 +295,20 @@ def build_reconciliation_preview(
     }
 
 
+def infer_reconciliation_outcome(preview):
+    """Derive provenance from the reviewer-selected result."""
+    if any(
+        isinstance(decision, dict) and decision.get("source") == "edited"
+        for decision in preview["decisions"].values()
+    ):
+        return ScheduleReconciliation.Outcome.MIXED
+    if preview["proposed"] == preview["candidate"]:
+        return ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    if preview["proposed"] == preview["before"]:
+        return ScheduleReconciliation.Outcome.RETAINED_CURRENT
+    return ScheduleReconciliation.Outcome.MIXED
+
+
 @transaction.atomic
 def apply_reconciliation(
     *,
@@ -288,7 +319,6 @@ def apply_reconciliation(
     transcription_id=None,
     notes="",
     decisions=None,
-    reviewed_decisions_fingerprint="",
 ):
     """Apply one fully reviewed decision and approve the schedule atomically."""
     if outcome not in ScheduleReconciliation.Outcome.values:
@@ -325,7 +355,11 @@ def apply_reconciliation(
             ScheduleReconciliation.Outcome.MIXED,
         }
         else None,
-        decisions=decisions,
+        decisions=(
+            decisions
+            if outcome == ScheduleReconciliation.Outcome.MIXED
+            else None
+        ),
         mixed=outcome == ScheduleReconciliation.Outcome.MIXED,
     )
     if preview["before_fingerprint"] != expected_fingerprint:
@@ -333,14 +367,6 @@ def apply_reconciliation(
             "The canonical record changed after this preview. Refresh and review "
             "it again."
         )
-    if (
-        outcome == ScheduleReconciliation.Outcome.MIXED
-        and reviewed_decisions_fingerprint != preview["decisions_fingerprint"]
-    ):
-        raise ReconciliationValidationError(
-            "Preview this exact mixed selection before applying it."
-        )
-
     duplicate = ScheduleReconciliation.objects.filter(
         census_schedule=schedule,
         reviewer=reviewer,
@@ -386,7 +412,16 @@ def apply_reconciliation(
                 if outcome == ScheduleReconciliation.Outcome.MIXED
                 else {}
             ),
-            "reviewer_overrides": [],
+            "reviewer_overrides": (
+                [
+                    {"field": key, **decision}
+                    for key, decision in preview["decisions"].items()
+                    if isinstance(decision, dict)
+                    and decision.get("source") == "edited"
+                ]
+                if outcome == ScheduleReconciliation.Outcome.MIXED
+                else []
+            ),
         },
     )
     if transcription:
@@ -531,13 +566,17 @@ def build_mixed_review(before, candidate, decisions):
                     current_value,
                     candidate_value,
                     decision_key=key,
-                    selected=used_decisions[key],
+                    edit_type=_edit_type(key),
+                    **_decision_row_options(used_decisions[key]),
                 )
             )
         sections.append(
             {
                 "title": title,
-                "note": "Choose the source for each differing value.",
+                "note": (
+                    "Select a value cell. Double-click it, or use Edit, to "
+                    "enter a reviewer correction."
+                ),
                 "rows": rows,
                 "decision_scope": "field",
             }
@@ -845,12 +884,16 @@ def _mixed_matched_entity(
                 current.get(field),
                 candidate.get(field),
                 decision_key=key,
-                selected=used_decisions[key],
+                edit_type=_edit_type(key),
+                **_decision_row_options(used_decisions[key]),
             )
         )
     return proposed, {
         "title": title,
-        "note": "Matched without relying on database or array order.",
+        "note": (
+            "Matched without relying on database or array order. Select a "
+            "value cell, or edit the selected value."
+        ),
         "rows": rows,
         "decision_scope": "field",
     }
@@ -908,8 +951,94 @@ def _selected_value(
     current_value,
     candidate_value,
 ):
+    decision = decisions.get(key, "candidate")
+    if isinstance(decision, dict):
+        if decision.get("source") != "edited":
+            raise ReconciliationValidationError(
+                f"Invalid source decision for {key!r}."
+            )
+        base = decision.get("base")
+        if base not in {"current", "candidate"}:
+            raise ReconciliationValidationError(
+                f"Choose the source value used to edit {key!r}."
+            )
+        value = _coerce_edited_value(key, decision.get("value", ""))
+        used_decisions[key] = {
+            "source": "edited",
+            "base": base,
+            "value": value,
+        }
+        return deepcopy(value)
+
     selected = _selected_source(decisions, used_decisions, key)
     return deepcopy(current_value if selected == "current" else candidate_value)
+
+
+def _decision_row_options(decision):
+    if isinstance(decision, dict):
+        return {
+            "selected": "edited",
+            "edited_base": decision["base"],
+            "edited_value": decision["value"],
+        }
+    return {"selected": decision}
+
+
+def _edit_type(key):
+    field = key.rsplit(".", 1)[-1]
+    if field in BOOLEAN_FIELDS:
+        return "boolean"
+    if field in DATE_FIELDS:
+        return "date"
+    if field in DECIMAL_FIELDS:
+        return "decimal"
+    if field in INTEGER_FIELDS:
+        return "integer"
+    return "text"
+
+
+def _coerce_edited_value(key, raw_value):
+    field = key.rsplit(".", 1)[-1]
+    value = "" if raw_value is None else str(raw_value).strip()
+    if field in INTEGER_FIELDS:
+        if value == "":
+            return None
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ReconciliationValidationError(
+                f"Enter a whole number for {key!r}."
+            ) from exc
+    if field in DECIMAL_FIELDS:
+        if value == "":
+            return None
+        try:
+            decimal_value = Decimal(value)
+        except InvalidOperation as exc:
+            raise ReconciliationValidationError(
+                f"Enter a number for {key!r}."
+            ) from exc
+        if not decimal_value.is_finite():
+            raise ReconciliationValidationError(
+                f"Enter a finite number for {key!r}."
+            )
+        return format(decimal_value, "f")
+    if field in BOOLEAN_FIELDS:
+        if value == "":
+            return None
+        normalized = value.casefold()
+        if normalized in {"true", "1", "yes"}:
+            return True
+        if normalized in {"false", "0", "no"}:
+            return False
+        raise ReconciliationValidationError(
+            f"Choose Yes, No, or Blank for {key!r}."
+        )
+    if field in DATE_FIELDS:
+        if value == "":
+            return None
+        return _parse_date(value).isoformat()
+    return value
 
 
 def _validate_draft(schedule, draft):

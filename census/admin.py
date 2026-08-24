@@ -49,7 +49,7 @@ from .transcription.reconciliation import (
     ReconciliationError,
     apply_reconciliation,
     build_reconciliation_preview,
-    decisions_fingerprint,
+    infer_reconciliation_outcome,
 )
 from .transcription.services import (
     LaunchError,
@@ -1239,10 +1239,7 @@ class CensusScheduleAdmin(ModelAdmin):
         }
         reconciliation_error = ""
         candidate_can_promote = bool(selected)
-        selected_outcome = request.POST.get("outcome", "")
         posted_decisions = self._reconciliation_decisions(request)
-        reviewed_decisions_fingerprint = ""
-        mixed_preview_ready = False
         try:
             preview = build_reconciliation_preview(schedule, selected)
         except ReconciliationError as exc:
@@ -1252,16 +1249,10 @@ class CensusScheduleAdmin(ModelAdmin):
         comparison = preview["comparison"]
 
         if request.method == "POST":
-            action = request.POST.get("action", "apply")
-            if selected_outcome == ScheduleReconciliation.Outcome.RETAINED_CURRENT:
-                try:
-                    preview = build_reconciliation_preview(schedule)
-                except ReconciliationError as exc:
-                    reconciliation_error = str(exc)
-                else:
-                    reconciliation_error = ""
-                    comparison = preview["comparison"]
-            elif selected_outcome == ScheduleReconciliation.Outcome.MIXED:
+            inferred_outcome = ""
+            if selected is None:
+                reconciliation_error = "Choose transcription evidence to review."
+            else:
                 try:
                     preview = build_reconciliation_preview(
                         schedule,
@@ -1274,21 +1265,12 @@ class CensusScheduleAdmin(ModelAdmin):
                 else:
                     reconciliation_error = ""
                     comparison = preview["comparison"]
-                    if action == "preview":
-                        reviewed_decisions_fingerprint = preview[
-                            "decisions_fingerprint"
-                        ]
-                        mixed_preview_ready = True
-                    elif request.POST.get(
-                        "reviewed_decisions_fingerprint", ""
-                    ) != decisions_fingerprint(preview["decisions"]):
-                        reconciliation_error = (
-                            "Preview this mixed selection again before applying it."
-                        )
+                    inferred_outcome = infer_reconciliation_outcome(preview)
 
-            if action == "preview":
-                pass
-            elif request.POST.get("confirmed") != "yes":
+            if (
+                not reconciliation_error
+                and request.POST.get("confirmed") != "yes"
+            ):
                 reconciliation_error = (
                     "Confirm that you reviewed the source image and proposed data."
                 )
@@ -1297,16 +1279,13 @@ class CensusScheduleAdmin(ModelAdmin):
                     reconciliation = apply_reconciliation(
                         schedule_id=schedule.pk,
                         reviewer=request.user,
-                        outcome=request.POST.get("outcome", ""),
+                        outcome=inferred_outcome,
                         expected_fingerprint=request.POST.get(
                             "expected_fingerprint", ""
                         ),
                         transcription_id=selected.pk if selected else None,
                         notes=request.POST.get("notes", ""),
                         decisions=posted_decisions,
-                        reviewed_decisions_fingerprint=request.POST.get(
-                            "reviewed_decisions_fingerprint", ""
-                        ),
                     )
                 except ReconciliationError as exc:
                     reconciliation_error = str(exc)
@@ -1342,9 +1321,6 @@ class CensusScheduleAdmin(ModelAdmin):
             "preview": preview,
             "reconciliation_error": reconciliation_error,
             "candidate_can_promote": candidate_can_promote,
-            "selected_outcome": selected_outcome,
-            "mixed_preview_ready": mixed_preview_ready,
-            "reviewed_decisions_fingerprint": reviewed_decisions_fingerprint,
             "recent_reconciliations": schedule.reconciliations.select_related(
                 "reviewer"
             )[:5],
@@ -1369,11 +1345,22 @@ class CensusScheduleAdmin(ModelAdmin):
     @staticmethod
     def _reconciliation_decisions(request):
         prefix = "choice__"
-        return {
-            key.removeprefix(prefix): value
-            for key, value in request.POST.items()
-            if key.startswith(prefix)
-        }
+        decisions = {}
+        for key, value in request.POST.items():
+            if not key.startswith(prefix):
+                continue
+            decision_key = key.removeprefix(prefix)
+            if value == "edited":
+                decisions[decision_key] = {
+                    "source": "edited",
+                    "base": request.POST.get(
+                        f"edit_base__{decision_key}", ""
+                    ),
+                    "value": request.POST.get(f"edit__{decision_key}", ""),
+                }
+            else:
+                decisions[decision_key] = value
+        return decisions
 
     @staticmethod
     def _comparison_source_details(source, job):
