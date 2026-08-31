@@ -485,9 +485,13 @@ class ScheduleReconciliation(models.Model):
     """Append-only evidence for one reviewer approval decision."""
 
     class Outcome(models.TextChoices):
-        RETAINED_CURRENT = "retained_current", "Kept current canonical data"
-        PROMOTED_CANDIDATE = "promoted_candidate", "Promoted one candidate"
-        MIXED = "mixed", "Combined current and candidate data"
+        RETAINED_CURRENT = "retained_current", "Kept canonical data"
+        PROMOTED_CANDIDATE = (
+            "promoted_candidate",
+            "Promoted one evidence source",
+        )
+        MIXED = "mixed", "Combined evidence and reviewer edits"
+        ROLLED_BACK = "rolled_back", "Restored previous canonical data"
 
     census_schedule = models.ForeignKey(
         CensusSchedule,
@@ -535,7 +539,7 @@ class ScheduleReconciliation(models.Model):
 
 
 class ReconciliationSource(models.Model):
-    """Final disposition of an immutable candidate in a reconciliation."""
+    """Final disposition of immutable evidence in a reconciliation."""
 
     class Disposition(models.TextChoices):
         ACCEPTED = "accepted", "Accepted"

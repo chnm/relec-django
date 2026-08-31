@@ -215,7 +215,7 @@ def comparison_row(
     right,
     *,
     decision_key="",
-    selected="candidate",
+    selected="comparison",
     edited_base="",
     edited_value="",
     edit_type="text",

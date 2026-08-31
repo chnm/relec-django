@@ -127,7 +127,7 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"source": human.pk},
+        {"baseline": human.pk, "comparison": agent.pk},
     )
 
     assert response.status_code == 200
@@ -138,16 +138,16 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"Preview mixed selection" not in response.content
     assert b"section-selection-status" in response.content
     assert b'aria-pressed="false"' in response.content
-    assert b"comparison-source-value-current" in response.content
-    assert b"comparison-source-value-candidate" in response.content
+    assert b"comparison-source-value-baseline" in response.content
+    assert b"comparison-source-value-comparison" in response.content
     assert b"updateSectionSelection" in response.content
     assert b"source-value-select" in response.content
     assert b"edited-choice" in response.content
     assert b"save-inline-edit" in response.content
     assert b'addEventListener("dblclick"' in response.content
     assert b"comparison-decision" not in response.content
-    assert b'data-automatic-source="candidate"' in response.content
-    assert b"carried from the selected evidence automatically" in response.content
+    assert b'data-automatic-source="comparison"' in response.content
+    assert b"carried from the comparison evidence automatically" in response.content
     assert list(
         ScheduleTranscription.objects.filter(census_schedule=schedule).values_list(
             "pk", "data"
@@ -197,12 +197,53 @@ def test_comparison_source_selection_is_scoped_to_schedule(client, reviewer):
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"source": other.pk},
+        {"baseline": other.pk},
     )
 
     assert response.status_code == 200
-    assert response.context["selected_source"]["object"] == selected
+    assert response.context["baseline_source"]["object"] == selected
     assert b"Wrong schedule" not in response.content
+
+
+@pytest.mark.django_db
+def test_comparison_defaults_to_latest_human_and_latest_agent():
+    from django.contrib import admin
+
+    from census.admin import CensusScheduleAdmin
+    from census.models import CensusSchedule
+
+    schedule = CensusScheduleFactory()
+    older_human = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+    )
+    newest_human = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+    )
+    older_agent = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    newest_agent = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    sources = list(
+        schedule.transcriptions.select_related("run").order_by(
+            "-created_at", "-pk"
+        )
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    baseline_ref, comparison_ref = model_admin._comparison_source_refs(
+        sources, None, None
+    )
+
+    assert baseline_ref == str(newest_human.pk)
+    assert baseline_ref != str(older_human.pk)
+    assert comparison_ref == str(newest_agent.pk)
+    assert comparison_ref != str(older_agent.pk)
 
 
 def test_comparison_view_rejects_non_reviewer_directly(transcriber):
@@ -242,7 +283,8 @@ def test_reviewer_can_approve_selected_result_from_interface(client, reviewer):
             args=[schedule.pk],
         ),
         {
-            "source": source.pk,
+            "baseline": "canonical",
+            "comparison": source.pk,
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
             "notes": "Checked against the image.",
@@ -253,7 +295,7 @@ def test_reviewer_can_approve_selected_result_from_interface(client, reviewer):
     assert response.status_code == 302
     assert schedule.transcription_status == "approved"
     reconciliation = schedule.reconciliations.get()
-    assert reconciliation.outcome == "promoted_candidate"
+    assert reconciliation.outcome == "retained_current"
     assert reconciliation.notes == "Checked against the image."
 
 
@@ -278,7 +320,8 @@ def test_direct_approval_still_requires_reviewer_confirmation(client, reviewer):
             args=[schedule.pk],
         ),
         {
-            "source": source.pk,
+            "baseline": "canonical",
+            "comparison": source.pk,
             "expected_fingerprint": preview["before_fingerprint"],
         },
     )
@@ -310,7 +353,8 @@ def test_reconciliation_post_is_csrf_protected(reviewer):
             args=[schedule.pk],
         ),
         {
-            "source": source.pk,
+            "baseline": "canonical",
+            "comparison": source.pk,
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
         },
@@ -345,10 +389,11 @@ def test_interface_directly_applies_current_cell_selection(client, reviewer):
     )
     client.force_login(reviewer)
     base_data = {
-        "source": source.pk,
+        "baseline": "canonical",
+        "comparison": source.pk,
         "expected_fingerprint": initial["before_fingerprint"],
         "confirmed": "yes",
-        "choice__schedule.respondent_name": "current",
+        "choice__schedule.respondent_name": "baseline",
     }
 
     applied = client.post(url, base_data)
@@ -384,10 +429,11 @@ def test_interface_directly_applies_inline_edit(client, reviewer):
     )
     client.force_login(reviewer)
     base_data = {
-        "source": source.pk,
+        "baseline": "canonical",
+        "comparison": source.pk,
         "expected_fingerprint": initial["before_fingerprint"],
         "choice__schedule.respondent_name": "edited",
-        "edit_base__schedule.respondent_name": "candidate",
+        "edit_base__schedule.respondent_name": "comparison",
         "edit__schedule.respondent_name": "Reviewer Name",
         "confirmed": "yes",
     }
@@ -403,7 +449,7 @@ def test_interface_directly_applies_inline_edit(client, reviewer):
         {
             "field": "schedule.respondent_name",
             "source": "edited",
-            "base": "candidate",
+            "base": "comparison",
             "value": "Reviewer Name",
         }
     ]

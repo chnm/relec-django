@@ -166,7 +166,7 @@ evidence-bearing jobs remain protected.
 A successful candidate never changes the canonical `transcription_status` by
 itself. Reviewers reach those schedules through **Project Management → AI
 Transcriptions - Ready for Review**, which applies the `AI transcribed` schedule
-filter and opens the read-only comparison workflow. The ordinary Review Queue
+filter and opens the reconciliation workflow. The ordinary Review Queue
 continues to mean canonical human/imported work. The admin Overview reports human
 review readiness, AI candidate readiness, approvals, and approval percentage as
 separate measures; only `approved` schedules count toward project approval.
@@ -215,14 +215,26 @@ or model is approved for a large run:
 6. Approve expansion only after every pilot job is accounted for, failures are
    explained, quality thresholds are met, and projected scale fits the budget.
 
-Once a schedule has both a human snapshot and a successful agent candidate,
-reviewers can open **Compare transcriptions** from its admin change page. The
-read-only comparison keeps the object-storage image visible beside aligned human
-and agent fields, supports selecting among immutable runs, distinguishes blanks
-from zeroes, and retains expandable raw JSON. Legacy human representations such as
-decimal strings and `Rural`/`Urban` labels are normalized for display only; neither
-source document nor canonical census data is changed. Repeated religious bodies,
-memberships, and clergy are aligned by document order and labeled accordingly.
+Reviewers can open **Reconcile & approve** from a schedule's admin change page. The
+comparison keeps the object-storage image visible beside two independently selected
+sources: current canonical data, any human snapshot, or any agent output. It
+defaults to the newest human snapshot and newest agent output, while allowing
+model-to-model review. Reviewers choose values by clicking cells, may make typed
+corrections, and apply the highlighted result only after checking the confirmation.
+Legacy human representations such as decimal strings and `Rural`/`Urban` labels
+are normalized for display. Repeated religious bodies, memberships, and clergy are
+matched by owned IDs or unique signatures rather than array order. Applying a
+decision updates canonical data atomically and preserves both sources, field-level
+choices, edits, and before/after snapshots as append-only provenance.
+
+For a run that has already received sufficient quality review, the Census Schedule
+admin action menu provides **Promote latest model transcription**. The action uses
+each schedule's newest agent run rather than asking for a model or run manually,
+shows a confirmation screen, skips schedules without valid model evidence, and
+records one ordinary reconciliation per schedule. **Restore previous canonical
+data** reverses the newest unreversed data-changing reconciliation for each selected
+schedule. Restores are themselves immutable reconciliation events; they do not
+delete either the promoted data or its evidence from history.
 
 ## Synchronizing object-storage image references
 
@@ -471,8 +483,10 @@ promote any candidate values into canonical census models.
   dashboard, reproducible exports, and benchmark protocol are implemented. Quality
   remains a separate human evaluation against frozen snapshots; estimated costs are
   intentionally based on completed provider usage rather than a web-tier preflight.
-- #134 still owns reconciliation and promotion. The comparison page in this change
-  is intentionally read-only and records no decisions or canonical-model updates.
+- #134 owns the reconciliation and promotion workflow. Its admin interface supports
+  canonical, human-snapshot, and agent-output source pairs, including model-to-model
+  comparison, and records reviewer decisions before atomically updating canonical
+  models.
 - #143 still owns crawler-query and thumbnail performance work. The manifest commands
   here only link schedule records to existing object-storage originals for
   transcription; they do not warm thumbnails or alter the public browser.

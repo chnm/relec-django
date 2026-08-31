@@ -1,10 +1,22 @@
 from copy import deepcopy
 
 import pytest
+from django.contrib import admin
 from django.contrib.auth.models import Group, User
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import ValidationError
+from django.test import RequestFactory
 
-from census.models import ReconciliationSource, ScheduleReconciliation
+from census.admin import (
+    CensusScheduleAdmin,
+    promote_latest_model_transcription,
+    restore_previous_canonical_data,
+)
+from census.models import (
+    CensusSchedule,
+    ReconciliationSource,
+    ScheduleReconciliation,
+)
 from census.transcription import reconciliation as reconciliation_service
 from census.transcription.contracts import load_contract
 from census.transcription.reconciliation import (
@@ -14,6 +26,8 @@ from census.transcription.reconciliation import (
     build_reconciliation_preview,
     canonical_fingerprint,
     infer_reconciliation_outcome,
+    latest_reversible_reconciliation,
+    rollback_reconciliation,
     serialize_canonical,
 )
 from census.transcription.status import with_ai_status
@@ -151,6 +165,14 @@ def canonical_schedule():
     )
     ClergyFactory(census_schedule=schedule, name="Rev. Human")
     return schedule
+
+
+def bulk_action_request(user, **data):
+    request = RequestFactory().post("/admin/census/censusschedule/", data=data)
+    request.user = user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    return request
 
 
 @pytest.mark.django_db
@@ -303,11 +325,11 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         ),
     )
     decisions = {
-        "schedule.respondent_name": "current",
-        f"body.{body.pk}.name": "current",
-        f"membership.{membership.pk}.male_members": "current",
-        f"entity.clergy.{current_clergy.pk}": "current",
-        "entity.clergy.new.0": "current",
+        "schedule.respondent_name": "baseline",
+        f"body.{body.pk}.name": "baseline",
+        f"membership.{membership.pk}.male_members": "baseline",
+        f"entity.clergy.{current_clergy.pk}": "baseline",
+        "entity.clergy.new.0": "baseline",
     }
     preview = build_reconciliation_preview(
         schedule,
@@ -359,7 +381,7 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     )
     assert event.decisions["field_source_decisions"][
         "schedule.respondent_name"
-    ] == "current"
+    ] == "baseline"
 
 
 @pytest.mark.django_db
@@ -370,12 +392,12 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
     decisions = {
         "schedule.respondent_name": {
             "source": "edited",
-            "base": "candidate",
+            "base": "comparison",
             "value": "Reviewer Corrected",
         },
         f"body.{body.pk}.expenses": {
             "source": "edited",
-            "base": "current",
+            "base": "baseline",
             "value": "1234.50",
         },
     }
@@ -413,13 +435,13 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
         {
             "field": "schedule.respondent_name",
             "source": "edited",
-            "base": "candidate",
+            "base": "comparison",
             "value": "Reviewer Corrected",
         },
         {
             "field": f"body.{body.pk}.expenses",
             "source": "edited",
-            "base": "current",
+            "base": "baseline",
             "value": "1234.50",
         },
     ]
@@ -437,7 +459,7 @@ def test_inline_edit_rejects_invalid_typed_values(reviewer):
             decisions={
                 "schedule.num_assistant_pastors": {
                     "source": "edited",
-                    "base": "candidate",
+                    "base": "comparison",
                     "value": "several",
                 }
             },
@@ -470,12 +492,12 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
     candidate["religious_bodies"].append(second_candidate)
     source = agent_source(schedule, candidate)
     decisions = {
-        f"entity.body.{first_current.pk}": "current",
-        f"entity.body.{second_current.pk}": "candidate",
-        "entity.body.new.0": "candidate",
-        "entity.body.new.1": "current",
-        f"entity.clergy.{schedule.clergy.get().pk}": "current",
-        "entity.clergy.new.0": "current",
+        f"entity.body.{first_current.pk}": "baseline",
+        f"entity.body.{second_current.pk}": "comparison",
+        "entity.body.new.0": "comparison",
+        "entity.body.new.1": "baseline",
+        f"entity.clergy.{schedule.clergy.get().pk}": "baseline",
+        "entity.clergy.new.0": "baseline",
     }
 
     preview = build_reconciliation_preview(
@@ -634,3 +656,245 @@ def test_reviewed_agent_candidate_leaves_pending_ai_queue(reviewer):
     )
     annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
     assert annotated._ai_status == "transcribed"
+
+
+@pytest.mark.django_db
+def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
+    schedule = canonical_schedule()
+    baseline_data = agent_candidate(
+        respondent={
+            "name": "Claude reading",
+            "title": "Claude title",
+            "po_address": "Model PO",
+            "date_signed": "1926-05-03",
+        }
+    )
+    comparison_data = deepcopy(baseline_data)
+    comparison_data["schedule_fields"]["respondent"].update(
+        {"name": "Gemini reading", "title": "Gemini title"}
+    )
+    baseline = agent_source(schedule, baseline_data)
+    comparison = agent_source(schedule, comparison_data)
+    decisions = {
+        "schedule.respondent_name": "baseline",
+        "schedule.respondent_title": "comparison",
+    }
+
+    preview = build_reconciliation_preview(
+        schedule,
+        comparison,
+        baseline_transcription=baseline,
+        decisions=decisions,
+        mixed=True,
+    )
+
+    assert preview["proposed"]["schedule_fields"]["respondent_name"] == (
+        "Claude reading"
+    )
+    assert preview["proposed"]["schedule_fields"]["respondent_title"] == (
+        "Gemini title"
+    )
+    assert infer_reconciliation_outcome(preview) == "mixed"
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.MIXED,
+        expected_fingerprint=preview["before_fingerprint"],
+        baseline_transcription_id=baseline.pk,
+        comparison_transcription_id=comparison.pk,
+        decisions=decisions,
+    )
+
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Claude reading"
+    assert schedule.respondent_title == "Gemini title"
+    assert event.decisions["source_refs"] == {
+        "baseline": f"transcription:{baseline.pk}",
+        "comparison": f"transcription:{comparison.pk}",
+    }
+    assert set(
+        event.sources.values_list("transcription_id", "disposition")
+    ) == {
+        (baseline.pk, ReconciliationSource.Disposition.INCORPORATED),
+        (comparison.pk, ReconciliationSource.Disposition.INCORPORATED),
+    }
+
+
+@pytest.mark.django_db
+def test_reviewer_can_restore_previous_canonical_state(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+    promoted = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+    schedule.refresh_from_db()
+    promoted_snapshot = serialize_canonical(schedule)
+    assert schedule.respondent_name == "Agent Respondent"
+    assert latest_reversible_reconciliation(schedule).pk == promoted.pk
+
+    reversal = rollback_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        reconciliation_id=promoted.pk,
+        expected_fingerprint=canonical_fingerprint(promoted_snapshot),
+        notes="The model reading was incorrect.",
+    )
+
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Human Respondent"
+    assert reversal.outcome == ScheduleReconciliation.Outcome.ROLLED_BACK
+    assert reversal.reverses == promoted
+    assert reversal.notes == "The model reading was incorrect."
+    assert reversal.decisions["rollback_of"] == promoted.pk
+    assert list(reversal.sources.values_list("disposition", flat=True)) == [
+        ReconciliationSource.Disposition.SUPERSEDED
+    ]
+    assert latest_reversible_reconciliation(schedule) is None
+
+
+@pytest.mark.django_db
+def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
+    schedule = canonical_schedule()
+    first_source = agent_source(schedule)
+    first_preview = build_reconciliation_preview(schedule, first_source)
+    first = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
+        expected_fingerprint=first_preview["before_fingerprint"],
+        comparison_transcription_id=first_source.pk,
+    )
+    schedule.refresh_from_db()
+    second_source = agent_source(
+        schedule,
+        agent_candidate(
+            respondent={
+                "name": "Second model reading",
+                "title": "Clerk",
+                "po_address": "Agent PO",
+                "date_signed": "1926-05-03",
+            }
+        ),
+    )
+    second_preview = build_reconciliation_preview(schedule, second_source)
+    second = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
+        expected_fingerprint=second_preview["before_fingerprint"],
+        comparison_transcription_id=second_source.pk,
+    )
+
+    schedule.refresh_from_db()
+    current = serialize_canonical(schedule)
+    rollback_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=canonical_fingerprint(current),
+    )
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Agent Respondent"
+    assert latest_reversible_reconciliation(schedule).pk == first.pk
+    assert second.reversals.count() == 1
+
+    current = serialize_canonical(schedule)
+    rollback_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=canonical_fingerprint(current),
+    )
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Human Respondent"
+    assert latest_reversible_reconciliation(schedule) is None
+
+
+@pytest.mark.django_db
+def test_bulk_promotion_uses_most_recent_agent_run(reviewer):
+    schedule = canonical_schedule()
+    contract = load_contract()
+    run_metadata = {
+        "model": "test-model",
+        "contract_version": contract["version"],
+        "schema": contract["schema"],
+    }
+    older_run = TranscriptionRunFactory(kind="agent", metadata=run_metadata)
+    latest_run = TranscriptionRunFactory(kind="agent", metadata=run_metadata)
+    latest_data = agent_candidate(
+        respondent={
+            "name": "Newest model reading",
+            "title": "Pastor",
+            "po_address": "Newest PO",
+            "date_signed": "1926-05-05",
+        }
+    )
+    latest = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=latest_run,
+        data=latest_data,
+    )
+    older = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=older_run,
+        data=agent_candidate(),
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = bulk_action_request(
+        reviewer,
+        action="promote_latest_model_transcription",
+        apply="1",
+        confirmed="yes",
+        notes="Trusted bulk review.",
+    )
+
+    response = promote_latest_model_transcription(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk=schedule.pk),
+    )
+
+    schedule.refresh_from_db()
+    assert response.status_code == 302
+    assert schedule.respondent_name == "Newest model reading"
+    event = schedule.reconciliations.get()
+    assert event.sources.get().transcription == latest
+    assert event.sources.get().transcription != older
+    assert "Trusted bulk review." in event.notes
+
+
+@pytest.mark.django_db
+def test_bulk_restore_records_a_reversal(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+    promoted = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = bulk_action_request(
+        reviewer,
+        action="restore_previous_canonical_data",
+        apply="1",
+        confirmed="yes",
+    )
+
+    response = restore_previous_canonical_data(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk=schedule.pk),
+    )
+
+    schedule.refresh_from_db()
+    assert response.status_code == 302
+    assert schedule.respondent_name == "Human Respondent"
+    reversal = schedule.reconciliations.exclude(pk=promoted.pk).get()
+    assert reversal.reverses == promoted

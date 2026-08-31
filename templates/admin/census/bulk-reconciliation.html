@@ -1,0 +1,85 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ heading }}</h1>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ explanation }}</p>
+      {% if select_across == "1" %}
+        <p class="mt-1 text-xs font-semibold text-primary-600">All matching schedules are selected.</p>
+      {% endif %}
+    </div>
+
+    {% if confirmation_error %}
+      <div class="p-4 mb-5 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
+        {{ confirmation_error }}
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 gap-4 mb-5 sm:grid-cols-3">
+      <div class="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+        <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ total_count }}</div>
+        <div class="text-xs text-gray-500 dark:text-gray-400">Selected</div>
+      </div>
+      <div class="p-4 border border-green-200 rounded-lg bg-green-50 dark:bg-green-950 dark:border-green-800">
+        <div class="text-2xl font-bold text-green-800 dark:text-green-200">{{ eligible_count }}</div>
+        <div class="text-xs text-green-700 dark:text-green-300">Eligible</div>
+      </div>
+      <div class="p-4 border border-amber-200 rounded-lg bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
+        <div class="text-2xl font-bold text-amber-800 dark:text-amber-200">{{ skipped_count }}</div>
+        <div class="text-xs text-amber-700 dark:text-amber-300">Will be skipped</div>
+      </div>
+    </div>
+    <p class="mb-5 text-xs text-gray-500 dark:text-gray-400">Eligibility is checked again for every schedule when the action runs; invalid or stale records are skipped safely.</p>
+
+    <div class="mb-5 overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+      <div class="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100">
+        Selection details{% if truncated %} · first 100 shown{% endif %}
+      </div>
+      <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+        {% for item in items %}
+          <li class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ item.schedule }}</span>
+            <span class="text-xs {% if item.eligible %}text-green-700 dark:text-green-300{% else %}text-amber-700 dark:text-amber-300{% endif %}">
+              {{ item.detail }}
+            </span>
+          </li>
+        {% empty %}
+          <li class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No schedules selected.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="{{ action_name }}">
+      <input type="hidden" name="select_across" value="{{ select_across }}">
+      {% for object_id in selected %}
+        <input type="hidden" name="_selected_action" value="{{ object_id }}">
+      {% endfor %}
+
+      <div class="p-4 text-sm border border-amber-300 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+        {{ warning }}
+      </div>
+
+      <div>
+        <label for="notes" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Reviewer notes <span class="font-normal">(optional)</span></label>
+        <textarea id="notes" name="notes" rows="3" class="w-full p-3 text-sm bg-white border border-gray-300 rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100">{{ notes }}</textarea>
+      </div>
+
+      <label class="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-200">
+        <input type="checkbox" name="confirmed" value="yes" required class="mt-1">
+        <span>I understand which canonical data will change and confirm this bulk action.</span>
+      </label>
+
+      <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+        <a href="{% url 'admin:census_censusschedule_changelist' %}" class="text-sm font-medium text-gray-600 hover:underline dark:text-gray-300">← Cancel</a>
+        <button type="submit" name="apply" value="1" class="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary-600 hover:bg-primary-700" {% if not eligible_count %}disabled{% endif %}>
+          {{ button_label }}
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

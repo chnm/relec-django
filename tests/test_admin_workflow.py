@@ -13,6 +13,7 @@ from census.admin import (
     assign_to_me,
     mark_completed,
     mark_needs_review,
+    promote_latest_model_transcription,
     queue_claude_transcription,
 )
 from census.models import CensusSchedule, TranscriptionJob, TranscriptionRun
@@ -189,6 +190,39 @@ def test_reviewer_must_use_reconciliation_instead_of_bulk_approval(reviewer):
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
     assert "mark_approved" not in model_admin.get_actions(admin_request(reviewer))
+
+
+@pytest.mark.django_db
+def test_reviewer_has_guarded_bulk_reconciliation_actions(reviewer):
+    schedule = CensusScheduleFactory()
+    ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = admin_post_request(
+        reviewer,
+        {
+            "_selected_action": [schedule.pk],
+            "action": "promote_latest_model_transcription",
+            "select_across": "1",
+        },
+    )
+
+    actions = model_admin.get_actions(request)
+    response = promote_latest_model_transcription(
+        model_admin,
+        request,
+        CensusSchedule.objects.filter(pk=schedule.pk),
+    )
+
+    assert "promote_latest_model_transcription" in actions
+    assert "restore_previous_canonical_data" in actions
+    assert response.status_code == 200
+    assert b"Trust the newest model run" in response.content
+    assert b'name="select_across" value="1"' in response.content
+    assert b'name="confirmed" value="yes" required' in response.content
+    assert b"Promote and approve" in response.content
 
 
 @pytest.mark.django_db

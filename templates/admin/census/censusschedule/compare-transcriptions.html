@@ -19,7 +19,7 @@
         </p>
       </div>
       <div class="px-3 py-2 text-xs text-gray-600 border border-gray-200 rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-300">
-        Preview first · Canonical data changes only after confirmation
+        Canonical data changes only after reviewer confirmation
       </div>
     </div>
 
@@ -32,25 +32,27 @@
     <form method="get" class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
       <div class="comparison-source-form">
         <div>
-          <label for="source" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-            Evidence to compare with the current canonical record
+          <label for="baseline" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Baseline source
           </label>
-          <select id="source" name="source" class="comparison-select">
-            {% for source in sources %}
-              <option value="{{ source.pk }}"
-                      {% if selected_source and source.pk == selected_source.object.pk %}selected{% endif %}>
-                {{ source.run.get_kind_display }} · {{ source.run.key }}{% if source.run.metadata.model %} · {{ source.run.metadata.model }}{% endif %} · {{ source.created_at|date:"M j, Y H:i" }}
-              </option>
-            {% empty %}
-              <option value="">No immutable transcription evidence available</option>
+          <select id="baseline" name="baseline" class="comparison-select">
+            {% for option in source_options %}
+              <option value="{{ option.value }}" {% if option.value == baseline_ref %}selected{% endif %}>{{ option.label }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="text-sm text-gray-600 dark:text-gray-300">
-          <strong>Approval target:</strong> the structured schedule record. Human snapshots and agent runs remain immutable evidence.
+        <div>
+          <label for="comparison" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Comparison source
+          </label>
+          <select id="comparison" name="comparison" class="comparison-select">
+            {% for option in source_options %}
+              <option value="{{ option.value }}" {% if option.value == comparison_ref %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
         </div>
         <button type="submit" class="comparison-button comparison-button-primary">
-          Preview selected
+          Compare sources
         </button>
       </div>
     </form>
@@ -109,11 +111,8 @@
       <main class="min-w-0 space-y-5">
         <div class="comparison-source-headings">
           <div></div>
-          <div class="comparison-source-heading">
-            <strong>Current canonical</strong>
-            <span>Live structured data · {{ schedule.get_transcription_status_display }}</span>
-          </div>
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=selected_source fallback="No evidence selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source fallback="No baseline selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source fallback="No comparison selected" %}
         </div>
 
         {% for section in comparison.sections %}
@@ -128,8 +127,8 @@
               {% if section.decision_scope == "field" %}
                 <div class="section-selection-controls">
                   <span class="section-selection-status" data-state="pending" aria-live="polite">Checking selection…</span>
-                  <button type="button" class="comparison-button section-source" data-source="current" aria-pressed="false">Use all current</button>
-                  <button type="button" class="comparison-button section-source" data-source="candidate" aria-pressed="false">Use all selected</button>
+                  <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Use all baseline</button>
+                  <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
                 </div>
               {% endif %}
             </div>
@@ -137,11 +136,11 @@
               <fieldset class="entity-decision px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                 <legend class="sr-only">Decision for {{ section.title }}</legend>
                 <label>
-                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="current" {% if section.entity_decision.selected == "current" %}checked{% endif %}>
+                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="baseline" {% if section.entity_decision.selected == "baseline" %}checked{% endif %}>
                   {{ section.entity_decision.current_label }}
                 </label>
                 <label>
-                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="candidate" {% if section.entity_decision.selected == "candidate" %}checked{% endif %}>
+                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="comparison" {% if section.entity_decision.selected == "comparison" %}checked{% endif %}>
                   {{ section.entity_decision.candidate_label }}
                 </label>
               </fieldset>
@@ -157,11 +156,11 @@
                       {% endif %}
                     </div>
                     {% if row.can_choose %}
-                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.left source_side="current" row=row %}
-                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.right source_side="candidate" row=row %}
+                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.left source_side="baseline" row=row %}
+                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.right source_side="comparison" row=row %}
                     {% else %}
-                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left source_side="current" %}
-                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right source_side="candidate" %}
+                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left source_side="baseline" %}
+                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right source_side="comparison" %}
                     {% endif %}
                   </div>
                 {% endfor %}
@@ -174,8 +173,9 @@
           </div>
         {% endfor %}
 
-        <section>
-          {% include "admin/census/censusschedule/includes/raw-source.html" with source=selected_source title="Selected evidence raw JSON" %}
+        <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {% include "admin/census/censusschedule/includes/raw-source.html" with source=baseline_source title="Baseline raw JSON" %}
+          {% include "admin/census/censusschedule/includes/raw-source.html" with source=comparison_source title="Comparison raw JSON" %}
         </section>
 
         <section class="comparison-card overflow-hidden" aria-labelledby="approval-heading">
@@ -186,7 +186,8 @@
           <div class="p-5">
             <form id="reconciliation-form" method="post" class="space-y-5">
               {% csrf_token %}
-              {% if selected_source %}<input type="hidden" name="source" value="{{ selected_source.object.pk }}">{% endif %}
+              <input type="hidden" name="baseline" value="{{ baseline_ref }}">
+              <input type="hidden" name="comparison" value="{{ comparison_ref }}">
               <input type="hidden" name="expected_fingerprint" value="{{ preview.before_fingerprint }}">
 
               <div>
@@ -199,7 +200,7 @@
                 <span>I reviewed the source image and confirm that the highlighted values, entity choices, and edits above should become canonical.</span>
               </label>
 
-              <button type="submit" class="comparison-button comparison-button-primary" {% if not candidate_can_promote %}disabled{% endif %}>
+              <button type="submit" class="comparison-button comparison-button-primary" {% if not can_apply %}disabled{% endif %}>
                 Apply and approve
               </button>
             </form>
@@ -321,8 +322,8 @@
       text-transform: uppercase;
     }
 
-    .section-selection-status[data-state="current"],
-    .section-selection-status[data-state="candidate"] {
+    .section-selection-status[data-state="baseline"],
+    .section-selection-status[data-state="comparison"] {
       background: #eaf4ff;
       border-color: #80b9e8;
       color: #004f91;
@@ -640,8 +641,8 @@
       .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
       .section-source.is-selected { background: #0875ce; border-color: #60a5fa; color: #fff; }
       .section-selection-status { background: #1f2937; border-color: #4b5563; color: #d1d5db; }
-      .section-selection-status[data-state="current"],
-      .section-selection-status[data-state="candidate"] { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+      .section-selection-status[data-state="baseline"],
+      .section-selection-status[data-state="comparison"] { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
       .section-selection-status[data-state="mixed"] { background: #78350f; border-color: #f59e0b; color: #fef3c7; }
       .section-selection-status[data-state="edited"] { background: #7c2d12; border-color: #fb923c; color: #ffedd5; }
       .comparison-label,
@@ -684,8 +685,8 @@
         const status = section.querySelector(".section-selection-status");
         if (status) {
           const labels = {
-            current: "All current",
-            candidate: "All selected",
+            baseline: "All baseline",
+            comparison: "All comparison",
             mixed: "Mixed",
             edited: "Contains edits",
             none: "No choices",

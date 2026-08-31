@@ -142,7 +142,10 @@ IT/infrastructure administrators with full Django admin access.
 - Status can be set backward by Reviewers (e.g., returning a record to `in_progress`)
 - A schedule is **automatically** moved from `unassigned` to `assigned` when a transcriber is assigned
 - Transcribers submit finished work as `completed`; only Reviewers can set `approved`, through the schedule-level reconciliation workflow
-- Mixed reconciliations record every field and related-row source decision as append-only provenance; repeated entities are matched by stable identity or unique signatures, never silently by list order
+- Reconciliation compares any two distinct sources: live canonical data, immutable human snapshots, or immutable agent outputs. The baseline defaults to the newest human snapshot (or canonical when none exists), while the comparison defaults to the newest agent output.
+- Mixed reconciliations record both evidence sources plus every field and related-row source decision as append-only provenance; repeated entities are matched by stable identity or unique signatures, never silently by list order
+- Reviewers may bulk-promote selected schedules from the admin action menu. Each schedule uses the output belonging to its newest agent run, is validated independently, and receives its own reconciliation event; schedules without valid model evidence are skipped.
+- Reviewers may restore selected schedules to the data state before their newest unreversed reconciliation. A restore never deletes history: it creates a new append-only reconciliation linked through `reverses`, marks prior evidence as superseded, and leaves the restored schedule approved.
 - A schedule must have at least one `ReligiousBody` record before it can be marked `completed` or `needs_review`
 
 ### Location Hierarchy
@@ -437,12 +440,14 @@ Record has `transcription_status = completed` and at least one complete `Religio
 **Steps:**
 1. Dashboard shows the combined review queue count
 2. Reviewer navigates to Census Schedules → filters by "Review Queue"
-3. Opens a record → selects **Reconcile & approve** and compares the live canonical graph, immutable transcription evidence, and original schedule image
-4. Selects current or candidate values by clicking their cells, optionally enters a typed reviewer correction through the selected cell's pencil action (or double-click), and explicitly retains/adds/removes unmatched related rows. AI-specific marginalia and agent notes come from the selected evidence automatically and are not presented as source decisions.
+3. Opens a record → selects **Reconcile & approve**, then compares two distinct sources beside the original schedule image. Both selectors offer current canonical data, human snapshots, and agent outputs, so reviewers can compare snapshot-to-model, model-to-model, or canonical-to-evidence. The default pair is the newest human snapshot and newest agent output.
+4. Selects baseline or comparison values by clicking their cells, optionally enters a typed reviewer correction through the selected cell's pencil action (or double-click), and explicitly retains/adds/removes unmatched related rows. AI-specific marginalia and agent notes come from the comparison evidence automatically and are not presented as source decisions.
 5. Adds optional notes, checks the confirmation that the highlighted result should become canonical, and chooses **Apply and approve**. The server validates and applies the result atomically without a separate preview step.
-6. The system infers whether the append-only provenance outcome retained current data, promoted the selected candidate, or incorporated a mixed/edited result. Reviewer corrections are preserved as an `edited` source.
+6. The system infers whether the append-only provenance outcome retained canonical data, promoted one complete evidence source, or incorporated a mixed/edited result. Reviewer corrections are preserved as an `edited` source, and every selected transcription is linked to the event.
 7. If neither is correct: Returns the record to `in_progress` and adds a note in `transcription_notes`
    - Transcriber will see the record reappear in their list with the reviewer's note
+
+For trusted model runs, a Reviewer may instead select schedules in the admin list and choose **Promote latest model transcription**. After an explicit confirmation, each schedule independently promotes its newest agent run and becomes approved. **Restore previous canonical data** steps eligible schedules backward through unreversed reconciliation states while preserving every promotion and restore in the audit trail.
 
 **Success Outcome:**
 Record has `transcription_status = approved`; all data has been verified against the source image and the decision is preserved as append-only reconciliation evidence.

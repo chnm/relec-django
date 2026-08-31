@@ -1,14 +1,14 @@
 {% if source %}
   <div class="comparison-source-heading">
     <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">
-      {{ source.run.key }}
+      {{ source.heading }}
     </div>
     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-      {{ source.run.get_kind_display }} · {{ source.object.created_at|date:"M j, Y H:i" }}
+      {{ source.subtitle }}
     </div>
-    {% if source.model %}
+    {% if source.detail %}
       <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ source.model }}{% if source.contract_version %} · {{ source.contract_version }}{% endif %}
+        {{ source.detail }}
       </div>
     {% endif %}
     {% if source.job %}

@@ -40,7 +40,7 @@ from census.transcription.contracts import (
 )
 from location.models import PopulatedPlace
 
-DECISION_VERSION = "schedule-reconciliation-v3"
+DECISION_VERSION = "schedule-reconciliation-v4"
 SCHEDULE_FIELDS = (
     "num_assistant_pastors",
     "respondent_name",
@@ -247,21 +247,27 @@ def canonical_fingerprint(snapshot):
 
 def build_reconciliation_preview(
     schedule,
-    transcription=None,
+    comparison_transcription=None,
     *,
+    baseline_transcription=None,
     decisions=None,
     mixed=False,
     validate=True,
 ):
     """Return the live baseline, proposed draft, and explicit consequences."""
     before = serialize_canonical(schedule)
-    candidate = (
+    baseline = (
         before
-        if transcription is None
-        else _candidate_draft(schedule, transcription, before)
+        if baseline_transcription is None
+        else _candidate_draft(schedule, baseline_transcription, before)
     )
-    review = build_mixed_review(before, candidate, decisions or {})
-    proposed = review["proposed"] if mixed else candidate
+    comparison = (
+        before
+        if comparison_transcription is None
+        else _candidate_draft(schedule, comparison_transcription, before)
+    )
+    review = build_mixed_review(baseline, comparison, decisions or {})
+    proposed = review["proposed"] if mixed else comparison
     if validate:
         _validate_draft(schedule, proposed)
     operations = _operation_summary(before, proposed)
@@ -273,7 +279,8 @@ def build_reconciliation_preview(
     )
     return {
         "before": before,
-        "candidate": candidate,
+        "baseline": baseline,
+        "comparison_source": comparison,
         "proposed": proposed,
         "before_fingerprint": canonical_fingerprint(before),
         "operations": operations,
@@ -302,10 +309,16 @@ def infer_reconciliation_outcome(preview):
         for decision in preview["decisions"].values()
     ):
         return ScheduleReconciliation.Outcome.MIXED
-    if preview["proposed"] == preview["candidate"]:
-        return ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
     if preview["proposed"] == preview["before"]:
         return ScheduleReconciliation.Outcome.RETAINED_CURRENT
+    if any(
+        _source_content(preview["proposed"]) == _source_content(source)
+        for source in (
+            preview["baseline"],
+            preview["comparison_source"],
+        )
+    ):
+        return ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
     return ScheduleReconciliation.Outcome.MIXED
 
 
@@ -317,62 +330,72 @@ def apply_reconciliation(
     outcome,
     expected_fingerprint,
     transcription_id=None,
+    baseline_transcription_id=None,
+    comparison_transcription_id=None,
     notes="",
     decisions=None,
 ):
     """Apply one fully reviewed decision and approve the schedule atomically."""
     if outcome not in ScheduleReconciliation.Outcome.values:
         raise ReconciliationValidationError("Choose a valid reconciliation outcome.")
-    if outcome in {
-        ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
-        ScheduleReconciliation.Outcome.MIXED,
-    }:
-        if not transcription_id:
-            raise ReconciliationValidationError("Choose a candidate to promote.")
+    if transcription_id is not None and comparison_transcription_id is None:
+        comparison_transcription_id = transcription_id
+    if (
+        baseline_transcription_id is not None
+        and baseline_transcription_id == comparison_transcription_id
+    ):
+        raise ReconciliationValidationError(
+            "Choose two distinct comparison sources."
+        )
 
     # Lock only the schedule row. The graph queryset joins nullable relations,
     # which PostgreSQL cannot include in an unrestricted FOR UPDATE clause.
     CensusSchedule.objects.select_for_update(of=("self",)).get(pk=schedule_id)
     schedule = schedule_graph_queryset().get(pk=schedule_id)
-    transcription = None
-    if transcription_id:
-        transcription = (
-            ScheduleTranscription.objects.select_related("run")
-            .filter(census_schedule=schedule, pk=transcription_id)
-            .first()
-        )
-        if transcription is None:
-            raise ReconciliationValidationError(
-                "The selected candidate does not belong to this schedule."
-            )
-
-    preview = build_reconciliation_preview(
-        schedule,
-        transcription
-        if outcome
+    baseline_transcription = _reconciliation_transcription(
+        schedule, baseline_transcription_id, "baseline"
+    )
+    comparison_transcription = _reconciliation_transcription(
+        schedule, comparison_transcription_id, "comparison"
+    )
+    transcriptions = [
+        source
+        for source in (baseline_transcription, comparison_transcription)
+        if source is not None
+    ]
+    if (
+        outcome
         in {
             ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
             ScheduleReconciliation.Outcome.MIXED,
         }
-        else None,
-        decisions=(
-            decisions
-            if outcome == ScheduleReconciliation.Outcome.MIXED
-            else None
-        ),
-        mixed=outcome == ScheduleReconciliation.Outcome.MIXED,
+        and not transcriptions
+    ):
+        raise ReconciliationValidationError("Choose evidence to promote.")
+
+    preview = build_reconciliation_preview(
+        schedule,
+        comparison_transcription,
+        baseline_transcription=baseline_transcription,
+        decisions=decisions,
+        mixed=True,
     )
     if preview["before_fingerprint"] != expected_fingerprint:
         raise StaleReconciliationError(
             "The canonical record changed after this preview. Refresh and review "
             "it again."
         )
+    source_refs = {
+        "baseline": _source_ref(baseline_transcription),
+        "comparison": _source_ref(comparison_transcription),
+    }
     duplicate = ScheduleReconciliation.objects.filter(
         census_schedule=schedule,
         reviewer=reviewer,
         outcome=outcome,
         before_fingerprint=expected_fingerprint,
-        sources__transcription_id=transcription_id,
+        decisions__source_refs=source_refs,
+        decisions__field_source_decisions=preview["decisions"],
     ).first()
     if duplicate:
         return duplicate
@@ -397,49 +420,167 @@ def apply_reconciliation(
         after_fingerprint=canonical_fingerprint(after),
         decisions={
             "version": DECISION_VERSION,
-            "starting_source": (
-                f"transcription:{transcription.pk}"
-                if outcome
-                in {
-                    ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
-                    ScheduleReconciliation.Outcome.MIXED,
-                }
-                else "current_canonical"
-            ),
+            "source_refs": source_refs,
             "operations": preview["operations"],
-            "field_source_decisions": (
-                preview["decisions"]
-                if outcome == ScheduleReconciliation.Outcome.MIXED
-                else {}
-            ),
-            "reviewer_overrides": (
-                [
-                    {"field": key, **decision}
-                    for key, decision in preview["decisions"].items()
-                    if isinstance(decision, dict)
-                    and decision.get("source") == "edited"
-                ]
-                if outcome == ScheduleReconciliation.Outcome.MIXED
-                else []
-            ),
+            "field_source_decisions": preview["decisions"],
+            "reviewer_overrides": [
+                {"field": key, **decision}
+                for key, decision in preview["decisions"].items()
+                if isinstance(decision, dict)
+                and decision.get("source") == "edited"
+            ],
         },
     )
-    if transcription:
-        disposition = (
-            ReconciliationSource.Disposition.INCORPORATED
-            if outcome == ScheduleReconciliation.Outcome.MIXED
-            else (
-                ReconciliationSource.Disposition.ACCEPTED
-                if outcome == ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
-                else ReconciliationSource.Disposition.REJECTED
-            )
-        )
+    source_snapshots = (
+        (baseline_transcription, preview["baseline"]),
+        (comparison_transcription, preview["comparison_source"]),
+    )
+    for transcription, snapshot in source_snapshots:
+        if transcription is None:
+            continue
+        if outcome == ScheduleReconciliation.Outcome.MIXED:
+            disposition = ReconciliationSource.Disposition.INCORPORATED
+        elif (
+            outcome == ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+            and _source_content(preview["proposed"])
+            == _source_content(snapshot)
+        ):
+            disposition = ReconciliationSource.Disposition.ACCEPTED
+        else:
+            disposition = ReconciliationSource.Disposition.REJECTED
         ReconciliationSource.objects.create(
             reconciliation=reconciliation,
             transcription=transcription,
             disposition=disposition,
         )
     return reconciliation
+
+
+def latest_reversible_reconciliation(schedule, snapshot=None):
+    """Return the newest unreversed event that produced the current data state."""
+    snapshot = snapshot or serialize_canonical(schedule)
+    events = schedule.reconciliations.filter(
+        reverses__isnull=True,
+        reversals__isnull=True,
+    )
+    for event in events.iterator():
+        if _source_content(event.canonical_before) == _source_content(
+            event.canonical_after
+        ):
+            continue
+        if _source_content(event.canonical_after) == _source_content(snapshot):
+            return event
+    return None
+
+
+@transaction.atomic
+def rollback_reconciliation(
+    *,
+    schedule_id,
+    reviewer,
+    expected_fingerprint,
+    reconciliation_id=None,
+    notes="",
+):
+    """Restore an earlier canonical graph and preserve the reversal as evidence."""
+    CensusSchedule.objects.select_for_update(of=("self",)).get(pk=schedule_id)
+    schedule = schedule_graph_queryset().get(pk=schedule_id)
+    before = serialize_canonical(schedule)
+    before_fingerprint = canonical_fingerprint(before)
+    if before_fingerprint != expected_fingerprint:
+        raise StaleReconciliationError(
+            "The canonical record changed after rollback was requested. "
+            "Refresh and try again."
+        )
+
+    if reconciliation_id is None:
+        target = latest_reversible_reconciliation(schedule, before)
+    else:
+        target = (
+            schedule.reconciliations.filter(
+                pk=reconciliation_id,
+                reverses__isnull=True,
+                reversals__isnull=True,
+            )
+            .select_related("reviewer")
+            .first()
+        )
+    if target is None:
+        raise ReconciliationValidationError(
+            "No previous canonical data state can be restored."
+        )
+    if _source_content(target.canonical_after) != _source_content(before):
+        raise StaleReconciliationError(
+            "This reconciliation no longer represents the current canonical "
+            "data state."
+        )
+
+    restored = deepcopy(target.canonical_before)
+    _validate_draft(schedule, restored)
+    operations = _operation_summary(before, restored)
+    _apply_draft(schedule, restored, reviewer)
+    _approve_schedule(schedule, reviewer)
+
+    refreshed = schedule_graph_queryset().get(pk=schedule.pk)
+    after = serialize_canonical(refreshed)
+    reversal = ScheduleReconciliation.objects.create(
+        census_schedule=refreshed,
+        reviewer=reviewer,
+        outcome=ScheduleReconciliation.Outcome.ROLLED_BACK,
+        notes=notes.strip(),
+        canonical_before=before,
+        canonical_after=after,
+        before_fingerprint=before_fingerprint,
+        after_fingerprint=canonical_fingerprint(after),
+        decisions={
+            "version": DECISION_VERSION,
+            "rollback_of": target.pk,
+            "operations": operations,
+        },
+        reverses=target,
+    )
+    for source in target.sources.select_related("transcription"):
+        ReconciliationSource.objects.create(
+            reconciliation=reversal,
+            transcription=source.transcription,
+            disposition=ReconciliationSource.Disposition.SUPERSEDED,
+        )
+    return reversal
+
+
+def _reconciliation_transcription(schedule, transcription_id, label):
+    if transcription_id is None:
+        return None
+    transcription = (
+        ScheduleTranscription.objects.select_related("run")
+        .filter(census_schedule=schedule, pk=transcription_id)
+        .first()
+    )
+    if transcription is None:
+        raise ReconciliationValidationError(
+            f"The selected {label} source does not belong to this schedule."
+        )
+    return transcription
+
+
+def _source_ref(transcription):
+    return (
+        f"transcription:{transcription.pk}"
+        if transcription is not None
+        else "canonical"
+    )
+
+
+def _source_content(value):
+    if isinstance(value, dict):
+        return {
+            key: _source_content(item)
+            for key, item in value.items()
+            if key not in {"id", "schema_version"} and not key.startswith("_")
+        }
+    if isinstance(value, list):
+        return [_source_content(item) for item in value]
+    return value
 
 
 def _candidate_draft(schedule, transcription, before):
@@ -593,12 +734,12 @@ def build_mixed_review(before, candidate, decisions):
             {
                 "title": title,
                 "note": (
-                    "AI transcription context is carried from the selected "
+                    "AI transcription context is carried from the comparison "
                     "evidence automatically."
                 ),
                 "rows": rows,
                 "decision_scope": "automatic",
-                "automatic_source": "candidate",
+                "automatic_source": "comparison",
             }
         )
 
@@ -611,10 +752,10 @@ def build_mixed_review(before, candidate, decisions):
             match_single=True,
         )
     )
-    for current_body, candidate_body in sorted(
-        body_matches, key=lambda pair: pair[0]["id"]
+    for index, (current_body, candidate_body) in enumerate(
+        sorted(body_matches, key=lambda pair: _snapshot_sort_key(pair[0]))
     ):
-        token = f"body.{current_body['id']}"
+        token = _snapshot_token("body", current_body, index)
         proposed_body, body_sections = _mixed_body(
             token,
             current_body,
@@ -625,27 +766,28 @@ def build_mixed_review(before, candidate, decisions):
         proposed_bodies.append(proposed_body)
         sections.extend(body_sections)
 
-    for current_body in sorted(
-        current_only_bodies, key=lambda row: row["id"]
+    for index, current_body in enumerate(
+        sorted(current_only_bodies, key=_snapshot_sort_key)
     ):
-        token = f"body.{current_body['id']}"
+        token = _snapshot_token("body", current_body, index)
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "current":
+        if selected == "baseline":
             proposed_bodies.append(deepcopy(current_body))
         sections.append(
             _entity_section(
-                f"Religious body: {current_body.get('name') or current_body['id']}",
+                f"Religious body: "
+                f"{_snapshot_label(current_body, index + 1)}",
                 current_body,
                 None,
                 BODY_FIELDS,
                 BODY_LABELS,
                 key,
                 selected,
-                "Retain current body",
+                "Retain baseline body",
                 "Remove body",
                 note=(
-                    f"Current-only body with "
+                    f"Baseline-only body with "
                     f"{len(current_body.get('membership', []))} membership row(s)."
                 ),
             )
@@ -659,13 +801,13 @@ def build_mixed_review(before, candidate, decisions):
         token = f"body.new.{index}"
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "candidate":
+        if selected == "comparison":
             proposed_body = deepcopy(candidate_body)
             proposed_body["_force_create"] = True
             proposed_bodies.append(proposed_body)
         sections.append(
             _entity_section(
-                f"Candidate religious body: "
+                f"Comparison religious body: "
                 f"{candidate_body.get('name') or index + 1}",
                 None,
                 candidate_body,
@@ -674,9 +816,9 @@ def build_mixed_review(before, candidate, decisions):
                 key,
                 selected,
                 "Do not add body",
-                "Add candidate body",
+                "Add comparison body",
                 note=(
-                    f"Candidate-only body with "
+                    f"Comparison-only body with "
                     f"{len(candidate_body.get('membership', []))} membership row(s)."
                 ),
             )
@@ -690,13 +832,13 @@ def build_mixed_review(before, candidate, decisions):
             signature_fields=("name", "is_assistant"),
         )
     )
-    for current_person, candidate_person in sorted(
-        clergy_matches, key=lambda pair: pair[0]["id"]
+    for index, (current_person, candidate_person) in enumerate(
+        sorted(clergy_matches, key=lambda pair: _snapshot_sort_key(pair[0]))
     ):
-        token = f"clergy.{current_person['id']}"
+        token = _snapshot_token("clergy", current_person, index)
         proposed_person, section = _mixed_matched_entity(
             token,
-            f"Clergy: {current_person.get('name') or current_person['id']}",
+            f"Clergy: {_snapshot_label(current_person, index + 1)}",
             current_person,
             candidate_person,
             CLERGY_FIELDS,
@@ -707,24 +849,24 @@ def build_mixed_review(before, candidate, decisions):
         proposed_clergy.append(proposed_person)
         sections.append(section)
 
-    for current_person in sorted(
-        current_only_clergy, key=lambda row: row["id"]
+    for index, current_person in enumerate(
+        sorted(current_only_clergy, key=_snapshot_sort_key)
     ):
-        token = f"clergy.{current_person['id']}"
+        token = _snapshot_token("clergy", current_person, index)
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "current":
+        if selected == "baseline":
             proposed_clergy.append(deepcopy(current_person))
         sections.append(
             _entity_section(
-                f"Clergy: {current_person.get('name') or current_person['id']}",
+                f"Clergy: {_snapshot_label(current_person, index + 1)}",
                 current_person,
                 None,
                 CLERGY_FIELDS,
                 CLERGY_LABELS,
                 key,
                 selected,
-                "Retain current clergy row",
+                "Retain baseline clergy row",
                 "Remove clergy row",
             )
         )
@@ -737,13 +879,13 @@ def build_mixed_review(before, candidate, decisions):
         token = f"clergy.new.{index}"
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "candidate":
+        if selected == "comparison":
             proposed_person = deepcopy(candidate_person)
             proposed_person["_force_create"] = True
             proposed_clergy.append(proposed_person)
         sections.append(
             _entity_section(
-                f"Candidate clergy: {candidate_person.get('name') or index + 1}",
+                f"Comparison clergy: {candidate_person.get('name') or index + 1}",
                 None,
                 candidate_person,
                 CLERGY_FIELDS,
@@ -751,7 +893,7 @@ def build_mixed_review(before, candidate, decisions):
                 key,
                 selected,
                 "Do not add clergy row",
-                "Add candidate clergy row",
+                "Add comparison clergy row",
             )
         )
 
@@ -776,7 +918,7 @@ def _mixed_body(
 ):
     proposed_body, body_section = _mixed_matched_entity(
         token,
-        f"Religious body: {current_body.get('name') or current_body['id']}",
+        f"Religious body: {_snapshot_label(current_body, 1)}",
         current_body,
         candidate_body,
         BODY_FIELDS,
@@ -792,13 +934,18 @@ def _mixed_body(
         signature_fields=MEMBERSHIP_FIELDS,
         match_single=True,
     )
-    for current_membership, candidate_membership in sorted(
-        matches, key=lambda pair: pair[0]["id"]
+    for index, (current_membership, candidate_membership) in enumerate(
+        sorted(matches, key=lambda pair: _snapshot_sort_key(pair[0]))
     ):
-        member_token = f"membership.{current_membership['id']}"
+        member_token = (
+            f"membership.{current_membership['id']}"
+            if current_membership.get("id") is not None
+            else f"{token}.membership.baseline.{index}"
+        )
+        member_label = current_membership.get("id") or index + 1
         proposed_membership, section = _mixed_matched_entity(
             member_token,
-            f"{body_section['title']}: membership {current_membership['id']}",
+            f"{body_section['title']}: membership {member_label}",
             current_membership,
             candidate_membership,
             MEMBERSHIP_FIELDS,
@@ -808,22 +955,29 @@ def _mixed_body(
         )
         memberships.append(proposed_membership)
         membership_sections.append(section)
-    for current_membership in sorted(current_only, key=lambda row: row["id"]):
-        member_token = f"membership.{current_membership['id']}"
+    for index, current_membership in enumerate(
+        sorted(current_only, key=_snapshot_sort_key)
+    ):
+        member_token = (
+            f"membership.{current_membership['id']}"
+            if current_membership.get("id") is not None
+            else f"{token}.membership.baseline.{index}"
+        )
+        member_label = current_membership.get("id") or index + 1
         key = f"entity.{member_token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "current":
+        if selected == "baseline":
             memberships.append(deepcopy(current_membership))
         membership_sections.append(
             _entity_section(
-                f"{body_section['title']}: membership {current_membership['id']}",
+                f"{body_section['title']}: membership {member_label}",
                 current_membership,
                 None,
                 MEMBERSHIP_FIELDS,
                 MEMBERSHIP_LABELS,
                 key,
                 selected,
-                "Retain current membership",
+                "Retain baseline membership",
                 "Remove membership",
             )
         )
@@ -836,13 +990,13 @@ def _mixed_body(
         member_token = f"{token}.membership.new.{index}"
         key = f"entity.{member_token}"
         selected = _selected_source(decisions, used_decisions, key)
-        if selected == "candidate":
+        if selected == "comparison":
             proposed_membership = deepcopy(candidate_membership)
             proposed_membership["_force_create"] = True
             memberships.append(proposed_membership)
         membership_sections.append(
             _entity_section(
-                f"{body_section['title']}: candidate membership {index + 1}",
+                f"{body_section['title']}: comparison membership {index + 1}",
                 None,
                 candidate_membership,
                 MEMBERSHIP_FIELDS,
@@ -850,7 +1004,7 @@ def _mixed_body(
                 key,
                 selected,
                 "Do not add membership",
-                "Add candidate membership",
+                "Add comparison membership",
             )
         )
     proposed_body["membership"] = memberships
@@ -867,7 +1021,9 @@ def _mixed_matched_entity(
     decisions,
     used_decisions,
 ):
-    proposed = {"id": current["id"]}
+    proposed = {}
+    if current.get("id") is not None:
+        proposed["id"] = current["id"]
     rows = []
     for field in fields:
         key = f"{token}.{field}"
@@ -935,8 +1091,8 @@ def _entity_section(
 
 
 def _selected_source(decisions, used_decisions, key):
-    selected = decisions.get(key, "candidate")
-    if selected not in {"current", "candidate"}:
+    selected = decisions.get(key, "comparison")
+    if selected not in {"baseline", "comparison"}:
         raise ReconciliationValidationError(
             f"Invalid source decision for {key!r}."
         )
@@ -951,14 +1107,14 @@ def _selected_value(
     current_value,
     candidate_value,
 ):
-    decision = decisions.get(key, "candidate")
+    decision = decisions.get(key, "comparison")
     if isinstance(decision, dict):
         if decision.get("source") != "edited":
             raise ReconciliationValidationError(
                 f"Invalid source decision for {key!r}."
             )
         base = decision.get("base")
-        if base not in {"current", "candidate"}:
+        if base not in {"baseline", "comparison"}:
             raise ReconciliationValidationError(
                 f"Choose the source value used to edit {key!r}."
             )
@@ -971,7 +1127,9 @@ def _selected_value(
         return deepcopy(value)
 
     selected = _selected_source(decisions, used_decisions, key)
-    return deepcopy(current_value if selected == "current" else candidate_value)
+    return deepcopy(
+        current_value if selected == "baseline" else candidate_value
+    )
 
 
 def _decision_row_options(decision):
@@ -1349,25 +1507,69 @@ def _fields_changed(old, new, fields):
 def _match_snapshot_rows(
     current, proposed, *, signature_fields, match_single=False
 ):
-    class SnapshotRow:
-        def __init__(self, data):
-            self.data = data
-            self.pk = data.get("id")
+    remaining_current = list(current)
+    remaining_proposed = list(proposed)
+    matches = []
 
-        def __getattr__(self, field):
-            return self.data.get(field)
+    current_by_id = {
+        row["id"]: row for row in remaining_current if row.get("id") is not None
+    }
+    for proposed_row in list(remaining_proposed):
+        if proposed_row.get("_force_create"):
+            continue
+        row_id = proposed_row.get("id")
+        if row_id is None or row_id not in current_by_id:
+            continue
+        current_row = current_by_id[row_id]
+        matches.append((current_row, proposed_row))
+        remaining_current.remove(current_row)
+        remaining_proposed.remove(proposed_row)
 
-    matches, removed, added = _match_rows(
-        [SnapshotRow(row) for row in current],
-        proposed,
-        signature_fields=signature_fields,
-        match_single=match_single,
+    if (
+        match_single
+        and len(remaining_current) == len(remaining_proposed) == 1
+        and not remaining_proposed[0].get("_force_create")
+    ):
+        matches.append((remaining_current.pop(), remaining_proposed.pop()))
+
+    current_by_signature = _unique_signatures(
+        remaining_current,
+        lambda row: tuple(row.get(field) for field in signature_fields),
     )
+    proposed_by_signature = _unique_signatures(
+        [row for row in remaining_proposed if not row.get("_force_create")],
+        lambda row: tuple(row.get(field) for field in signature_fields),
+    )
+    shared_signatures = current_by_signature.keys() & proposed_by_signature.keys()
+    for signature in sorted(shared_signatures, key=repr):
+        current_row = current_by_signature[signature]
+        proposed_row = proposed_by_signature[signature]
+        matches.append((current_row, proposed_row))
+        remaining_current.remove(current_row)
+        remaining_proposed.remove(proposed_row)
+    return matches, remaining_current, remaining_proposed
+
+
+def _snapshot_sort_key(row):
+    """Sort evidence rows deterministically, including ID-free model output."""
+    row_id = row.get("id")
     return (
-        [(old.data, new) for old, new in matches],
-        [old.data for old in removed],
-        added,
+        row_id is None,
+        row_id if row_id is not None else 0,
+        json.dumps(_source_content(row), sort_keys=True, default=str),
     )
+
+
+def _snapshot_token(prefix, row, index):
+    """Build a stable decision key for canonical or ID-free evidence rows."""
+    row_id = row.get("id")
+    if row_id is not None:
+        return f"{prefix}.{row_id}"
+    return f"{prefix}.baseline.{index}"
+
+
+def _snapshot_label(row, fallback):
+    return row.get("name") or row.get("id") or fallback
 
 
 def _consistency_warnings(draft):

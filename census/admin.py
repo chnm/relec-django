@@ -1,5 +1,6 @@
 import csv
 import datetime
+import json
 import os
 import re
 from collections import defaultdict
@@ -49,7 +50,11 @@ from .transcription.reconciliation import (
     ReconciliationError,
     apply_reconciliation,
     build_reconciliation_preview,
+    canonical_fingerprint,
     infer_reconciliation_outcome,
+    latest_reversible_reconciliation,
+    rollback_reconciliation,
+    serialize_canonical,
 )
 from .transcription.services import (
     LaunchError,
@@ -1086,6 +1091,265 @@ def queue_claude_transcription(modeladmin, request, queryset):
     )
 
 
+def _latest_agent_transcription(schedule):
+    return (
+        schedule.transcriptions.filter(run__kind="agent")
+        .select_related("run")
+        .order_by(
+            "-run__created_at",
+            "-run__pk",
+            "-created_at",
+            "-pk",
+        )
+        .first()
+    )
+
+
+def _bulk_reconciliation_context(
+    modeladmin,
+    request,
+    queryset,
+    *,
+    action_name,
+    title,
+    heading,
+    explanation,
+    warning,
+    button_label,
+    item_builder,
+    eligible_count,
+):
+    total_count = queryset.count()
+    items = [
+        item_builder(schedule) for schedule in queryset.order_by("pk")[:100]
+    ]
+    return {
+        **modeladmin.admin_site.each_context(request),
+        "opts": modeladmin.model._meta,
+        "action_name": action_name,
+        "title": title,
+        "heading": heading,
+        "explanation": explanation,
+        "warning": warning,
+        "button_label": button_label,
+        "items": items,
+        "total_count": total_count,
+        "eligible_count": eligible_count,
+        "skipped_count": total_count - eligible_count,
+        "truncated": total_count > len(items),
+        "selected": request.POST.getlist(helpers.ACTION_CHECKBOX_NAME),
+        "select_across": request.POST.get("select_across", "0"),
+        "notes": request.POST.get("notes", ""),
+        "confirmation_error": (
+            "Check the confirmation box before applying this action."
+            if request.POST.get("apply")
+            and request.POST.get("confirmed") != "yes"
+            else ""
+        ),
+    }
+
+
+def _bulk_action_messages(modeladmin, request, completed, skipped, action_label):
+    if completed:
+        modeladmin.message_user(
+            request,
+            f"{action_label} for {completed} schedule(s).",
+            level=messages.SUCCESS,
+        )
+    if skipped:
+        reasons = "; ".join(
+            f"{reason} ({count})" for reason, count in skipped.items()
+        )
+        modeladmin.message_user(
+            request,
+            f"Skipped {sum(skipped.values())} schedule(s): {reasons}",
+            level=messages.WARNING,
+        )
+
+
+@admin.action(description="Promote latest model transcription")
+def promote_latest_model_transcription(modeladmin, request, queryset):
+    """Apply each schedule's newest agent run as trusted canonical data."""
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can promote model transcriptions.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    if request.POST.get("apply") and request.POST.get("confirmed") == "yes":
+        completed = 0
+        skipped = defaultdict(int)
+        reviewer_notes = request.POST.get("notes", "").strip()
+        for schedule in queryset.order_by("pk").iterator(chunk_size=100):
+            source = _latest_agent_transcription(schedule)
+            if source is None:
+                skipped["no model transcription"] += 1
+                continue
+            try:
+                preview = build_reconciliation_preview(schedule, source)
+                outcome = infer_reconciliation_outcome(preview)
+                notes = f"Bulk-promoted latest model run {source.run.key}."
+                if reviewer_notes:
+                    notes = f"{notes}\n{reviewer_notes}"
+                apply_reconciliation(
+                    schedule_id=schedule.pk,
+                    reviewer=request.user,
+                    outcome=outcome,
+                    expected_fingerprint=preview["before_fingerprint"],
+                    comparison_transcription_id=source.pk,
+                    notes=notes,
+                )
+            except ReconciliationError as exc:
+                skipped[str(exc)] += 1
+            else:
+                completed += 1
+        _bulk_action_messages(
+            modeladmin,
+            request,
+            completed,
+            skipped,
+            "Promoted the latest model transcription",
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    def promotion_item(schedule):
+        source = _latest_agent_transcription(schedule)
+        if source is None:
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": "No model transcription available",
+            }
+        model = source.run.metadata.get("model", "Unspecified model")
+        return {
+            "schedule": schedule,
+            "eligible": True,
+            "detail": f"{source.run.key} · {model}",
+        }
+
+    context = _bulk_reconciliation_context(
+        modeladmin,
+        request,
+        queryset,
+        action_name="promote_latest_model_transcription",
+        title="Promote latest model transcription",
+        heading="Trust the newest model run for each schedule",
+        explanation=(
+            "Each eligible schedule will use the output from its most recently "
+            "created agent run. No model is selected manually."
+        ),
+        warning=(
+            "This assumes the newest model transcription is correct and replaces "
+            "canonical schedule data. Every change remains reversible through the "
+            "reconciliation history."
+        ),
+        button_label="Promote and approve",
+        item_builder=promotion_item,
+        eligible_count=queryset.filter(
+            transcriptions__run__kind="agent"
+        ).distinct().count(),
+    )
+    return render(request, "admin/census/bulk-reconciliation.html", context)
+
+
+@admin.action(description="Restore previous canonical data")
+def restore_previous_canonical_data(modeladmin, request, queryset):
+    """Step each schedule back to its newest unreversed canonical state."""
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can restore canonical data.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    if request.POST.get("apply") and request.POST.get("confirmed") == "yes":
+        completed = 0
+        skipped = defaultdict(int)
+        reviewer_notes = request.POST.get("notes", "").strip()
+        for schedule in queryset.order_by("pk").iterator(chunk_size=100):
+            snapshot = serialize_canonical(schedule)
+            target = latest_reversible_reconciliation(schedule, snapshot)
+            if target is None:
+                skipped["no restorable canonical state"] += 1
+                continue
+            try:
+                notes = f"Bulk-restored the state before reconciliation #{target.pk}."
+                if reviewer_notes:
+                    notes = f"{notes}\n{reviewer_notes}"
+                rollback_reconciliation(
+                    schedule_id=schedule.pk,
+                    reviewer=request.user,
+                    reconciliation_id=target.pk,
+                    expected_fingerprint=canonical_fingerprint(snapshot),
+                    notes=notes,
+                )
+            except ReconciliationError as exc:
+                skipped[str(exc)] += 1
+            else:
+                completed += 1
+        _bulk_action_messages(
+            modeladmin,
+            request,
+            completed,
+            skipped,
+            "Restored previous canonical data",
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    def rollback_item(schedule):
+        snapshot = serialize_canonical(schedule)
+        target = latest_reversible_reconciliation(schedule, snapshot)
+        if target is None:
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": "No previous canonical data state available",
+            }
+        return {
+            "schedule": schedule,
+            "eligible": True,
+            "detail": (
+                f"Restore state before reconciliation #{target.pk} · "
+                f"{target.get_outcome_display()}"
+            ),
+        }
+
+    context = _bulk_reconciliation_context(
+        modeladmin,
+        request,
+        queryset,
+        action_name="restore_previous_canonical_data",
+        title="Restore previous canonical data",
+        heading="Step backward through reconciliation history",
+        explanation=(
+            "Each eligible schedule will return to the canonical data that existed "
+            "immediately before its newest unreversed reconciliation."
+        ),
+        warning=(
+            "The current canonical data will be replaced, but not erased from "
+            "history. The restore itself is recorded as a new reconciliation event."
+        ),
+        button_label="Restore previous data",
+        item_builder=rollback_item,
+        eligible_count=queryset.filter(
+            reconciliations__reverses__isnull=True,
+            reconciliations__reversals__isnull=True,
+        ).distinct().count(),
+    )
+    return render(request, "admin/census/bulk-reconciliation.html", context)
+
+
 @admin.register(CensusSchedule)
 class CensusScheduleAdmin(ModelAdmin):
     change_form_template = "admin/census/censusschedule/change_form.html"
@@ -1141,6 +1405,8 @@ class CensusScheduleAdmin(ModelAdmin):
         unassign_reviewer,
         bulk_assign_users,
         queue_claude_transcription,
+        promote_latest_model_transcription,
+        restore_previous_canonical_data,
     ]
     ordering = ["schedule_title"]
 
@@ -1228,8 +1494,21 @@ class CensusScheduleAdmin(ModelAdmin):
         transcriptions = list(
             schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
         )
-        requested_source = request.POST.get("source") or request.GET.get("source")
-        selected = self._comparison_source(transcriptions, requested_source)
+        requested_baseline = request.POST.get("baseline") or request.GET.get(
+            "baseline"
+        )
+        requested_comparison = request.POST.get(
+            "comparison"
+        ) or request.GET.get("comparison")
+        baseline_ref, comparison_ref = self._comparison_source_refs(
+            transcriptions,
+            requested_baseline,
+            requested_comparison,
+        )
+        baseline = self._source_transcription(transcriptions, baseline_ref)
+        comparison_source = self._source_transcription(
+            transcriptions, comparison_ref
+        )
 
         jobs = {
             job.run_id: job
@@ -1238,25 +1517,35 @@ class CensusScheduleAdmin(ModelAdmin):
             ).select_related("run")
         }
         reconciliation_error = ""
-        candidate_can_promote = bool(selected)
+        can_apply = bool(
+            baseline_ref
+            and comparison_ref
+            and baseline_ref != comparison_ref
+            and (baseline is not None or comparison_source is not None)
+        )
         posted_decisions = self._reconciliation_decisions(request)
         try:
-            preview = build_reconciliation_preview(schedule, selected)
+            preview = build_reconciliation_preview(
+                schedule,
+                comparison_source,
+                baseline_transcription=baseline,
+            )
         except ReconciliationError as exc:
             preview = build_reconciliation_preview(schedule, validate=False)
             reconciliation_error = str(exc)
-            candidate_can_promote = False
+            can_apply = False
         comparison = preview["comparison"]
 
         if request.method == "POST":
             inferred_outcome = ""
-            if selected is None:
-                reconciliation_error = "Choose transcription evidence to review."
+            if not can_apply:
+                reconciliation_error = "Choose two distinct comparison sources."
             else:
                 try:
                     preview = build_reconciliation_preview(
                         schedule,
-                        selected,
+                        comparison_source,
+                        baseline_transcription=baseline,
                         decisions=posted_decisions,
                         mixed=True,
                     )
@@ -1283,7 +1572,14 @@ class CensusScheduleAdmin(ModelAdmin):
                         expected_fingerprint=request.POST.get(
                             "expected_fingerprint", ""
                         ),
-                        transcription_id=selected.pk if selected else None,
+                        baseline_transcription_id=(
+                            baseline.pk if baseline is not None else None
+                        ),
+                        comparison_transcription_id=(
+                            comparison_source.pk
+                            if comparison_source is not None
+                            else None
+                        ),
                         notes=request.POST.get("notes", ""),
                         decisions=posted_decisions,
                     )
@@ -1313,14 +1609,25 @@ class CensusScheduleAdmin(ModelAdmin):
             "opts": self.model._meta,
             "schedule": schedule,
             "image_url": image_url,
-            "sources": transcriptions,
-            "selected_source": self._comparison_source_details(
-                selected, jobs.get(selected.run_id) if selected else None
+            "source_options": self._comparison_source_options(transcriptions),
+            "baseline_ref": baseline_ref,
+            "comparison_ref": comparison_ref,
+            "baseline_source": self._comparison_source_details(
+                schedule,
+                baseline_ref,
+                baseline,
+                jobs.get(baseline.run_id) if baseline else None,
+            ),
+            "comparison_source": self._comparison_source_details(
+                schedule,
+                comparison_ref,
+                comparison_source,
+                jobs.get(comparison_source.run_id) if comparison_source else None,
             ),
             "comparison": comparison,
             "preview": preview,
             "reconciliation_error": reconciliation_error,
-            "candidate_can_promote": candidate_can_promote,
+            "can_apply": can_apply,
             "recent_reconciliations": schedule.reconciliations.select_related(
                 "reviewer"
             )[:5],
@@ -1332,15 +1639,78 @@ class CensusScheduleAdmin(ModelAdmin):
         )
 
     @staticmethod
-    def _comparison_source(sources, requested_id):
-        if requested_id:
-            selected = next(
-                (source for source in sources if str(source.pk) == requested_id),
-                None,
+    def _comparison_source_refs(
+        sources, requested_baseline, requested_comparison
+    ):
+        valid_refs = {"canonical", *(str(source.pk) for source in sources)}
+        human_sources = [
+            source for source in sources if source.run.kind == "human_snapshot"
+        ]
+        baseline_default = (
+            str(human_sources[0].pk) if human_sources else "canonical"
+        )
+        baseline_ref = (
+            requested_baseline
+            if requested_baseline in valid_refs
+            else baseline_default
+        )
+
+        comparison_order = [
+            str(source.pk) for source in sources if source.run.kind == "agent"
+        ]
+        comparison_order.extend(str(source.pk) for source in sources)
+        comparison_order.append("canonical")
+        comparison_default = next(
+            (ref for ref in comparison_order if ref != baseline_ref), ""
+        )
+        comparison_ref = (
+            requested_comparison
+            if requested_comparison in valid_refs
+            and requested_comparison != baseline_ref
+            else comparison_default
+        )
+        return baseline_ref, comparison_ref
+
+    @staticmethod
+    def _source_transcription(sources, source_ref):
+        if not source_ref or source_ref == "canonical":
+            return None
+        return next(
+            (source for source in sources if str(source.pk) == source_ref),
+            None,
+        )
+
+    @staticmethod
+    def _comparison_source_options(sources):
+        options = [
+            {
+                "value": "canonical",
+                "label": "Current canonical · live structured data",
+            }
+        ]
+        ordered_sources = sorted(
+            sources,
+            key=lambda source: (
+                source.run.kind != "human_snapshot",
+                -source.created_at.timestamp(),
+                -source.pk,
+            ),
+        )
+        for source in ordered_sources:
+            metadata = source.run.metadata
+            kind = source.run.get_kind_display()
+            model = metadata.get("model", "")
+            detail = f" · {model}" if model else ""
+            options.append(
+                {
+                    "value": str(source.pk),
+                    "label": (
+                        f"{kind} · {source.run.key}{detail} · "
+                        f"{source.created_at:%b %d, %Y %H:%M}"
+                    ),
+                }
             )
-            if selected:
-                return selected
-        return sources[0] if sources else None
+        return options
 
     @staticmethod
     def _reconciliation_decisions(request):
@@ -1363,13 +1733,44 @@ class CensusScheduleAdmin(ModelAdmin):
         return decisions
 
     @staticmethod
-    def _comparison_source_details(source, job):
-        if source is None:
+    def _comparison_source_details(schedule, source_ref, source, job):
+        if not source_ref:
             return None
+        if source_ref == "canonical":
+            return {
+                "ref": "canonical",
+                "heading": "Current canonical",
+                "subtitle": (
+                    f"Live structured data · "
+                    f"{schedule.get_transcription_status_display()}"
+                ),
+                "detail": "Approval target",
+                "job": None,
+                "raw_json": json.dumps(
+                    serialize_canonical(schedule),
+                    indent=2,
+                    sort_keys=True,
+                    default=str,
+                ),
+            }
         metadata = source.run.metadata
         return {
+            "ref": str(source.pk),
             "object": source,
             "run": source.run,
+            "heading": source.run.key,
+            "subtitle": (
+                f"{source.run.get_kind_display()} · "
+                f"{source.created_at:%b %d, %Y %H:%M}"
+            ),
+            "detail": " · ".join(
+                value
+                for value in (
+                    metadata.get("model", ""),
+                    metadata.get("contract_version", ""),
+                )
+                if value
+            ),
             "model": metadata.get("model", ""),
             "contract_version": metadata.get("contract_version", ""),
             "job": job,
