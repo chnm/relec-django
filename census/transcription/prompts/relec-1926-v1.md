@@ -15,11 +15,13 @@ nulls and booleans before validating and storing the candidate. Do not use a
 sentinel when the image supplies a real value.
 
 ## General principles
-
-- Record the Census Bureau's final accepted value. When an answer is crossed out
-  and replaced, use the replacement silently. A crossout without a replacement is
-  null. If a correction creates an arithmetic inconsistency, retain it and explain
-  the discrepancy in `ai_notes`.
+  
+- Record the Census Bureau's final accepted value. When an answer is crossed out\n  
+  and replaced, use the replacement silently. Please ignore crossed out content and 
+  insert non-crossed out text in field. The accurate answer could be hand written in 
+  red ink. A crossout without a replacement is\n  null. If a correction creates an 
+  arithmetic inconsistency, retain it and explain\n  the discrepancy in `ai_notes`.
+  
 - A blank or illegible field is null. Never guess an illegible value; explain the
   problem in `ai_notes`. In numeric fields, an explicit "None", "No", zero, or dash
   is integer zero.
@@ -41,9 +43,16 @@ sentinel when the image supplies a real value.
 - Transcribe county and state as written. State is the two-letter abbreviation when
   it can be determined. Set `populated_place_id` only when one supplied candidate is
   supported by the image and county context; otherwise use null.
-- `census_code` is the red-pencil two-part code (for example `0-1`). The separate
-  cursive three-part code belongs in `processing.denomination_code_stamp`.
-- `urban_rural_code` is the Bureau's literal red-pencil `U` or `R`, or null.
+- `census_code` is the handwritten red-pencil two-part code (for example `0-1` or '01'). 
+  The separate\n handwritten three-part code that is in blue or red or black ink (for example
+  ('1-2-3' or '123') belongs in `processing.denomination_code_stamp`. Hyphenate the three number
+  'denomination_code_stamp` in the output field.
+- `urban_rural_code` is a handwritten alphabetic code (letter-code is written in either print 
+  or cursive styles) in red-pencil. `U` denotes 'urban' and `R` denotes 'rural'. If present on 
+  schedule, 'U' or 'R' should be inserted in \n- `urban_rural_code` 
+  and 'null' if no handwritten 'U' or 'R' letter is present. 
+  
+
 
 ## Membership, buildings, and expenditures
 
