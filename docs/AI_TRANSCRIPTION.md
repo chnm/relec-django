@@ -85,11 +85,13 @@ dates and other metadata.
 The version-controlled default uses Anthropic's published Claude Sonnet 4.6 Batch
 rates effective 2026-08-11: $1.50 ordinary input, $7.50 output, $1.875 5-minute
 cache writes, $3.00 1-hour cache writes, and $0.15 cache reads per million tokens.
-It also records Claude Sonnet 5's introductory Batch rates through 2026-08-31:
-$1.00 input, $5.00 output, $1.25 5-minute cache writes, $2.00 1-hour cache writes,
-and $0.10 cache reads per million tokens. Sonnet 5's standard rates begin
-2026-09-01, so deployments must update the catalog before launching it after the
-introductory period.
+It also records Claude Sonnet 5's Batch rates: $1.00 input, $5.00 output, $1.25
+5-minute cache writes, $2.00 1-hour cache writes, and $0.10 cache reads per
+million tokens. These launched as introductory rates through 2026-08-31, but
+Anthropic made them the standard price and cancelled the planned 2026-09-01
+increase, so the entry no longer carries `valid_through`. Deployments that copied
+the earlier `CLAUDE_TRANSCRIPTION_PRICING` override with that date must remove it
+(or unset the override), or Sonnet 5 launches are rejected as expired.
 Confirm the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing)
 before changing the catalog.
 `CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES` applies to the base64-encoded image, matching

@@ -97,8 +97,6 @@ DEFAULT_CLAUDE_TRANSCRIPTION_PRICING = {
             }
         },
         "claude-sonnet-5": {
-            "effective_date": "2026-08-11",
-            "valid_through": "2026-08-31",
             "rates": {
                 "input_tokens": "1.00",
                 "output_tokens": "5.00",

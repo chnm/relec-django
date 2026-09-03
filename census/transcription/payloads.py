@@ -70,7 +70,16 @@ def build_batch_request(job):
     params = {
         "model": metadata["model"],
         "max_tokens": metadata["max_tokens"],
-        "system": metadata["prompt"],
+        # Every job in a run shares this prefix, so mark it for prompt caching.
+        # Batches run concurrently and can take longer than five minutes, so
+        # the 1-hour TTL is what Anthropic recommends for batch workloads.
+        "system": [
+            {
+                "type": "text",
+                "text": metadata["prompt"],
+                "cache_control": {"type": "ephemeral", "ttl": "1h"},
+            }
+        ],
         "messages": [
             {
                 "role": "user",
