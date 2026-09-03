@@ -581,7 +581,13 @@ def test_payload_contains_base64_image_context_and_structured_output(
     assert "effort" not in params["output_config"]
     assert len(payload["custom_id"]) <= 64
     assert params["messages"][0]["content"][0]["type"] == "image"
-    assert params["system"] == frozen_prompt
+    assert params["system"] == [
+        {
+            "type": "text",
+            "text": frozen_prompt,
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+    ]
     assert params["output_config"]["format"]["schema"] == frozen_transport_schema
     assert params["output_config"]["format"]["type"] == "json_schema"
     assert "populated_place_candidates" in params["messages"][0]["content"][1]["text"]
