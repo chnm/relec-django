@@ -120,16 +120,19 @@ def test_pricing_snapshot_rejects_expired_temporary_rates():
         pricing_snapshot_for_model(catalog, "test-model", as_of=date(2026, 8, 11))
 
 
-def test_configured_sonnet_5_introductory_batch_rates_are_bounded():
+def test_configured_sonnet_5_batch_rates_are_standard_and_unexpiring():
+    # Anthropic made the $2/$10 introductory price permanent; the planned
+    # 2026-09-01 increase did not happen, so the catalog must not expire.
+    # Test the version-controlled default, not a local .env override.
+    from config.settings import DEFAULT_CLAUDE_TRANSCRIPTION_PRICING
+
     snapshot = pricing_snapshot_for_model(
-        settings.CLAUDE_TRANSCRIPTION_PRICING,
-        "claude-sonnet-5",
-        as_of=date(2026, 8, 11),
+        DEFAULT_CLAUDE_TRANSCRIPTION_PRICING, "claude-sonnet-5"
     )
 
     assert snapshot["rates"]["input_tokens"] == "1.00"
     assert snapshot["rates"]["output_tokens"] == "5.00"
-    assert snapshot["valid_through"] == "2026-08-31"
+    assert "valid_through" not in snapshot
 
 
 def test_admin_sidebar_sections_are_always_expanded():
