@@ -558,6 +558,7 @@ class ReconciliationSource(models.Model):
         related_name="reconciliation_sources",
     )
     disposition = models.CharField(max_length=20, choices=Disposition.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
     objects = ImmutableQuerySet.as_manager()
 
     class Meta:
