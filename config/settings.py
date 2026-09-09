@@ -407,7 +407,7 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=needs_review",
                     },
                     {
-                        "title": "Student Work - Ready",
+                        "title": "Ready for Review",
                         "icon": "assignment_turned_in",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=completed",
                     },

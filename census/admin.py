@@ -192,7 +192,7 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
             ("review_queue", "Review Queue"),
             ("needs_review", "Needs Review"),
             ("in_progress", "In Progress"),
-            ("completed", "Student Work - Ready for Review"),
+            ("completed", "Ready for Review"),
             ("approved", "Approved"),
         )
 
