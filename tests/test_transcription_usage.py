@@ -150,7 +150,7 @@ def test_admin_sidebar_separates_project_management_from_data_models():
     assert navigation["Project Management"] == [
         "Review Queue",
         "Needs Review",
-        "Student Work - Ready",
+        "Ready for Review",
         "AI Transcriptions - Ready for Review",
         "Assigned to Me",
     ]

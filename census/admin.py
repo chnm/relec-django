@@ -192,7 +192,7 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
             ("review_queue", "Review Queue"),
             ("needs_review", "Needs Review"),
             ("in_progress", "In Progress"),
-            ("completed", "Student Work - Ready for Review"),
+            ("completed", "Ready for Review"),
             ("approved", "Approved"),
         )
 
@@ -1375,7 +1375,7 @@ def restore_previous_canonical_data(modeladmin, request, queryset):
 class CensusScheduleAdmin(ModelAdmin):
     change_form_template = "admin/census/censusschedule/change_form.html"
     list_display = [
-        "schedule_title",
+        "schedule_title_display",
         "schedule_id",
         "resource_id",
         "get_location_display",
@@ -1429,10 +1429,14 @@ class CensusScheduleAdmin(ModelAdmin):
         promote_latest_model_transcription,
         restore_previous_canonical_data,
     ]
-    ordering = ["schedule_title"]
+    ordering = ["title_sort_key", "pk"]
 
     class Media:
         js = ["js/admin_cascade_populated_place.js"]
+
+    @admin.display(description="Schedule title", ordering="title_sort_key")
+    def schedule_title_display(self, obj):
+        return obj.schedule_title
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -1546,10 +1550,15 @@ class CensusScheduleAdmin(ModelAdmin):
         )
         posted_decisions = self._reconciliation_decisions(request)
         try:
+            # Draft-level field problems (validate=False) must not block the
+            # display or disable Apply: the reviewer's actual mixed selection
+            # is what gets validated below, on POST. Only candidate-level
+            # errors (unsupported contract/kind) should still disable it.
             preview = build_reconciliation_preview(
                 schedule,
                 comparison_source,
                 baseline_transcription=baseline,
+                validate=False,
             )
         except ReconciliationError as exc:
             preview = build_reconciliation_preview(schedule, validate=False)
@@ -1559,7 +1568,10 @@ class CensusScheduleAdmin(ModelAdmin):
 
         if request.method == "POST":
             if not can_apply:
-                reconciliation_error = "Choose two distinct comparison sources."
+                if not reconciliation_error:
+                    reconciliation_error = (
+                        "Choose two distinct comparison sources."
+                    )
             else:
                 try:
                     preview = build_reconciliation_preview(

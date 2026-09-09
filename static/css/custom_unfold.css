@@ -617,6 +617,11 @@ button.bg-primary-600 {
   color: white;
 }
 
+.status-reviewed {
+  background-color: #059669;
+  color: white;
+}
+
 .status-failed {
   background-color: #b91c1c;
   color: white;

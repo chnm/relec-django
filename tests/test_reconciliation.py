@@ -326,8 +326,7 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         "schedule.respondent_name": "baseline",
         f"body.{body.pk}.name": "baseline",
         f"membership.{membership.pk}.male_members": "baseline",
-        f"entity.clergy.{current_clergy.pk}": "baseline",
-        "entity.clergy.new.0": "baseline",
+        f"clergy.{current_clergy.pk}.name": "baseline",
     }
     preview = build_reconciliation_preview(
         schedule,
@@ -382,6 +381,72 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
 
 
 @pytest.mark.django_db
+def test_context_sections_render_last():
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    titles = [section["title"] for section in preview["review_sections"]]
+    assert titles[-2:] == ["Marginalia", "Agent notes"]
+    assert all(
+        section["decision_scope"] != "automatic"
+        for section in preview["review_sections"][:-2]
+    )
+
+
+@pytest.mark.django_db
+def test_review_section_order_follows_schedule_form():
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    titles = [section["title"] for section in preview["review_sections"]]
+    assert titles[0] == "Schedule"
+    assert titles[1].startswith("Religious body:")
+    assert "membership" in titles[2]
+    assert titles[3].startswith("Clergy:")
+    assert titles[4:] == [
+        "Respondent",
+        "Census Bureau processing",
+        "Marginalia",
+        "Agent notes",
+    ]
+
+
+@pytest.mark.django_db
+def test_reviewer_can_mix_clergy_fields_when_names_differ(reviewer):
+    schedule = canonical_schedule()
+    current_clergy = schedule.clergy.get()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    clergy_sections = [
+        section
+        for section in preview["review_sections"]
+        if section["title"].startswith("Clergy:")
+        or section["title"].startswith("Comparison clergy:")
+    ]
+    assert len(clergy_sections) == 1
+    section = clergy_sections[0]
+    assert section["title"].startswith("Clergy:")
+    assert section["decision_scope"] == "field"
+    name_row = next(row for row in section["rows"] if row["label"] == "Name")
+    assert name_row["left"]["text"] == "Rev. Human"
+    assert name_row["right"]["text"] == "Rev. Agent"
+
+    original_pk = current_clergy.pk
+    decisions = {f"clergy.{original_pk}.name": "comparison"}
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        decisions=decisions,
+    )
+    current_clergy.refresh_from_db()
+    assert current_clergy.pk == original_pk
+    assert current_clergy.name == "Rev. Agent"
+    assert schedule.clergy.count() == 1
+
+
+@pytest.mark.django_db
 def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
     schedule = canonical_schedule()
     body = schedule.church_details.get()
@@ -429,16 +494,16 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
     assert str(body.expenses) == "1234.50"
     assert event.decisions["reviewer_overrides"] == [
         {
-            "field": "schedule.respondent_name",
-            "source": "edited",
-            "base": "comparison",
-            "value": "Reviewer Corrected",
-        },
-        {
             "field": f"body.{body.pk}.expenses",
             "source": "edited",
             "base": "baseline",
             "value": "1234.50",
+        },
+        {
+            "field": "schedule.respondent_name",
+            "source": "edited",
+            "base": "comparison",
+            "value": "Reviewer Corrected",
         },
     ]
 
@@ -492,8 +557,7 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
         f"entity.body.{second_current.pk}": "comparison",
         "entity.body.new.0": "comparison",
         "entity.body.new.1": "baseline",
-        f"entity.clergy.{schedule.clergy.get().pk}": "baseline",
-        "entity.clergy.new.0": "baseline",
+        f"clergy.{schedule.clergy.get().pk}.name": "baseline",
     }
 
     preview = build_reconciliation_preview(
@@ -647,6 +711,36 @@ def test_reviewed_agent_candidate_leaves_pending_ai_queue(reviewer):
     )
     annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
     assert annotated._ai_status == "transcribed"
+
+
+@pytest.mark.django_db
+def test_promotion_supersedes_older_pending_agent_candidates(reviewer):
+    schedule = canonical_schedule()
+    older = agent_source(schedule)
+    newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="newer")))
+    preview = build_reconciliation_preview(schedule, newer)
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=newer.pk,
+    )
+
+    older_source = older.reconciliation_sources.get()
+    assert older_source.disposition == ReconciliationSource.Disposition.SUPERSEDED
+    assert older_source.reconciliation == event
+    assert newer.reconciliation_sources.get().disposition == (
+        ReconciliationSource.Disposition.ACCEPTED
+    )
+
+    annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
+    assert annotated._ai_status == "reviewed"
+
+    even_newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="latest")))
+    annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
+    assert annotated._ai_status == "transcribed"
+    assert not even_newer.reconciliation_sources.exists()
 
 
 @pytest.mark.django_db

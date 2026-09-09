@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 
 from census.models import (
     CensusSchedule,
@@ -453,6 +454,26 @@ def apply_reconciliation(
             transcription=transcription,
             disposition=disposition,
         )
+
+    used_transcriptions = [
+        t for t in (baseline_transcription, comparison_transcription) if t is not None
+    ]
+    if used_transcriptions:
+        newest = max(used_transcriptions, key=lambda t: (t.created_at, t.pk))
+        pending_candidates = ScheduleTranscription.objects.filter(
+            census_schedule=schedule,
+            run__kind="agent",
+            reconciliation_sources__isnull=True,
+        ).filter(
+            Q(created_at__lt=newest.created_at)
+            | Q(created_at=newest.created_at, pk__lt=newest.pk)
+        )
+        for candidate in pending_candidates:
+            ReconciliationSource.objects.create(
+                reconciliation=reconciliation,
+                transcription=candidate,
+                disposition=ReconciliationSource.Disposition.SUPERSEDED,
+            )
     return reconciliation
 
 
@@ -685,65 +706,65 @@ def decisions_fingerprint(decisions):
     return hashlib.sha256(payload).hexdigest()
 
 
+def _schedule_group_section(
+    title, fields, before, candidate, decisions, used_decisions, proposed_fields
+):
+    rows = []
+    for field, label in fields:
+        key = f"schedule.{field}"
+        current_value = before["schedule_fields"].get(field)
+        candidate_value = candidate["schedule_fields"].get(field)
+        proposed_fields[field] = _selected_value(
+            decisions,
+            used_decisions,
+            key,
+            current_value,
+            candidate_value,
+        )
+        rows.append(
+            comparison_row(
+                label,
+                current_value,
+                candidate_value,
+                decision_key=key,
+                edit_type=_edit_type(key),
+                **_decision_row_options(used_decisions[key]),
+            )
+        )
+    return {
+        "title": title,
+        "note": (
+            "Select a value cell. Double-click it, or use Edit, to "
+            "enter a reviewer correction."
+        ),
+        "rows": rows,
+        "decision_scope": "field",
+    }
+
+
 def build_mixed_review(before, candidate, decisions):
-    """Align entities explicitly and construct a field-level mixed draft."""
+    """Align entities explicitly and construct a field-level mixed draft.
+
+    Section order follows the physical 1926 schedule form: Schedule fields,
+    then religious bodies/clergy (the body of the form), then Respondent and
+    Census Bureau processing (the form's footer), then AI context last.
+    """
     used_decisions = {}
     sections = []
     proposed_fields = {}
-    for title, fields in SCHEDULE_FIELD_GROUPS:
-        rows = []
-        for field, label in fields:
-            key = f"schedule.{field}"
-            current_value = before["schedule_fields"].get(field)
-            candidate_value = candidate["schedule_fields"].get(field)
-            proposed_fields[field] = _selected_value(
-                decisions,
-                used_decisions,
-                key,
-                current_value,
-                candidate_value,
-            )
-            rows.append(
-                comparison_row(
-                    label,
-                    current_value,
-                    candidate_value,
-                    decision_key=key,
-                    edit_type=_edit_type(key),
-                    **_decision_row_options(used_decisions[key]),
-                )
-            )
-        sections.append(
-            {
-                "title": title,
-                "note": (
-                    "Select a value cell. Double-click it, or use Edit, to "
-                    "enter a reviewer correction."
-                ),
-                "rows": rows,
-                "decision_scope": "field",
-            }
+    schedule_title, schedule_fields = SCHEDULE_FIELD_GROUPS[0]
+    trailing_schedule_groups = SCHEDULE_FIELD_GROUPS[1:]
+    sections.append(
+        _schedule_group_section(
+            schedule_title,
+            schedule_fields,
+            before,
+            candidate,
+            decisions,
+            used_decisions,
+            proposed_fields,
         )
-
-    for title, fields in AI_CONTEXT_FIELD_GROUPS:
-        rows = []
-        for field, label in fields:
-            current_value = before["schedule_fields"].get(field)
-            candidate_value = candidate["schedule_fields"].get(field)
-            proposed_fields[field] = deepcopy(candidate_value)
-            rows.append(comparison_row(label, current_value, candidate_value))
-        sections.append(
-            {
-                "title": title,
-                "note": (
-                    "AI transcription context is carried from the comparison "
-                    "evidence automatically."
-                ),
-                "rows": rows,
-                "decision_scope": "automatic",
-                "automatic_source": "comparison",
-            }
-        )
+    )
 
     proposed_bodies = []
     body_matches, current_only_bodies, candidate_only_bodies = (
@@ -832,6 +853,7 @@ def build_mixed_review(before, candidate, decisions):
             before["clergy"],
             candidate["clergy"],
             signature_fields=("name", "is_assistant"),
+            match_single=True,
         )
     )
     for index, (current_person, candidate_person) in enumerate(
@@ -897,6 +919,39 @@ def build_mixed_review(before, candidate, decisions):
                 "Do not add clergy row",
                 "Add comparison clergy row",
             )
+        )
+
+    for title, fields in trailing_schedule_groups:
+        sections.append(
+            _schedule_group_section(
+                title,
+                fields,
+                before,
+                candidate,
+                decisions,
+                used_decisions,
+                proposed_fields,
+            )
+        )
+
+    for title, fields in AI_CONTEXT_FIELD_GROUPS:
+        rows = []
+        for field, label in fields:
+            current_value = before["schedule_fields"].get(field)
+            candidate_value = candidate["schedule_fields"].get(field)
+            proposed_fields[field] = deepcopy(candidate_value)
+            rows.append(comparison_row(label, current_value, candidate_value))
+        sections.append(
+            {
+                "title": title,
+                "note": (
+                    "AI transcription context is carried from the comparison "
+                    "evidence automatically."
+                ),
+                "rows": rows,
+                "decision_scope": "automatic",
+                "automatic_source": "comparison",
+            }
         )
 
     return {
@@ -1332,6 +1387,7 @@ def _apply_draft(schedule, draft, reviewer):
         list(schedule.clergy.all()),
         draft["clergy"],
         signature_fields=("name", "is_assistant"),
+        match_single=True,
     )
     for person, person_data in clergy_matches:
         for field in CLERGY_FIELDS:
@@ -1465,6 +1521,7 @@ def _operation_summary(before, proposed):
         before["clergy"],
         proposed["clergy"],
         signature_fields=("name", "is_assistant"),
+        match_single=True,
     )
     return {
         "schedule_fields_changed": changed_fields,

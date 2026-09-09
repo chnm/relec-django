@@ -8,6 +8,7 @@ from census.models import ScheduleTranscription
 from census.transcription.comparison import build_comparison
 from census.transcription.reconciliation import (
     build_reconciliation_preview,
+    canonical_fingerprint,
     serialize_canonical,
 )
 from tests.factories import (
@@ -16,6 +17,7 @@ from tests.factories import (
     ScheduleTranscriptionFactory,
     TranscriptionRunFactory,
 )
+from tests.test_reconciliation import canonical_schedule
 
 
 def _row(comparison, section_title, label):
@@ -453,3 +455,91 @@ def test_interface_directly_applies_inline_edit(client, reviewer):
             "value": "Reviewer Name",
         }
     ]
+
+
+def _invalid_clergy_name_source(schedule):
+    """A comparison source whose clergy name fails draft validation."""
+    clergy = schedule.clergy.get()
+    candidate = serialize_canonical(schedule)
+    candidate["clergy"][0]["name"] = "x" * 1000
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=candidate,
+    )
+    return clergy, source
+
+
+@pytest.mark.django_db
+def test_get_with_invalid_candidate_field_still_enables_apply(client, reviewer):
+    schedule = canonical_schedule()
+    _, source = _invalid_clergy_name_source(schedule)
+    client.force_login(reviewer)
+
+    response = client.get(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {"baseline": "canonical", "comparison": source.pk},
+    )
+
+    assert response.status_code == 200
+    assert response.context["can_apply"] is True
+    assert b'comparison-button-primary" disabled' not in response.content
+
+
+@pytest.mark.django_db
+def test_post_selecting_baseline_value_for_invalid_field_approves(client, reviewer):
+    schedule = canonical_schedule()
+    clergy, source = _invalid_clergy_name_source(schedule)
+    client.force_login(reviewer)
+
+    response = client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "baseline": "canonical",
+            "comparison": source.pk,
+            "expected_fingerprint": canonical_fingerprint(
+                serialize_canonical(schedule)
+            ),
+            "confirmed": "yes",
+            f"choice__clergy.{clergy.pk}.name": "baseline",
+        },
+    )
+
+    schedule.refresh_from_db()
+    assert response.status_code == 302
+    assert schedule.transcription_status == "approved"
+    clergy.refresh_from_db()
+    assert clergy.name == "Rev. Human"
+
+
+@pytest.mark.django_db
+def test_post_with_invalid_selection_shows_validation_message(client, reviewer):
+    schedule = canonical_schedule()
+    _, source = _invalid_clergy_name_source(schedule)
+    client.force_login(reviewer)
+
+    response = client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "baseline": "canonical",
+            "comparison": source.pk,
+            "expected_fingerprint": canonical_fingerprint(
+                serialize_canonical(schedule)
+            ),
+            "confirmed": "yes",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Choose two distinct comparison sources." not in response.content
+    assert b"name:" in response.content
+    assert not schedule.reconciliations.exists()
