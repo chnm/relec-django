@@ -1375,7 +1375,7 @@ def restore_previous_canonical_data(modeladmin, request, queryset):
 class CensusScheduleAdmin(ModelAdmin):
     change_form_template = "admin/census/censusschedule/change_form.html"
     list_display = [
-        "schedule_title",
+        "schedule_title_display",
         "schedule_id",
         "resource_id",
         "get_location_display",
@@ -1429,10 +1429,14 @@ class CensusScheduleAdmin(ModelAdmin):
         promote_latest_model_transcription,
         restore_previous_canonical_data,
     ]
-    ordering = ["schedule_title"]
+    ordering = ["title_sort_key", "pk"]
 
     class Media:
         js = ["js/admin_cascade_populated_place.js"]
+
+    @admin.display(description="Schedule title", ordering="title_sort_key")
+    def schedule_title_display(self, obj):
+        return obj.schedule_title
 
     def get_actions(self, request):
         actions = super().get_actions(request)

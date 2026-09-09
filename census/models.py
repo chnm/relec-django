@@ -4,6 +4,8 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Func
+from django.db.models.functions import Coalesce, Concat, Lower
 from simple_history.models import HistoricalRecords
 
 from location.models import County, PopulatedPlace
@@ -152,6 +154,54 @@ class CensusSchedule(models.Model):
 
     resource_id = models.IntegerField(unique=True, verbose_name="Record ID")
     schedule_title = models.CharField(max_length=255)
+    # Natural sort key so the admin changelist can order "Foo: 2" before
+    # "Foo: 10" via an index instead of a per-request expression sort.
+    # Built as: lower(prefix) || '|' || lpad(number, 8, '0') || suffix
+    title_sort_key = models.GeneratedField(
+        expression=Concat(
+            Lower(
+                Func(
+                    Func(
+                        models.F("schedule_title"),
+                        models.Value(r"[ :]*\d+[a-z]?\s*$"),
+                        models.Value(""),
+                        function="regexp_replace",
+                    ),
+                    models.Value("[ :]+$"),
+                    models.Value(""),
+                    function="regexp_replace",
+                )
+            ),
+            models.Value("|"),
+            Func(
+                Coalesce(
+                    Func(
+                        models.F("schedule_title"),
+                        models.Value(r"(\d+)[a-z]?\s*$"),
+                        function="substring",
+                    ),
+                    models.Value(""),
+                ),
+                models.Value(8),
+                models.Value("0"),
+                function="lpad",
+                output_field=models.CharField(max_length=8),
+            ),
+            Coalesce(
+                Func(
+                    models.F("schedule_title"),
+                    models.Value(r"\d+([a-z]?)\s*$"),
+                    function="substring",
+                ),
+                models.Value(""),
+            ),
+            output_field=models.CharField(max_length=300),
+        ),
+        output_field=models.CharField(max_length=300),
+        db_persist=True,
+        db_index=True,
+        editable=False,
+    )
     schedule_id = models.CharField(max_length=50, verbose_name="Schedule ID")
     box = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(null=True, blank=True)

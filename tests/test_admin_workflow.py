@@ -490,6 +490,36 @@ def test_transcriber_sees_only_assigned_schedules(transcriber):
 
 
 @pytest.mark.django_db
+def test_schedule_changelist_uses_natural_title_sort(reviewer):
+    titles = [
+        "Advent Christian Church: 10",
+        "Advent Christian Church: 2",
+        "Advent Christian Church: 1",
+        "Baptist: 3",
+        "Church of God: 469a",
+        "Church of God: 469",
+        "Disciples of Christ:",
+    ]
+    for title in titles:
+        CensusScheduleFactory(schedule_title=title)
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    queryset = model_admin.get_queryset(admin_request(reviewer)).order_by(
+        *model_admin.ordering
+    )
+
+    assert list(queryset.values_list("schedule_title", flat=True)) == [
+        "Advent Christian Church: 1",
+        "Advent Christian Church: 2",
+        "Advent Christian Church: 10",
+        "Baptist: 3",
+        "Church of God: 469",
+        "Church of God: 469a",
+        "Disciples of Christ:",
+    ]
+
+
+@pytest.mark.django_db
 def test_dual_role_staff_sees_all_schedules(transcriber):
     reviewer_group, _ = Group.objects.get_or_create(name="Reviewers")
     transcriber.groups.add(reviewer_group)
