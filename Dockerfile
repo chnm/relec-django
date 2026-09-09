@@ -44,9 +44,9 @@ RUN node -v && npm -v
 RUN npm install
 
 # generate front end assets
-RUN uv run manage.py tailwind install
-RUN uv run manage.py tailwind build
-RUN uv run manage.py collectstatic --no-input
+RUN uv run manage.py tailwind --skip-checks install
+RUN uv run manage.py tailwind --skip-checks build
+RUN uv run manage.py collectstatic --no-input --skip-checks
 
 # clean up
 RUN rm -rf /root/.volta
