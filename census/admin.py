@@ -1546,10 +1546,15 @@ class CensusScheduleAdmin(ModelAdmin):
         )
         posted_decisions = self._reconciliation_decisions(request)
         try:
+            # Draft-level field problems (validate=False) must not block the
+            # display or disable Apply: the reviewer's actual mixed selection
+            # is what gets validated below, on POST. Only candidate-level
+            # errors (unsupported contract/kind) should still disable it.
             preview = build_reconciliation_preview(
                 schedule,
                 comparison_source,
                 baseline_transcription=baseline,
+                validate=False,
             )
         except ReconciliationError as exc:
             preview = build_reconciliation_preview(schedule, validate=False)
@@ -1559,7 +1564,10 @@ class CensusScheduleAdmin(ModelAdmin):
 
         if request.method == "POST":
             if not can_apply:
-                reconciliation_error = "Choose two distinct comparison sources."
+                if not reconciliation_error:
+                    reconciliation_error = (
+                        "Choose two distinct comparison sources."
+                    )
             else:
                 try:
                     preview = build_reconciliation_preview(
