@@ -404,7 +404,7 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=review_queue",
                     },
                     {
-                        "title": "Imported - Needs Review",
+                        "title": "Needs Review",
                         "icon": "fact_check",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=needs_review",
                     },

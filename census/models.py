@@ -145,7 +145,7 @@ class CensusSchedule(models.Model):
         ("unassigned", "Unassigned"),
         ("assigned", "Assigned"),
         ("in_progress", "In Progress"),
-        ("needs_review", "Imported - Needs Review"),
+        ("needs_review", "Needs Review"),
         ("completed", "Ready for Review"),
         ("approved", "Approved"),
     ]

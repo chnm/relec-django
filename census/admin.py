@@ -190,7 +190,7 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
             ("unassigned", "Unassigned Records"),
             ("assigned_to_me", "Assigned to Me"),
             ("review_queue", "Review Queue"),
-            ("needs_review", "Imported - Needs Review"),
+            ("needs_review", "Needs Review"),
             ("in_progress", "In Progress"),
             ("completed", "Student Work - Ready for Review"),
             ("approved", "Approved"),
@@ -815,7 +815,7 @@ mark_in_progress.short_description = "Mark as in progress"
 
 
 def mark_needs_review(modeladmin, request, queryset):
-    """Mark imported or untriaged records as needing review."""
+    """Mark records as needing review."""
     eligible = schedules_with_religious_bodies(queryset)
     count = eligible.update(transcription_status="needs_review")
     skipped = queryset.count() - count
