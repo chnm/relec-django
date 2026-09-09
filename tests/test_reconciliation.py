@@ -1,3 +1,4 @@
+import re
 from copy import deepcopy
 
 import pytest
@@ -1067,3 +1068,34 @@ def test_validation_errors_name_the_offending_field(reviewer):
     with pytest.raises(ReconciliationValidationError, match=r"^name: "):
         build_reconciliation_preview(schedule, source)
 
+
+@pytest.mark.django_db
+def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer):
+    schedule = canonical_schedule()
+    agent_source(schedule)
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    queryset = CensusSchedule.objects.filter(pk=schedule.pk)
+
+    for _ in range(2):
+        request = bulk_action_request(
+            reviewer,
+            action="promote_latest_model_transcription",
+            apply="1",
+            confirmed="yes",
+        )
+        promote_latest_model_transcription(model_admin, request, queryset)
+
+    assert schedule.reconciliations.count() == 1
+    assert any(
+        "already promoted" in message.message.lower()
+        for message in request._messages
+    )
+
+    confirmation = promote_latest_model_transcription(
+        model_admin,
+        bulk_action_request(reviewer, action="promote_latest_model_transcription"),
+        queryset,
+    )
+    page = confirmation.content.decode()
+    assert "Already promoted from" in page
+    assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)

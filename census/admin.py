@@ -1104,6 +1104,19 @@ def _latest_agent_transcription(schedule):
     )
 
 
+def _already_promoted_from(schedule, source):
+    """True when the newest unreversed reconciliation accepted this run."""
+    latest = schedule.reconciliations.filter(reverses__isnull=True).first()
+    return bool(
+        latest
+        and not latest.reversals.exists()
+        and latest.sources.filter(
+            transcription=source,
+            disposition=ReconciliationSource.Disposition.ACCEPTED,
+        ).exists()
+    )
+
+
 def _bulk_reconciliation_context(
     modeladmin,
     request,
@@ -1122,6 +1135,8 @@ def _bulk_reconciliation_context(
     items = [
         item_builder(schedule) for schedule in queryset.order_by("pk")[:100]
     ]
+    if total_count <= len(items):
+        eligible_count = sum(item["eligible"] for item in items)
     return {
         **modeladmin.admin_site.each_context(request),
         "opts": modeladmin.model._meta,
@@ -1188,6 +1203,9 @@ def promote_latest_model_transcription(modeladmin, request, queryset):
             if source is None:
                 skipped["no model transcription"] += 1
                 continue
+            if _already_promoted_from(schedule, source):
+                skipped["already promoted from this run"] += 1
+                continue
             try:
                 preview = build_reconciliation_preview(schedule, source)
                 notes = f"Bulk-promoted latest model run {source.run.key}."
@@ -1224,6 +1242,12 @@ def promote_latest_model_transcription(modeladmin, request, queryset):
                 "detail": "No model transcription available",
             }
         model = source.run.metadata.get("model", "Unspecified model")
+        if _already_promoted_from(schedule, source):
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": f"Already promoted from {source.run.key} · {model}",
+            }
         return {
             "schedule": schedule,
             "eligible": True,
