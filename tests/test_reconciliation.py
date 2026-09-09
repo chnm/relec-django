@@ -650,6 +650,36 @@ def test_reviewed_agent_candidate_leaves_pending_ai_queue(reviewer):
 
 
 @pytest.mark.django_db
+def test_promotion_supersedes_older_pending_agent_candidates(reviewer):
+    schedule = canonical_schedule()
+    older = agent_source(schedule)
+    newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="newer")))
+    preview = build_reconciliation_preview(schedule, newer)
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=newer.pk,
+    )
+
+    older_source = older.reconciliation_sources.get()
+    assert older_source.disposition == ReconciliationSource.Disposition.SUPERSEDED
+    assert older_source.reconciliation == event
+    assert newer.reconciliation_sources.get().disposition == (
+        ReconciliationSource.Disposition.ACCEPTED
+    )
+
+    annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
+    assert annotated._ai_status == "reviewed"
+
+    even_newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="latest")))
+    annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
+    assert annotated._ai_status == "transcribed"
+    assert not even_newer.reconciliation_sources.exists()
+
+
+@pytest.mark.django_db
 def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
     schedule = canonical_schedule()
     baseline_data = agent_candidate(

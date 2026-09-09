@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 
 from census.models import (
     CensusSchedule,
@@ -453,6 +454,26 @@ def apply_reconciliation(
             transcription=transcription,
             disposition=disposition,
         )
+
+    used_transcriptions = [
+        t for t in (baseline_transcription, comparison_transcription) if t is not None
+    ]
+    if used_transcriptions:
+        newest = max(used_transcriptions, key=lambda t: (t.created_at, t.pk))
+        pending_candidates = ScheduleTranscription.objects.filter(
+            census_schedule=schedule,
+            run__kind="agent",
+            reconciliation_sources__isnull=True,
+        ).filter(
+            Q(created_at__lt=newest.created_at)
+            | Q(created_at=newest.created_at, pk__lt=newest.pk)
+        )
+        for candidate in pending_candidates:
+            ReconciliationSource.objects.create(
+                reconciliation=reconciliation,
+                transcription=candidate,
+                disposition=ReconciliationSource.Disposition.SUPERSEDED,
+            )
     return reconciliation
 
 

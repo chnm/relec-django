@@ -229,7 +229,11 @@ Legacy human representations such as decimal strings and `Rural`/`Urban` labels
 are normalized for display. Repeated religious bodies, memberships, and clergy are
 matched by owned IDs or unique signatures rather than array order. Applying a
 decision updates canonical data atomically and preserves both sources, field-level
-choices, edits, and before/after snapshots as append-only provenance.
+choices, edits, and before/after snapshots as append-only provenance. Any other
+pending agent candidate for the schedule older than the newest source used in that
+decision is marked superseded at the same time, so leftover older candidates do not
+linger in the AI review queue; a candidate newer than the one just reviewed still
+returns to the queue for its own review.
 
 For a run that has already received sufficient quality review, the Census Schedule
 admin action menu provides **Promote latest model transcription**. The action uses
