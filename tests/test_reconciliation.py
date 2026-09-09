@@ -35,6 +35,7 @@ from tests.factories import (
     CensusScheduleFactory,
     ClergyFactory,
     MembershipFactory,
+    PopulatedPlaceFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
     TranscriptionJobFactory,
@@ -195,9 +196,8 @@ def test_reviewer_can_keep_current_data_and_approve(reviewer):
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.RETAINED_CURRENT,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        baseline_transcription_id=source.pk,
         notes="Human data matches the image.",
     )
 
@@ -222,7 +222,6 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
     )
@@ -255,7 +254,6 @@ def test_promotion_preserves_geocoding_when_address_is_unchanged(reviewer):
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
     )
@@ -293,7 +291,6 @@ def test_promotion_ignores_operational_fields_in_human_snapshot(reviewer):
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
     )
@@ -351,7 +348,6 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.MIXED,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
         decisions=decisions,
@@ -421,7 +417,6 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.MIXED,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
         decisions=decisions,
@@ -519,7 +514,6 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.MIXED,
         expected_fingerprint=preview["before_fingerprint"],
         transcription_id=source.pk,
         decisions=decisions,
@@ -543,7 +537,6 @@ def test_stale_preview_cannot_overwrite_newer_canonical_edits(reviewer):
         apply_reconciliation(
             schedule_id=schedule.pk,
             reviewer=reviewer,
-            outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
             expected_fingerprint=preview["before_fingerprint"],
             transcription_id=source.pk,
         )
@@ -596,7 +589,6 @@ def test_failed_write_rolls_back_the_complete_canonical_graph(reviewer, monkeypa
         apply_reconciliation(
             schedule_id=schedule.pk,
             reviewer=reviewer,
-            outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
             expected_fingerprint=preview["before_fingerprint"],
             transcription_id=source.pk,
         )
@@ -615,9 +607,8 @@ def test_reconciliation_evidence_and_dispositions_are_immutable(reviewer):
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.RETAINED_CURRENT,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        baseline_transcription_id=source.pk,
     )
 
     event.notes = "rewrite history"
@@ -640,9 +631,8 @@ def test_reviewed_agent_candidate_leaves_pending_ai_queue(reviewer):
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.RETAINED_CURRENT,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        baseline_transcription_id=source.pk,
     )
 
     annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
@@ -699,7 +689,6 @@ def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.MIXED,
         expected_fingerprint=preview["before_fingerprint"],
         baseline_transcription_id=baseline.pk,
         comparison_transcription_id=comparison.pk,
@@ -729,7 +718,6 @@ def test_reviewer_can_restore_previous_canonical_state(reviewer):
     promoted = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=preview["before_fingerprint"],
         comparison_transcription_id=source.pk,
     )
@@ -766,7 +754,6 @@ def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
     first = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=first_preview["before_fingerprint"],
         comparison_transcription_id=first_source.pk,
     )
@@ -786,7 +773,6 @@ def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
     second = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=second_preview["before_fingerprint"],
         comparison_transcription_id=second_source.pk,
     )
@@ -875,7 +861,6 @@ def test_bulk_restore_records_a_reversal(reviewer):
     promoted = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
-        outcome=ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         expected_fingerprint=preview["before_fingerprint"],
         comparison_transcription_id=source.pk,
     )
@@ -898,3 +883,187 @@ def test_bulk_restore_records_a_reversal(reviewer):
     assert schedule.respondent_name == "Human Respondent"
     reversal = schedule.reconciliations.exclude(pk=promoted.pk).get()
     assert reversal.reverses == promoted
+
+
+@pytest.mark.django_db
+def test_outcome_is_derived_from_the_applied_result(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    before = serialize_canonical(schedule)
+    preview = build_reconciliation_preview(schedule, baseline_transcription=source)
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        baseline_transcription_id=source.pk,
+    )
+
+    schedule.refresh_from_db()
+    assert event.outcome == ScheduleReconciliation.Outcome.RETAINED_CURRENT
+    assert schedule.transcription_status == "approved"
+    assert serialize_canonical(schedule) == before
+    assert event.decisions["operations"]["religious_bodies"] == {
+        "updated": 0,
+        "added": 0,
+        "removed": 0,
+    }
+    assert event.sources.get().disposition == ReconciliationSource.Disposition.REJECTED
+
+
+@pytest.mark.django_db
+def test_repromoting_an_identical_candidate_records_no_changes(reviewer):
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["schedule_fields"]["respondent"]["title"] = None
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, source)
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+
+    schedule.refresh_from_db()
+    preview = build_reconciliation_preview(schedule, source)
+    assert preview["has_changes"] is False
+    assert preview["operations"]["schedule_fields_changed"] == []
+    assert preview["operations"]["religious_bodies"]["updated"] == 0
+    assert infer_reconciliation_outcome(preview) == (
+        ScheduleReconciliation.Outcome.RETAINED_CURRENT
+    )
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+    assert event.outcome == ScheduleReconciliation.Outcome.RETAINED_CURRENT
+    assert event.sources.get().disposition == ReconciliationSource.Disposition.ACCEPTED
+
+
+@pytest.mark.django_db
+def test_canonical_comparison_source_updates_existing_rows_in_place(reviewer):
+    schedule = canonical_schedule()
+    first = schedule.church_details.get()
+    second = ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+        name="Second Human Church",
+        address="12 Old Street",
+        census_code="H-2",
+        latitude=38.5,
+        longitude=-77.5,
+        geocode_status="success",
+    )
+    candidate = agent_candidate()
+    second_candidate = deepcopy(candidate["religious_bodies"][0])
+    second_candidate.update(
+        {"name": "Second Agent Church", "address": "23 New Street", "census_code": "A-2"}
+    )
+    candidate["religious_bodies"].append(second_candidate)
+    source = agent_source(schedule, candidate)
+
+    preview = build_reconciliation_preview(
+        schedule, baseline_transcription=source, mixed=True
+    )
+    assert preview["operations"]["religious_bodies"] == {
+        "updated": 0,
+        "added": 0,
+        "removed": 0,
+    }
+
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        baseline_transcription_id=source.pk,
+    )
+
+    assert set(schedule.church_details.values_list("pk", flat=True)) == {
+        first.pk,
+        second.pk,
+    }
+    assert schedule.church_details.get(pk=second.pk).geocode_status == "success"
+
+
+@pytest.mark.django_db
+def test_candidate_can_be_promoted_again_after_a_restore(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+    schedule.refresh_from_db()
+    rollback_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=canonical_fingerprint(serialize_canonical(schedule)),
+    )
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Human Respondent"
+
+    preview = build_reconciliation_preview(schedule, source)
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Agent Respondent"
+    assert event.outcome == ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    assert schedule.reconciliations.count() == 3
+
+
+@pytest.mark.django_db
+def test_ambiguous_populated_place_fails_closed(reviewer):
+    schedule = canonical_schedule()
+    PopulatedPlaceFactory(county=schedule.county, place_id=777)
+    PopulatedPlaceFactory(county=schedule.county, place_id=777)
+    source = agent_source(schedule, agent_candidate(populated_place_id=777))
+
+    with pytest.raises(ReconciliationValidationError, match="populated place"):
+        build_reconciliation_preview(schedule, source)
+
+
+@pytest.mark.django_db
+def test_promotion_preserves_unvalidated_operational_fields_on_existing_rows(
+    reviewer,
+):
+    schedule = canonical_schedule()
+    body = schedule.church_details.get()
+    body.denomination = None
+    body.save()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        comparison_transcription_id=source.pk,
+    )
+
+    body.refresh_from_db()
+    assert body.name == "Agent Church"
+    assert body.denomination is None
+
+
+@pytest.mark.django_db
+def test_validation_errors_name_the_offending_field(reviewer):
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["clergy"][0]["name"] = "x" * 1000
+    source = agent_source(schedule, candidate)
+
+    with pytest.raises(ReconciliationValidationError, match=r"^name: "):
+        build_reconciliation_preview(schedule, source)
+

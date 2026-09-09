@@ -51,7 +51,6 @@ from .transcription.reconciliation import (
     apply_reconciliation,
     build_reconciliation_preview,
     canonical_fingerprint,
-    infer_reconciliation_outcome,
     latest_reversible_reconciliation,
     rollback_reconciliation,
     serialize_canonical,
@@ -1191,14 +1190,12 @@ def promote_latest_model_transcription(modeladmin, request, queryset):
                 continue
             try:
                 preview = build_reconciliation_preview(schedule, source)
-                outcome = infer_reconciliation_outcome(preview)
                 notes = f"Bulk-promoted latest model run {source.run.key}."
                 if reviewer_notes:
                     notes = f"{notes}\n{reviewer_notes}"
                 apply_reconciliation(
                     schedule_id=schedule.pk,
                     reviewer=request.user,
-                    outcome=outcome,
                     expected_fingerprint=preview["before_fingerprint"],
                     comparison_transcription_id=source.pk,
                     notes=notes,
@@ -1537,7 +1534,6 @@ class CensusScheduleAdmin(ModelAdmin):
         comparison = preview["comparison"]
 
         if request.method == "POST":
-            inferred_outcome = ""
             if not can_apply:
                 reconciliation_error = "Choose two distinct comparison sources."
             else:
@@ -1554,7 +1550,6 @@ class CensusScheduleAdmin(ModelAdmin):
                 else:
                     reconciliation_error = ""
                     comparison = preview["comparison"]
-                    inferred_outcome = infer_reconciliation_outcome(preview)
 
             if (
                 not reconciliation_error
@@ -1568,7 +1563,6 @@ class CensusScheduleAdmin(ModelAdmin):
                     reconciliation = apply_reconciliation(
                         schedule_id=schedule.pk,
                         reviewer=request.user,
-                        outcome=inferred_outcome,
                         expected_fingerprint=request.POST.get(
                             "expected_fingerprint", ""
                         ),

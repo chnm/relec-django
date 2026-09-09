@@ -125,6 +125,15 @@ BOOLEAN_FIELDS = {
 }
 INTEGER_FIELDS = (NONNEGATIVE_FIELDS - DECIMAL_FIELDS) | {"populated_place_id"}
 DATE_FIELDS = {"date_received"}
+TEXT_FIELDS = {
+    "respondent_name",
+    "respondent_title",
+    "respondent_po_address",
+    "respondent_date_signed",
+    "district_stamp",
+    "denomination_code_stamp",
+    "ai_notes",
+}
 SCHEDULE_FIELD_GROUPS = (
     (
         "Schedule",
@@ -227,12 +236,35 @@ def serialize_canonical(schedule):
             {field: _json_value(getattr(person, field)) for field in CLERGY_FIELDS}
         )
         clergy.append(values)
-    return {
-        "schema_version": DECISION_VERSION,
-        "schedule_fields": schedule_fields,
-        "religious_bodies": bodies,
-        "clergy": clergy,
-    }
+    return _normalize_snapshot(
+        {
+            "schema_version": DECISION_VERSION,
+            "schedule_fields": schedule_fields,
+            "religious_bodies": bodies,
+            "clergy": clergy,
+        }
+    )
+
+
+def _normalize_snapshot(snapshot):
+    """Coerce every draft to its stored representation so comparisons are exact."""
+    fields = snapshot["schedule_fields"]
+    for field in TEXT_FIELDS:
+        if fields.get(field) is None:
+            fields[field] = ""
+    for body in snapshot["religious_bodies"]:
+        for field in DECIMAL_FIELDS:
+            body[field] = _decimal_text(body.get(field))
+    return snapshot
+
+
+def _decimal_text(value):
+    if value in (None, ""):
+        return None
+    try:
+        return format(Decimal(str(value)).quantize(Decimal("0.01")), "f")
+    except (InvalidOperation, TypeError, ValueError):
+        return value
 
 
 def canonical_fingerprint(snapshot):
@@ -285,7 +317,7 @@ def build_reconciliation_preview(
         "before_fingerprint": canonical_fingerprint(before),
         "operations": operations,
         "warnings": warnings,
-        "has_changes": before != proposed,
+        "has_changes": _source_content(before) != _source_content(proposed),
         "review_sections": review["sections"],
         "decisions": review["decisions"],
         "decisions_fingerprint": decisions_fingerprint(review["decisions"]),
@@ -309,7 +341,7 @@ def infer_reconciliation_outcome(preview):
         for decision in preview["decisions"].values()
     ):
         return ScheduleReconciliation.Outcome.MIXED
-    if preview["proposed"] == preview["before"]:
+    if _source_content(preview["proposed"]) == _source_content(preview["before"]):
         return ScheduleReconciliation.Outcome.RETAINED_CURRENT
     if any(
         _source_content(preview["proposed"]) == _source_content(source)
@@ -327,7 +359,6 @@ def apply_reconciliation(
     *,
     schedule_id,
     reviewer,
-    outcome,
     expected_fingerprint,
     transcription_id=None,
     baseline_transcription_id=None,
@@ -336,8 +367,6 @@ def apply_reconciliation(
     decisions=None,
 ):
     """Apply one fully reviewed decision and approve the schedule atomically."""
-    if outcome not in ScheduleReconciliation.Outcome.values:
-        raise ReconciliationValidationError("Choose a valid reconciliation outcome.")
     if transcription_id is not None and comparison_transcription_id is None:
         comparison_transcription_id = transcription_id
     if (
@@ -358,21 +387,6 @@ def apply_reconciliation(
     comparison_transcription = _reconciliation_transcription(
         schedule, comparison_transcription_id, "comparison"
     )
-    transcriptions = [
-        source
-        for source in (baseline_transcription, comparison_transcription)
-        if source is not None
-    ]
-    if (
-        outcome
-        in {
-            ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
-            ScheduleReconciliation.Outcome.MIXED,
-        }
-        and not transcriptions
-    ):
-        raise ReconciliationValidationError("Choose evidence to promote.")
-
     preview = build_reconciliation_preview(
         schedule,
         comparison_transcription,
@@ -389,17 +403,7 @@ def apply_reconciliation(
         "baseline": _source_ref(baseline_transcription),
         "comparison": _source_ref(comparison_transcription),
     }
-    duplicate = ScheduleReconciliation.objects.filter(
-        census_schedule=schedule,
-        reviewer=reviewer,
-        outcome=outcome,
-        before_fingerprint=expected_fingerprint,
-        decisions__source_refs=source_refs,
-        decisions__field_source_decisions=preview["decisions"],
-    ).first()
-    if duplicate:
-        return duplicate
-
+    outcome = infer_reconciliation_outcome(preview)
     if outcome in {
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         ScheduleReconciliation.Outcome.MIXED,
@@ -438,14 +442,10 @@ def apply_reconciliation(
     for transcription, snapshot in source_snapshots:
         if transcription is None:
             continue
-        if outcome == ScheduleReconciliation.Outcome.MIXED:
-            disposition = ReconciliationSource.Disposition.INCORPORATED
-        elif (
-            outcome == ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
-            and _source_content(preview["proposed"])
-            == _source_content(snapshot)
-        ):
+        if _source_content(preview["proposed"]) == _source_content(snapshot):
             disposition = ReconciliationSource.Disposition.ACCEPTED
+        elif outcome == ScheduleReconciliation.Outcome.MIXED:
+            disposition = ReconciliationSource.Disposition.INCORPORATED
         else:
             disposition = ReconciliationSource.Disposition.REJECTED
         ReconciliationSource.objects.create(
@@ -666,12 +666,14 @@ def _candidate_draft(schedule, transcription, before):
         if person.get("id") is not None:
             values["id"] = person["id"]
         clergy.append(values)
-    return {
-        "schema_version": DECISION_VERSION,
-        "schedule_fields": proposed_fields,
-        "religious_bodies": bodies,
-        "clergy": clergy,
-    }
+    return _normalize_snapshot(
+        {
+            "schema_version": DECISION_VERSION,
+            "schedule_fields": proposed_fields,
+            "religious_bodies": bodies,
+            "clergy": clergy,
+        }
+    )
 
 
 def decisions_fingerprint(decisions):
@@ -803,7 +805,7 @@ def build_mixed_review(before, candidate, decisions):
         selected = _selected_source(decisions, used_decisions, key)
         if selected == "comparison":
             proposed_body = deepcopy(candidate_body)
-            proposed_body["_force_create"] = True
+            proposed_body["_force_create"] = candidate_body.get("id") is None
             proposed_bodies.append(proposed_body)
         sections.append(
             _entity_section(
@@ -881,7 +883,7 @@ def build_mixed_review(before, candidate, decisions):
         selected = _selected_source(decisions, used_decisions, key)
         if selected == "comparison":
             proposed_person = deepcopy(candidate_person)
-            proposed_person["_force_create"] = True
+            proposed_person["_force_create"] = candidate_person.get("id") is None
             proposed_clergy.append(proposed_person)
         sections.append(
             _entity_section(
@@ -992,7 +994,9 @@ def _mixed_body(
         selected = _selected_source(decisions, used_decisions, key)
         if selected == "comparison":
             proposed_membership = deepcopy(candidate_membership)
-            proposed_membership["_force_create"] = True
+            proposed_membership["_force_create"] = (
+                candidate_membership.get("id") is None
+            )
             memberships.append(proposed_membership)
         membership_sections.append(
             _entity_section(
@@ -1180,7 +1184,7 @@ def _coerce_edited_value(key, raw_value):
             raise ReconciliationValidationError(
                 f"Enter a finite number for {key!r}."
             )
-        return format(decimal_value, "f")
+        return _decimal_text(decimal_value)
     if field in BOOLEAN_FIELDS:
         if value == "":
             return None
@@ -1205,35 +1209,12 @@ def _validate_draft(schedule, draft):
             "A canonical schedule must contain at least one religious body."
         )
     fields = draft["schedule_fields"]
-    place_id = fields.get("populated_place_id")
-    place = None
-    if place_id is not None:
-        if schedule.county_id is None:
-            raise ReconciliationValidationError(
-                "A populated place cannot be selected without a schedule county."
-            )
-        place = PopulatedPlace.objects.filter(
-            county=schedule.county, place_id=place_id
-        ).first()
-        if place is None:
-            raise ReconciliationValidationError(
-                "The proposed populated place is not in the schedule county."
-            )
+    place = _resolve_place(schedule, fields.get("populated_place_id"))
 
     candidate_schedule = CensusSchedule.objects.get(pk=schedule.pk)
     candidate_schedule.populated_place = place
     for field in SCHEDULE_FIELDS:
         value = fields.get(field)
-        if field in {
-            "respondent_name",
-            "respondent_title",
-            "respondent_po_address",
-            "respondent_date_signed",
-            "district_stamp",
-            "denomination_code_stamp",
-            "ai_notes",
-        } and value is None:
-            value = ""
         if field == "date_received":
             value = _parse_date(value)
         _reject_negative(field, value)
@@ -1272,26 +1253,34 @@ def _validate_draft(schedule, draft):
         _full_clean(person, exclude={"id"})
 
 
+def _resolve_place(schedule, place_id):
+    if place_id is None:
+        return None
+    if schedule.county_id is None:
+        raise ReconciliationValidationError(
+            "A populated place cannot be selected without a schedule county."
+        )
+    places = list(
+        PopulatedPlace.objects.filter(county=schedule.county, place_id=place_id)[:2]
+    )
+    if not places:
+        raise ReconciliationValidationError(
+            "The proposed populated place is not in the schedule county."
+        )
+    if len(places) > 1:
+        raise ReconciliationValidationError(
+            "The proposed populated place ID is ambiguous in the schedule county."
+        )
+    return places[0]
+
+
 def _apply_draft(schedule, draft, reviewer):
     fields = draft["schedule_fields"]
-    place_id = fields.get("populated_place_id")
-    schedule.populated_place = (
-        PopulatedPlace.objects.get(county=schedule.county, place_id=place_id)
-        if place_id is not None
-        else None
+    schedule.populated_place = _resolve_place(
+        schedule, fields.get("populated_place_id")
     )
     for field in SCHEDULE_FIELDS:
         value = fields.get(field)
-        if field in {
-            "respondent_name",
-            "respondent_title",
-            "respondent_po_address",
-            "respondent_date_signed",
-            "district_stamp",
-            "denomination_code_stamp",
-            "ai_notes",
-        } and value is None:
-            value = ""
         if field == "date_received":
             value = _parse_date(value)
         setattr(schedule, field, value)
@@ -1615,7 +1604,6 @@ def _sum_disagrees(left, right, total):
 def _history_save(instance, reviewer, reason):
     instance._history_user = reviewer
     instance._change_reason = reason
-    instance.full_clean()
     instance.save()
 
 
@@ -1629,7 +1617,16 @@ def _full_clean(instance, exclude=None):
     try:
         instance.full_clean(exclude=exclude or set())
     except ValidationError as exc:
-        raise ReconciliationValidationError(str(exc)) from exc
+        raise ReconciliationValidationError(_validation_message(exc)) from exc
+
+
+def _validation_message(exc):
+    if hasattr(exc, "message_dict"):
+        return "; ".join(
+            f"{field}: {' '.join(messages)}"
+            for field, messages in exc.message_dict.items()
+        )
+    return "; ".join(exc.messages)
 
 
 def _reject_negative(field, value):
