@@ -415,11 +415,16 @@ class ClaudeTranscriptionWorker:
             job.save()
             return job
 
-        ScheduleTranscription.objects.get_or_create(
+        _, created = ScheduleTranscription.objects.get_or_create(
             census_schedule=job.census_schedule,
             run=job.run,
             defaults={"data": candidate},
         )
+        schedule = job.census_schedule
+        if created and schedule.transcription_status != "approved":
+            schedule.transcription_status = "needs_review"
+            schedule._change_reason = f"AI transcription {job.run.key} ready for review"
+            schedule.save(update_fields=["transcription_status", "updated_at"])
         job.state = TranscriptionJob.State.SUCCEEDED
         job.save()
         return job

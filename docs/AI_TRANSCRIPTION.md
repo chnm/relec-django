@@ -163,13 +163,15 @@ admin pages expose progress, errors, and token usage. Reviewers may cancel only 
 that are still locally queued and have not been claimed into a batch; submitted and
 evidence-bearing jobs remain protected.
 
-A successful candidate never changes the canonical `transcription_status` by
-itself. Reviewers reach those schedules through **Project Management → AI
-Transcriptions - Ready for Review**, which applies the `AI transcribed` schedule
-filter and opens the reconciliation workflow. The ordinary Review Queue
-continues to mean canonical human/imported work. The admin Overview reports human
-review readiness, AI candidate readiness, approvals, and approval percentage as
-separate measures; only `approved` schedules count toward project approval.
+A successful candidate moves an unapproved schedule to `needs_review`, the same
+state a human transcriber's finished work enters; an `approved` schedule keeps its
+status and only gains a new candidate. The status change is recorded in the
+schedule's history with the run key as the change reason. Reviewers can also reach
+AI work through **Project Management → AI Transcriptions - Ready for Review**, which
+applies the `AI transcribed` schedule filter and opens the reconciliation workflow.
+The admin Overview reports human review readiness, AI candidate readiness,
+approvals, and approval percentage as separate measures; only `approved` schedules
+count toward project approval.
 
 ## Usage, cost, and benchmark reporting
 
