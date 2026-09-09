@@ -49,7 +49,7 @@ ANTHROPIC_API_BASE_URL = env(
 CLAUDE_TRANSCRIPTION_ENABLED = env.bool("CLAUDE_TRANSCRIPTION_ENABLED", default=False)
 CLAUDE_TRANSCRIPTION_MODELS = env.list(
     "CLAUDE_TRANSCRIPTION_MODELS",
-    default=["claude-sonnet-4-6", "claude-sonnet-5"],
+    default=["claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-4-8"],
 )
 CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=8192
