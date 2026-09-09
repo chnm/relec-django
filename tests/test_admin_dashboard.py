@@ -4,7 +4,11 @@ from django.urls import reverse
 
 from census.models import TranscriptionJob
 from religious_ecologies.admin import _get_dashboard_data_sync
-from tests.factories import CensusScheduleFactory, TranscriptionJobFactory
+from tests.factories import (
+    CensusScheduleFactory,
+    ScheduleTranscriptionFactory,
+    TranscriptionJobFactory,
+)
 
 
 @pytest.mark.django_db
@@ -20,9 +24,13 @@ def test_dashboard_metrics_distinguish_approval_and_review_readiness():
             "approved",
         )
     }
-    TranscriptionJobFactory(
+    job = TranscriptionJobFactory(
         census_schedule=schedules["unassigned"],
         state=TranscriptionJob.State.SUCCEEDED,
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=schedules["unassigned"],
+        run=job.run,
     )
 
     context = _get_dashboard_data_sync(include_ai_usage=True)

@@ -874,3 +874,37 @@ def test_provider_evidence_is_immutable():
 
     with pytest.raises(ValidationError, match="Immutable job fields"):
         TranscriptionJob.objects.filter(pk=job.pk).update(input_tokens=4)
+
+
+@pytest.mark.django_db(transaction=True)
+@override_settings(
+    CLAUDE_TRANSCRIPTION_BATCH_SIZE=2,
+    CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES=1,
+    CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES=1024 * 1024,
+    CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=1024,
+    CLAUDE_TRANSCRIPTION_LEASE_SECONDS=60,
+)
+def test_successful_transcription_moves_unapproved_schedules_to_needs_review(
+    tmp_path, settings
+):
+    settings.MEDIA_ROOT = tmp_path
+    run = TranscriptionRunFactory(metadata=frozen_run_metadata())
+    schedules = {}
+    for status in ("in_progress", "approved"):
+        schedules[status] = CensusScheduleFactory(
+            transcription_status=status,
+            original_image=SimpleUploadedFile(
+                f"{status}.jpg", b"image bytes", content_type="image/jpeg"
+            ),
+        )
+        TranscriptionJobFactory(census_schedule=schedules[status], run=run)
+    worker = ClaudeTranscriptionWorker(client=SuccessfulBatchClient(candidate()))
+
+    assert worker.run_once()
+    assert worker.run_once()
+
+    for schedule in schedules.values():
+        schedule.refresh_from_db()
+    assert schedules["in_progress"].transcription_status == "needs_review"
+    assert schedules["approved"].transcription_status == "approved"
+    assert run.key in schedules["in_progress"].history.first().history_change_reason

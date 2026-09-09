@@ -53,7 +53,7 @@
                 <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=review_queue">
                     <span>Review Queue</span>
                     <strong>{{ needs_review_count|intcomma }}</strong>
-                    <small>Imported and student work awaiting human review</small>
+                    <small>Transcribed work awaiting human review</small>
                 </a>
                 {% if show_ai_usage %}
                     <a class="attention-card attention-card-ai" href="{% url 'admin:census_censusschedule_changelist' %}?ai_status=transcribed">
@@ -63,9 +63,9 @@
                     </a>
                 {% endif %}
                 <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=needs_review">
-                    <span>Imported - Needs Review</span>
+                    <span>Needs Review</span>
                     <strong>{{ imported_needs_review_count|intcomma }}</strong>
-                    <small>Imported records requiring canonical review</small>
+                    <small>Records requiring canonical review</small>
                 </a>
                 <a class="attention-card" href="{% url 'admin:census_censusschedule_changelist' %}?workflow_view=unassigned">
                     <span>Unassigned Records</span>
@@ -94,7 +94,7 @@
                         <li>Unassigned: {{ status_counts.unassigned|intcomma }}</li>
                         <li>Assigned: {{ status_counts.assigned|intcomma }}</li>
                         <li>In Progress: {{ status_counts.in_progress|intcomma }}</li>
-                        <li>Imported - Needs Review: {{ status_counts.needs_review|intcomma }}</li>
+                        <li>Needs Review: {{ status_counts.needs_review|intcomma }}</li>
                         <li>Ready for Review: {{ status_counts.completed|intcomma }}</li>
                         <li>Approved: {{ status_counts.approved|intcomma }}</li>
                     </ul>
@@ -206,7 +206,7 @@
                 data: {
                     labels: [
                         "Unassigned", "Assigned", "In Progress",
-                        "Imported - Needs Review", "Ready for Review", "Approved",
+                        "Needs Review", "Ready for Review", "Approved",
                     ],
                     datasets: [{
                         label: "Schedules",

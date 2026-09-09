@@ -1,12 +1,18 @@
 import pytest
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied
+from django.test import Client
 from django.urls import reverse
 
 from census.models import ScheduleTranscription
 from census.transcription.comparison import build_comparison
+from census.transcription.reconciliation import (
+    build_reconciliation_preview,
+    serialize_canonical,
+)
 from tests.factories import (
     CensusScheduleFactory,
+    ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
     TranscriptionRunFactory,
 )
@@ -87,8 +93,12 @@ def transcriber(db):
 
 
 @pytest.mark.django_db
-def test_reviewer_can_render_read_only_comparison(client, reviewer):
+def test_reviewer_can_render_reconciliation_preview_without_writes(client, reviewer):
     schedule = CensusScheduleFactory()
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
     human_run = TranscriptionRunFactory(key="human-review", kind="human_snapshot")
     agent_run = TranscriptionRunFactory(
         key="agent-review",
@@ -117,14 +127,27 @@ def test_reviewer_can_render_read_only_comparison(client, reviewer):
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"human": human.pk, "agent": agent.pk},
+        {"baseline": human.pk, "comparison": agent.pk},
     )
 
     assert response.status_code == 200
-    assert b"Compare transcriptions" in response.content
+    assert b"Reconcile and approve" in response.content
     assert b"human-review" in response.content
-    assert b"agent-review" in response.content
-    assert b"Blank vs zero" in response.content
+    assert b"Apply and approve" in response.content
+    assert b"Choose what becomes canonical" not in response.content
+    assert b"Preview mixed selection" not in response.content
+    assert b"section-selection-status" in response.content
+    assert b'aria-pressed="false"' in response.content
+    assert b"comparison-source-value-baseline" in response.content
+    assert b"comparison-source-value-comparison" in response.content
+    assert b"updateSectionSelection" in response.content
+    assert b"source-value-select" in response.content
+    assert b"edited-choice" in response.content
+    assert b"save-inline-edit" in response.content
+    assert b'addEventListener("dblclick"' in response.content
+    assert b"comparison-decision" not in response.content
+    assert b'data-automatic-source="comparison"' in response.content
+    assert b"carried from the comparison evidence automatically" in response.content
     assert list(
         ScheduleTranscription.objects.filter(census_schedule=schedule).values_list(
             "pk", "data"
@@ -151,6 +174,10 @@ def test_transcriber_cannot_access_comparison(client, transcriber):
 def test_comparison_source_selection_is_scoped_to_schedule(client, reviewer):
     schedule = CensusScheduleFactory()
     other_schedule = CensusScheduleFactory()
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
     human_run = TranscriptionRunFactory(key="human-scoped", kind="human_snapshot")
     selected = ScheduleTranscriptionFactory(
         census_schedule=schedule,
@@ -170,12 +197,53 @@ def test_comparison_source_selection_is_scoped_to_schedule(client, reviewer):
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"human": other.pk},
+        {"baseline": other.pk},
     )
 
     assert response.status_code == 200
-    assert response.context["human_source"]["object"] == selected
+    assert response.context["baseline_source"]["object"] == selected
     assert b"Wrong schedule" not in response.content
+
+
+@pytest.mark.django_db
+def test_comparison_defaults_to_latest_human_and_latest_agent():
+    from django.contrib import admin
+
+    from census.admin import CensusScheduleAdmin
+    from census.models import CensusSchedule
+
+    schedule = CensusScheduleFactory()
+    older_human = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+    )
+    newest_human = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+    )
+    older_agent = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    newest_agent = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="agent"),
+    )
+    sources = list(
+        schedule.transcriptions.select_related("run").order_by(
+            "-created_at", "-pk"
+        )
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    baseline_ref, comparison_ref = model_admin._comparison_source_refs(
+        sources, None, None
+    )
+
+    assert baseline_ref == str(newest_human.pk)
+    assert baseline_ref != str(older_human.pk)
+    assert comparison_ref == str(newest_agent.pk)
+    assert comparison_ref != str(older_agent.pk)
 
 
 def test_comparison_view_rejects_non_reviewer_directly(transcriber):
@@ -192,3 +260,196 @@ def test_comparison_view_rejects_non_reviewer_directly(transcriber):
 
     with pytest.raises(PermissionDenied):
         model_admin.compare_transcriptions_view(request, str(schedule.pk))
+
+
+@pytest.mark.django_db
+def test_reviewer_can_approve_selected_result_from_interface(client, reviewer):
+    schedule = CensusScheduleFactory(transcription_status="completed")
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=serialize_canonical(schedule),
+    )
+    preview = build_reconciliation_preview(schedule)
+    client.force_login(reviewer)
+
+    response = client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "baseline": "canonical",
+            "comparison": source.pk,
+            "expected_fingerprint": preview["before_fingerprint"],
+            "confirmed": "yes",
+            "notes": "Checked against the image.",
+        },
+    )
+
+    schedule.refresh_from_db()
+    assert response.status_code == 302
+    assert schedule.transcription_status == "approved"
+    reconciliation = schedule.reconciliations.get()
+    assert reconciliation.outcome == "retained_current"
+    assert reconciliation.notes == "Checked against the image."
+
+
+@pytest.mark.django_db
+def test_direct_approval_still_requires_reviewer_confirmation(client, reviewer):
+    schedule = CensusScheduleFactory(transcription_status="completed")
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=serialize_canonical(schedule),
+    )
+    preview = build_reconciliation_preview(schedule, source)
+    client.force_login(reviewer)
+
+    response = client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "baseline": "canonical",
+            "comparison": source.pk,
+            "expected_fingerprint": preview["before_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Confirm that you reviewed" in response.content
+    assert not schedule.reconciliations.exists()
+
+
+@pytest.mark.django_db
+def test_reconciliation_post_is_csrf_protected(reviewer):
+    schedule = CensusScheduleFactory()
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=serialize_canonical(schedule),
+    )
+    preview = build_reconciliation_preview(schedule)
+    csrf_client = Client(enforce_csrf_checks=True)
+    csrf_client.force_login(reviewer)
+
+    response = csrf_client.post(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
+        ),
+        {
+            "baseline": "canonical",
+            "comparison": source.pk,
+            "expected_fingerprint": preview["before_fingerprint"],
+            "confirmed": "yes",
+        },
+    )
+
+    assert response.status_code == 403
+    schedule.refresh_from_db()
+    assert schedule.transcription_status != "approved"
+
+
+@pytest.mark.django_db
+def test_interface_directly_applies_current_cell_selection(client, reviewer):
+    schedule = CensusScheduleFactory(
+        transcription_status="completed",
+        respondent_name="Keep Human",
+    )
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    candidate = serialize_canonical(schedule)
+    candidate["schedule_fields"]["respondent_name"] = "Use Candidate"
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=candidate,
+    )
+    initial = build_reconciliation_preview(schedule, source)
+    url = reverse(
+        "admin:census_censusschedule_compare_transcriptions",
+        args=[schedule.pk],
+    )
+    client.force_login(reviewer)
+    base_data = {
+        "baseline": "canonical",
+        "comparison": source.pk,
+        "expected_fingerprint": initial["before_fingerprint"],
+        "confirmed": "yes",
+        "choice__schedule.respondent_name": "baseline",
+    }
+
+    applied = client.post(url, base_data)
+
+    schedule.refresh_from_db()
+    assert applied.status_code == 302
+    assert schedule.transcription_status == "approved"
+    assert schedule.respondent_name == "Keep Human"
+    assert schedule.reconciliations.get().outcome == "retained_current"
+
+
+@pytest.mark.django_db
+def test_interface_directly_applies_inline_edit(client, reviewer):
+    schedule = CensusScheduleFactory(
+        transcription_status="completed",
+        respondent_name="Current Name",
+    )
+    ReligiousBodyFactory(
+        census_record=schedule,
+        denomination=schedule.schedule_denomination,
+    )
+    candidate = serialize_canonical(schedule)
+    candidate["schedule_fields"]["respondent_name"] = "Candidate Name"
+    source = ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=TranscriptionRunFactory(kind="human_snapshot"),
+        data=candidate,
+    )
+    initial = build_reconciliation_preview(schedule, source)
+    url = reverse(
+        "admin:census_censusschedule_compare_transcriptions",
+        args=[schedule.pk],
+    )
+    client.force_login(reviewer)
+    base_data = {
+        "baseline": "canonical",
+        "comparison": source.pk,
+        "expected_fingerprint": initial["before_fingerprint"],
+        "choice__schedule.respondent_name": "edited",
+        "edit_base__schedule.respondent_name": "comparison",
+        "edit__schedule.respondent_name": "Reviewer Name",
+        "confirmed": "yes",
+    }
+
+    applied = client.post(url, base_data)
+
+    schedule.refresh_from_db()
+    assert applied.status_code == 302
+    assert schedule.respondent_name == "Reviewer Name"
+    reconciliation = schedule.reconciliations.get()
+    assert reconciliation.outcome == "mixed"
+    assert reconciliation.decisions["reviewer_overrides"] == [
+        {
+            "field": "schedule.respondent_name",
+            "source": "edited",
+            "base": "comparison",
+            "value": "Reviewer Name",
+        }
+    ]

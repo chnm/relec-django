@@ -49,7 +49,7 @@ ANTHROPIC_API_BASE_URL = env(
 CLAUDE_TRANSCRIPTION_ENABLED = env.bool("CLAUDE_TRANSCRIPTION_ENABLED", default=False)
 CLAUDE_TRANSCRIPTION_MODELS = env.list(
     "CLAUDE_TRANSCRIPTION_MODELS",
-    default=["claude-sonnet-4-6", "claude-sonnet-5"],
+    default=["claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-4-8"],
 )
 CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=8192
@@ -402,7 +402,7 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=review_queue",
                     },
                     {
-                        "title": "Imported - Needs Review",
+                        "title": "Needs Review",
                         "icon": "fact_check",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=needs_review",
                     },
@@ -452,6 +452,12 @@ UNFOLD = {
                         "title": "Clergy Information",
                         "icon": "person",
                         "link": lambda request: "/admin/census/clergy/",
+                    },
+                    {
+                        "title": "Reconciliation History",
+                        "icon": "verified",
+                        "link": lambda request: "/admin/census/schedulereconciliation/",
+                        "permission": can_view_ai_transcription,
                     },
                     {
                         "title": "Missing Location",
