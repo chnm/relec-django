@@ -140,10 +140,11 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"Preview mixed selection" not in response.content
     assert b"section-selection-status" in response.content
     assert b'aria-pressed="false"' in response.content
+    assert b"source-dot-baseline" in response.content
     assert b"comparison-source-value-baseline" in response.content
     assert b"comparison-source-value-comparison" in response.content
     assert b"updateSectionSelection" in response.content
-    assert b"source-value-select" in response.content
+    assert b'class="source-choice"' in response.content
     assert b"edited-choice" in response.content
     assert b"form-correction" in response.content
     assert b'class="schedule-form-block"' in response.content

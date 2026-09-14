@@ -110,8 +110,8 @@
 
       <main class="min-w-0 space-y-5">
         <div class="comparison-source-headings">
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source fallback="No baseline selected" %}
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source fallback="No comparison selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source side="baseline" fallback="No baseline selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source side="comparison" fallback="No comparison selected" %}
         </div>
 
         {% if form.bodies or form.schedule %}
@@ -120,7 +120,7 @@
             <span class="section-selection-status" data-state="pending" aria-live="polite">Checking selection…</span>
             <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Use all baseline</button>
             <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
-            <span class="schedule-form-hint">Click a value to select it, or type a correction. Corrections apply to every field.</span>
+            <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
           </div>
 
           <div class="schedule-form-masthead">
@@ -209,9 +209,10 @@
               {% for row in section.rows %}
                 <div class="form-field comparison-row comparison-row-{{ row.status }}">
                   <div class="form-field-label"><span>{{ row.label }}</span></div>
-                  <div class="form-field-values">
-                    <div class="form-chips">
-                      <div class="form-chip comparison-source-value comparison-source-value-comparison comparison-value-{{ row.right.kind }} is-selected" data-source-cell="comparison"><small>Comparison</small>{{ row.right.text }}</div>
+                  <div class="form-choices">
+                    <div class="form-choice comparison-source-value comparison-source-value-comparison" data-source-cell="comparison">
+                      <span class="source-dots"><span class="source-dot source-dot-comparison"></span></span>
+                      <span class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</span>
                     </div>
                   </div>
                 </div>
@@ -461,6 +462,29 @@
       margin-left: auto;
     }
 
+    .comparison-source-heading-baseline { border-left: 4px solid #0f766e; }
+    .comparison-source-heading-comparison { border-left: 4px solid #7c3aed; }
+
+    .source-dots {
+      align-items: center;
+      display: inline-flex;
+      gap: 2px;
+      margin-top: .35rem;
+    }
+
+    .source-dot {
+      background: #9ca3af;
+      border-radius: 999px;
+      display: inline-block;
+      flex: none;
+      height: .55rem;
+      width: .55rem;
+    }
+
+    .source-dot-baseline { background: #0f766e; }
+    .source-dot-comparison { background: #7c3aed; }
+    .source-dot-edited { background: #f97316; }
+
     .schedule-form-masthead {
       border-bottom: 3px double #9ca3af;
       padding: 1rem 1.25rem .75rem;
@@ -607,74 +631,59 @@
     .comparison-row-one_missing .form-field-label::before { background: #3b82f6; }
     .comparison-row-blank_zero .form-field-label::before { background: #a855f7; }
 
-    .form-field-values {
+    .form-choices {
       display: flex;
       flex-direction: column;
-      gap: .3rem;
+      gap: .1rem;
       min-width: 0;
     }
 
-    .form-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .3rem;
-    }
-
-    .form-chip {
-      background: #fff;
-      border: 1px solid #d1d5db;
+    .form-choice {
+      align-items: flex-start;
       border-radius: .3rem;
       color: #111827;
-      font: inherit;
+      display: grid;
+      gap: .4rem;
+      grid-template-columns: auto auto minmax(0, 1fr);
       line-height: 1.3;
-      max-width: 100%;
+      margin: 0;
+      min-width: 0;
+      padding: .15rem .3rem;
+    }
+
+    label.form-choice { cursor: pointer; }
+    label.form-choice:hover { background: #f3f4f6; }
+
+    .form-choice input[type="radio"] {
+      accent-color: #0060b1;
+      height: .9rem;
+      margin: .2rem 0 0;
+      width: .9rem;
+    }
+
+    .form-choice-value {
       min-width: 0;
       overflow-wrap: anywhere;
-      padding: .25rem .5rem;
-      text-align: left;
       white-space: pre-wrap;
     }
 
-    button.form-chip { cursor: pointer; }
-    button.form-chip:hover { background: #f3f4f6; }
-
-    .form-chip small {
-      color: #6b7280;
-      display: block;
-      font-size: .58rem;
-      font-weight: 700;
-      letter-spacing: .05em;
-      text-transform: uppercase;
-    }
-
-    .form-chip:focus-visible {
-      outline: 3px solid rgba(0, 96, 177, .3);
-      outline-offset: 2px;
-    }
-
-    .comparison-source-value.is-selected {
+    .form-choice.is-selected {
       background: #eaf4ff;
-      border-color: #4895d2;
-      box-shadow: inset 0 0 0 1px #4895d2;
-      color: #003d70;
       font-weight: 600;
     }
 
-    .comparison-source-value.is-edited {
+    .form-choice-edit.is-selected {
       background: #fff7ed;
-      border-color: #f97316;
-      box-shadow: inset 0 0 0 1px #f97316;
-      color: #9a3412;
     }
 
     .form-correction {
-      background: #fff;
+      background: transparent;
       border: 0;
       border-bottom: 1px solid #d1d5db;
       border-radius: 0;
       color: #111827;
       font: inherit;
-      padding: .2rem .25rem;
+      padding: .1rem .25rem;
       text-align: left;
       width: 100%;
     }
@@ -687,11 +696,9 @@
       outline: none;
     }
 
-    .form-field.is-edited .form-correction {
-      background: #fff7ed;
+    .form-choice-edit.is-selected .form-correction {
       border-bottom-color: #f97316;
       color: #9a3412;
-      font-weight: 600;
     }
 
     .entity-decision label {
@@ -759,16 +766,15 @@
       .schedule-form-body-title,
       .schedule-form-block h4,
       .form-field-label,
-      .form-chip { color: #e5e7eb; }
+      .form-choice { color: #e5e7eb; }
       .schedule-form-static { color: #d1d5db; }
-      .form-chip { background: #111827; border-color: #4b5563; }
-      button.form-chip:hover { background: #1f2937; }
+      label.form-choice:hover { background: #1f2937; }
       .form-panel + .form-panel { border-color: #4b5563; }
       .form-field { border-color: #4b5563; }
-      .comparison-source-value.is-selected { background: #0c4a6e; border-color: #38bdf8; box-shadow: inset 0 0 0 1px #38bdf8; color: #f0f9ff; }
-      .comparison-source-value.is-edited { background: #7c2d12; border-color: #fb923c; box-shadow: inset 0 0 0 1px #fb923c; color: #ffedd5; }
-      .form-correction { background: #111827; border-color: #4b5563; color: #e5e7eb; }
-      .form-field.is-edited .form-correction { background: #7c2d12; color: #ffedd5; }
+      .form-choice.is-selected { background: #0c4a6e; color: #f0f9ff; }
+      .form-choice-edit.is-selected { background: #7c2d12; color: #ffedd5; }
+      .form-correction { border-color: #4b5563; color: #e5e7eb; }
+      .form-choice-edit.is-selected .form-correction { color: #ffedd5; }
       .comparison-image-viewport { background: #030712; }
     }
   </style>
@@ -787,21 +793,16 @@
         return panel.dataset.automaticSource || undefined;
       };
 
-      // Highlight the selected source chip (and edited state) in every row of one panel.
+      // Highlight the chosen row (source value or correction) in every field of one panel.
       const updateSectionSelection = (panel) => {
         panel.querySelectorAll(".comparison-row").forEach((row) => {
           const choice = rowChoiceFor(row, panel);
-          const editedBase = row.querySelector('input[name^="edit_base__"]')?.value;
-          const selectedSource = choice === "edited" ? editedBase : choice;
           row.classList.toggle("is-edited", choice === "edited");
-          row.querySelectorAll(".comparison-source-value").forEach((chip) => {
-            const selected = Boolean(selectedSource)
-              && chip.dataset.sourceCell.split(" ").includes(selectedSource);
-            chip.classList.toggle("is-selected", selected);
-            chip.classList.toggle("is-edited", selected && choice === "edited");
-            if (chip.tagName === "BUTTON") {
-              chip.setAttribute("aria-pressed", selected ? "true" : "false");
-            }
+          row.querySelectorAll(".form-choice").forEach((option) => {
+            option.classList.toggle(
+              "is-selected",
+              Boolean(choice) && option.dataset.sourceCell.split(" ").includes(choice)
+            );
           });
         });
       };
@@ -844,50 +845,49 @@
         updateFormStatus();
       };
 
+      // The last source the reviewer picked is the base a correction starts from.
       const selectSource = (row, source) => {
         row.querySelector(`.source-choice[value="${source}"]`).checked = true;
+        row.querySelector('input[name^="edit_base__"]').value = source;
+        row.querySelector('input[name^="edit__"]').value = "";
         const correction = row.querySelector(".form-correction");
         if (correction) correction.value = "";
-        row.querySelector('input[name^="edit__"]').value = "";
       };
 
-      // Typing a correction selects "edited", based on whichever source chip was
-      // selected at the time; clearing it falls back to that source.
-      // ponytail: an empty input means "no correction", so a reviewer cannot
-      // correct a value *to* blank here. Select the blank source instead.
-      const applyCorrection = (row) => {
-        const correction = row.querySelector(".form-correction");
-        const editedChoice = row.querySelector(".edited-choice");
-        const baseInput = row.querySelector('input[name^="edit_base__"]');
-        if (correction.value === "") {
-          row.querySelector(`.source-choice[value="${baseInput.value || "comparison"}"]`).checked = true;
-          row.querySelector('input[name^="edit__"]').value = "";
-          return;
-        }
-        if (!editedChoice.checked) {
-          baseInput.value = row.querySelector(".source-choice:checked")?.value || "comparison";
-        }
-        row.querySelector('input[name^="edit__"]').value = correction.value;
-        editedChoice.checked = true;
+      const selectCorrection = (row) => {
+        const base = row.querySelector('input[name^="edit_base__"]');
+        if (!base.value) base.value = "comparison";
+        row.querySelector(".edited-choice").checked = true;
+        row.querySelector('input[name^="edit__"]').value = (
+          row.querySelector(".form-correction").value
+        );
       };
 
       document.querySelectorAll("[data-form-row]").forEach((row) => {
-        row.querySelectorAll(".source-value-select").forEach((chip) => {
-          chip.addEventListener("click", () => {
-            selectSource(row, chip.dataset.source);
+        const correction = row.querySelector(".form-correction");
+        if (!correction) return;
+        const base = row.querySelector('input[name^="edit_base__"]');
+        if (!base.value) {
+          base.value = row.querySelector(".source-choice:checked")?.value || "comparison";
+        }
+        row.querySelectorAll(".source-choice").forEach((radio) => {
+          radio.addEventListener("change", () => {
+            selectSource(row, radio.value);
             refresh(row);
           });
         });
-        const correction = row.querySelector(".form-correction");
-        if (correction) {
-          correction.addEventListener("input", () => {
-            applyCorrection(row);
-            refresh(row);
-          });
-          correction.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") event.preventDefault();
-          });
-        }
+        row.querySelector(".edited-choice").addEventListener("change", () => {
+          selectCorrection(row);
+          refresh(row);
+          correction.focus();
+        });
+        correction.addEventListener("input", () => {
+          selectCorrection(row);
+          refresh(row);
+        });
+        correction.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") event.preventDefault();
+        });
       });
 
       form?.querySelectorAll(".section-source").forEach((button) => {
