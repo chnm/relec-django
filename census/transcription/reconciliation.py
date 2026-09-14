@@ -728,17 +728,16 @@ def _schedule_group_section(
                 candidate_value,
                 decision_key=key,
                 edit_type=_edit_type(key),
+                field=field,
                 **_decision_row_options(used_decisions[key]),
             )
         )
     return {
         "title": title,
-        "note": (
-            "Select a value cell. Double-click it, or use Edit, to "
-            "enter a reviewer correction."
-        ),
+        "note": "Select a source value, or type a reviewer correction.",
         "rows": rows,
         "decision_scope": "field",
+        "kind": "schedule",
     }
 
 
@@ -809,6 +808,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Retain baseline body",
                 "Remove body",
+                "body",
                 note=(
                     f"Baseline-only body with "
                     f"{len(current_body.get('membership', []))} membership row(s)."
@@ -840,6 +840,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Do not add body",
                 "Add comparison body",
+                "body",
                 note=(
                     f"Comparison-only body with "
                     f"{len(candidate_body.get('membership', []))} membership row(s)."
@@ -869,6 +870,7 @@ def build_mixed_review(before, candidate, decisions):
             CLERGY_LABELS,
             decisions,
             used_decisions,
+            "clergy",
         )
         proposed_clergy.append(proposed_person)
         sections.append(section)
@@ -892,6 +894,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Retain baseline clergy row",
                 "Remove clergy row",
+                "clergy",
             )
         )
 
@@ -918,6 +921,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Do not add clergy row",
                 "Add comparison clergy row",
+                "clergy",
             )
         )
 
@@ -940,7 +944,9 @@ def build_mixed_review(before, candidate, decisions):
             current_value = before["schedule_fields"].get(field)
             candidate_value = candidate["schedule_fields"].get(field)
             proposed_fields[field] = deepcopy(candidate_value)
-            rows.append(comparison_row(label, current_value, candidate_value))
+            rows.append(
+                comparison_row(label, current_value, candidate_value, field=field)
+            )
         sections.append(
             {
                 "title": title,
@@ -982,6 +988,7 @@ def _mixed_body(
         BODY_LABELS,
         decisions,
         used_decisions,
+        "body",
     )
     memberships = []
     membership_sections = []
@@ -1009,6 +1016,7 @@ def _mixed_body(
             MEMBERSHIP_LABELS,
             decisions,
             used_decisions,
+            "membership",
         )
         memberships.append(proposed_membership)
         membership_sections.append(section)
@@ -1036,6 +1044,7 @@ def _mixed_body(
                 selected,
                 "Retain baseline membership",
                 "Remove membership",
+                "membership",
             )
         )
     candidate_indices = {
@@ -1064,6 +1073,7 @@ def _mixed_body(
                 selected,
                 "Do not add membership",
                 "Add comparison membership",
+                "membership",
             )
         )
     proposed_body["membership"] = memberships
@@ -1079,6 +1089,7 @@ def _mixed_matched_entity(
     labels,
     decisions,
     used_decisions,
+    kind,
 ):
     proposed = {}
     if current.get("id") is not None:
@@ -1100,17 +1111,16 @@ def _mixed_matched_entity(
                 candidate.get(field),
                 decision_key=key,
                 edit_type=_edit_type(key),
+                field=field,
                 **_decision_row_options(used_decisions[key]),
             )
         )
     return proposed, {
         "title": title,
-        "note": (
-            "Matched without relying on database or array order. Select a "
-            "value cell, or edit the selected value."
-        ),
+        "note": "Select a source value, or type a reviewer correction.",
         "rows": rows,
         "decision_scope": "field",
+        "kind": kind,
     }
 
 
@@ -1124,6 +1134,7 @@ def _entity_section(
     selected,
     current_label,
     candidate_label,
+    kind,
     note="",
 ):
     current = current or {}
@@ -1136,10 +1147,12 @@ def _entity_section(
                 labels[field],
                 current.get(field, MISSING),
                 candidate.get(field, MISSING),
+                field=field,
             )
             for field in fields
         ],
         "decision_scope": "entity",
+        "kind": kind,
         "entity_decision": {
             "key": key,
             "selected": selected,

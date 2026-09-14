@@ -1,0 +1,25 @@
+{# A run of fields from one review section, drawn inside a printed-form block. #}
+{% for panel in panels %}
+  <div class="form-panel" data-decision-section>
+    {% if show_titles or panel.entity_decision %}
+      <div class="form-panel-title">{{ panel.title }}</div>
+    {% endif %}
+    {% if panel.entity_decision %}
+      <fieldset class="entity-decision">
+        <legend class="sr-only">Decision for {{ panel.title }}</legend>
+        <label>
+          <input form="reconciliation-form" type="radio" name="choice__{{ panel.entity_decision.key }}" value="baseline" {% if panel.entity_decision.selected == "baseline" %}checked{% endif %}>
+          {{ panel.entity_decision.current_label }}
+        </label>
+        <label>
+          <input form="reconciliation-form" type="radio" name="choice__{{ panel.entity_decision.key }}" value="comparison" {% if panel.entity_decision.selected == "comparison" %}checked{% endif %}>
+          {{ panel.entity_decision.candidate_label }}
+        </label>
+      </fieldset>
+      {% if panel.note %}<p class="form-panel-note">{{ panel.note }}</p>{% endif %}
+    {% endif %}
+    {% for row in panel.rows %}
+      {% include "admin/census/censusschedule/includes/form-field.html" with row=row %}
+    {% endfor %}
+  </div>
+{% endfor %}

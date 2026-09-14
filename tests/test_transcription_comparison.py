@@ -145,8 +145,8 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"updateSectionSelection" in response.content
     assert b"source-value-select" in response.content
     assert b"edited-choice" in response.content
-    assert b"save-inline-edit" in response.content
-    assert b'addEventListener("dblclick"' in response.content
+    assert b"form-correction" in response.content
+    assert b'class="schedule-form-block"' in response.content
     assert b"comparison-decision" not in response.content
     assert b'data-automatic-source="comparison"' in response.content
     assert b"carried from the comparison evidence automatically" in response.content

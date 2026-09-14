@@ -55,6 +55,7 @@ from .transcription.reconciliation import (
     rollback_reconciliation,
     serialize_canonical,
 )
+from .transcription.schedule_form import schedule_form_layout
 from .transcription.services import (
     LaunchError,
     launch_transcription_run,
@@ -1655,6 +1656,7 @@ class CensusScheduleAdmin(ModelAdmin):
                 jobs.get(comparison_source.run_id) if comparison_source else None,
             ),
             "comparison": comparison,
+            "form": schedule_form_layout(comparison["sections"]),
             "preview": preview,
             "reconciliation_error": reconciliation_error,
             "can_apply": can_apply,

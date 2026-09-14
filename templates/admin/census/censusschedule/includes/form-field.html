@@ -1,0 +1,56 @@
+{# One printed-form field: label, source value chips, and an always-visible correction input. #}
+<div class="form-field comparison-row comparison-row-{{ row.status }}{% if row.selected == 'edited' %} is-edited{% endif %}" data-form-row>
+  <div class="form-field-label">
+    {% if row.number %}<span class="form-field-number">{{ row.number }}.</span>{% endif %}
+    <span>{{ row.label }}</span>
+    {% if row.status != "same" %}<small>{{ row.status_label }}</small>{% endif %}
+  </div>
+  <div class="form-field-values">
+    {% if row.can_choose %}
+      <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="baseline" {% if row.selected == "baseline" %}checked{% endif %} hidden>
+      <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="comparison" {% if row.selected == "comparison" %}checked{% endif %} hidden>
+      <input form="reconciliation-form" type="radio" class="edited-choice" name="choice__{{ row.decision_key }}" value="edited" {% if row.selected == "edited" %}checked{% endif %} hidden>
+      <input form="reconciliation-form" type="hidden" name="edit__{{ row.decision_key }}" value="{{ row.edited_input }}">
+      <input form="reconciliation-form" type="hidden" name="edit_base__{{ row.decision_key }}" value="{{ row.edited_base }}">
+      <div class="form-chips">
+        {% if row.status == "same" %}
+          <button type="button" class="form-chip source-value-select comparison-source-value comparison-source-value-baseline comparison-source-value-comparison comparison-value-{{ row.right.kind }}"
+                  data-source="comparison" data-source-cell="baseline comparison" aria-pressed="false"
+                  aria-label="Use the agreed value for {{ row.label }}">
+            <small>Both</small>{{ row.right.text }}
+          </button>
+        {% else %}
+          <button type="button" class="form-chip source-value-select comparison-source-value comparison-source-value-baseline comparison-value-{{ row.left.kind }}"
+                  data-source="baseline" data-source-cell="baseline" aria-pressed="false"
+                  aria-label="Use baseline value for {{ row.label }}">
+            <small>Baseline</small>{{ row.left.text }}
+          </button>
+          <button type="button" class="form-chip source-value-select comparison-source-value comparison-source-value-comparison comparison-value-{{ row.right.kind }}"
+                  data-source="comparison" data-source-cell="comparison" aria-pressed="false"
+                  aria-label="Use comparison value for {{ row.label }}">
+            <small>Comparison</small>{{ row.right.text }}
+          </button>
+        {% endif %}
+      </div>
+      {% if row.edit_type == "boolean" %}
+        <select class="form-correction inline-value-input" aria-label="Correction for {{ row.label }}">
+          <option value="">No correction</option>
+          <option value="true" {% if row.selected == "edited" and row.edited_value is True %}selected{% endif %}>Yes</option>
+          <option value="false" {% if row.selected == "edited" and row.edited_value is False %}selected{% endif %}>No</option>
+        </select>
+      {% else %}
+        <input class="form-correction inline-value-input"
+               type="{% if row.edit_type == 'date' %}date{% elif row.edit_type == 'integer' or row.edit_type == 'decimal' %}number{% else %}text{% endif %}"
+               {% if row.edit_type == "integer" %}step="1" min="0"{% elif row.edit_type == "decimal" %}step="0.01" min="0"{% endif %}
+               value="{% if row.selected == 'edited' %}{{ row.edited_input }}{% endif %}"
+               placeholder="Correction"
+               aria-label="Correction for {{ row.label }}">
+      {% endif %}
+    {% else %}
+      <div class="form-chips">
+        <div class="form-chip comparison-source-value comparison-source-value-baseline comparison-value-{{ row.left.kind }}" data-source-cell="baseline"><small>Baseline</small>{{ row.left.text }}</div>
+        <div class="form-chip comparison-source-value comparison-source-value-comparison comparison-value-{{ row.right.kind }}" data-source-cell="comparison"><small>Comparison</small>{{ row.right.text }}</div>
+      </div>
+    {% endif %}
+  </div>
+</div>

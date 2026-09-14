@@ -1193,3 +1193,49 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
     page = confirmation.content.decode()
     assert "Already promoted from" in page
     assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)
+
+
+@pytest.mark.django_db
+def test_schedule_form_layout_places_every_decision_row_once():
+    from census.transcription.schedule_form import schedule_form_layout
+
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    sections = preview["review_sections"]
+    form = schedule_form_layout(sections)
+
+    def panel_keys(panels):
+        return [
+            row["decision_key"]
+            for panel in panels
+            for row in panel["rows"]
+            if row["decision_key"]
+        ]
+
+    placed = []
+    placed += panel_keys(form["schedule"])
+    for body in form["bodies"]:
+        for block in ("header", "membership", "schools", "buildings", "expenditures"):
+            placed += panel_keys(body[block])
+    placed += panel_keys(form["pastor"])
+    placed += panel_keys(form["footer"])
+    placed += panel_keys(form["stamps"])
+
+    expected = [
+        row["decision_key"]
+        for section in sections
+        if section["decision_scope"] != "automatic"
+        for row in section["rows"]
+        if row["decision_key"]
+    ]
+    assert form["other"] == []
+    assert sorted(placed) == sorted(expected)
+    assert len(placed) == len(set(placed))
+    assert [s["title"] for s in form["context"]] == ["Marginalia", "Agent notes"]
+    # Form question numbers follow the printed 1926 schedule.
+    membership_numbers = [
+        row["number"] for row in form["bodies"][0]["membership"][0]["rows"]
+    ]
+    assert membership_numbers == ["1", "2", "3", "4", "5", "6"]
+    assert form["pastor"][0]["rows"][0]["number"] == "26"
