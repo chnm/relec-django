@@ -721,17 +721,18 @@ def _schedule_group_section(
             current_value,
             candidate_value,
         )
-        rows.append(
-            comparison_row(
-                label,
-                current_value,
-                candidate_value,
-                decision_key=key,
-                edit_type=_edit_type(key),
-                field=field,
-                **_decision_row_options(used_decisions[key]),
-            )
+        row = comparison_row(
+            label,
+            current_value,
+            candidate_value,
+            decision_key=key,
+            edit_type=_edit_type(key),
+            field=field,
+            **_decision_row_options(used_decisions[key]),
         )
+        if field == "populated_place_id":
+            _annotate_place_names(row, current_value, candidate_value)
+        rows.append(row)
     return {
         "title": title,
         "note": "Select a source value, or type a reviewer correction.",
@@ -739,6 +740,21 @@ def _schedule_group_section(
         "decision_scope": "field",
         "kind": "schedule",
     }
+
+
+def _annotate_place_names(row, *place_ids):
+    """Show the place name and state after a bare Apiary place ID."""
+    ids = {value for value in place_ids if isinstance(value, int)}
+    if not ids:
+        return
+    names = {}
+    for place in PopulatedPlace.objects.filter(place_id__in=ids).select_related(
+        "county__state"
+    ):
+        names.setdefault(place.place_id, f"{place.name}, {place.county.state.code}")
+    for side, value in (("left", place_ids[0]), ("right", place_ids[1])):
+        if value in names:
+            row[side]["text"] = f"{value} ({names[value]})"
 
 
 def build_mixed_review(before, candidate, decisions):

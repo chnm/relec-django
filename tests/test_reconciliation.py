@@ -1239,3 +1239,21 @@ def test_schedule_form_layout_places_every_decision_row_once():
     ]
     assert membership_numbers == ["1", "2", "3", "4", "5", "6"]
     assert form["pastor"][0]["rows"][0]["number"] == "26"
+
+
+@pytest.mark.django_db
+def test_populated_place_row_shows_place_name_and_state():
+    schedule = canonical_schedule()
+    place = schedule.populated_place
+    place.place_id = 4242
+    place.name = "Mount Liberty"
+    place.county = schedule.county
+    place.save()
+    source = agent_source(schedule, agent_candidate(populated_place_id=4242))
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    row = preview["review_sections"][0]["rows"][0]
+    assert row["field"] == "populated_place_id"
+    state = place.county.state.code
+    assert row["left"]["text"] == f"4242 (Mount Liberty, {state})"
+    assert row["right"]["text"] == f"4242 (Mount Liberty, {state})"
+    assert row["left"]["input"] == "4242"
