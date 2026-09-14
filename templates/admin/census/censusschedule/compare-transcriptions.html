@@ -139,6 +139,12 @@
               <div class="schedule-form-head">
                 {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.header show_titles=False %}
               </div>
+              {% if forloop.first %}
+                <div class="schedule-form-block schedule-form-inline">
+                  <h4>Census Bureau stamps</h4>
+                  {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.stamps show_titles=False %}
+                </div>
+              {% endif %}
               <div class="schedule-form-grid">
                 <div class="schedule-form-col">
                   <div class="schedule-form-block">
@@ -169,6 +175,10 @@
               </div>
             </section>
           {% empty %}
+            <div class="schedule-form-block schedule-form-inline">
+              <h4>Census Bureau stamps</h4>
+              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.stamps show_titles=False %}
+            </div>
             <div class="schedule-form-block">
               <h4>Pastor</h4>
               {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.pastor show_titles=form.pastor|length|add:"-2" %}
@@ -182,15 +192,9 @@
             </div>
           {% endif %}
 
-          <div class="schedule-form-footer">
-            <div class="schedule-form-block">
-              <h4>Signature of person furnishing information</h4>
-              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.footer show_titles=False %}
-            </div>
-            <div class="schedule-form-block">
-              <h4>Census Bureau stamps</h4>
-              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.stamps show_titles=False %}
-            </div>
+          <div class="schedule-form-footer schedule-form-block schedule-form-inline">
+            <h4>Signature of person furnishing information</h4>
+            {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.footer show_titles=False %}
           </div>
         </div>
         {% else %}
@@ -552,13 +556,21 @@
 
     .schedule-form-footer {
       border-top: 3px double #9ca3af;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
     }
 
-    .schedule-form-footer .schedule-form-block + .schedule-form-block {
-      border-left: 1px solid #9ca3af;
-      border-top: 0;
+    .schedule-form-inline .form-panel {
+      display: grid;
+      gap: .5rem 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .schedule-form-inline .form-field {
+      border-bottom: 0;
+      grid-template-columns: 1fr;
+    }
+
+    .schedule-form-head + .schedule-form-inline {
+      border-bottom: 3px double #9ca3af;
     }
 
     .form-panel + .form-panel {
@@ -744,10 +756,8 @@
 
     @media (max-width: 900px) {
       .comparison-source-form,
-      .schedule-form-grid,
-      .schedule-form-footer { grid-template-columns: 1fr; }
-      .schedule-form-col + .schedule-form-col,
-      .schedule-form-footer .schedule-form-block + .schedule-form-block { border-left: 0; border-top: 3px double #9ca3af; }
+      .schedule-form-grid { grid-template-columns: 1fr; }
+      .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
     }
 
     @media (prefers-color-scheme: dark) {
