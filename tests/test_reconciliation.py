@@ -1257,3 +1257,84 @@ def test_populated_place_row_shows_place_name_and_state():
     assert row["left"]["text"] == f"4242 (Mount Liberty, {state})"
     assert row["right"]["text"] == f"4242 (Mount Liberty, {state})"
     assert row["left"]["input"] == "4242"
+
+
+def _clergy_sections(preview):
+    return [
+        section
+        for section in preview["review_sections"]
+        if section.get("kind") == "clergy"
+    ]
+
+
+@pytest.mark.django_db
+def test_clergy_rows_pair_by_position_and_extra_rows_are_new(reviewer):
+    schedule = canonical_schedule()
+    current_clergy = schedule.clergy.get()
+    candidate = agent_candidate()
+    candidate["clergy"] = [
+        {**candidate["clergy"][0], "name": "Rev. F.E. Banks", "is_assistant": False},
+        {**candidate["clergy"][0], "name": "Rev. Junior", "is_assistant": True},
+    ]
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    sections = _clergy_sections(preview)
+    assert [s["decision_scope"] for s in sections] == ["field", "field"]
+
+    paired = sections[0]
+    name_row = next(row for row in paired["rows"] if row["field"] == "name")
+    assert name_row["left"]["text"] == "Rev. Human"
+    assert name_row["right"]["text"] == "Rev. F.E. Banks"
+    assert "skip_decision" not in paired
+
+    new = sections[1]
+    name_row = next(row for row in new["rows"] if row["field"] == "name")
+    assert name_row["left"]["text"] == "Not captured"
+    assert name_row["right"]["text"] == "Rev. Junior"
+    assert new["skip_decision"] == {
+        "key": "entity.clergy.new.1",
+        "selected": "comparison",
+    }
+
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        decisions={f"clergy.{current_clergy.pk}.name": "baseline"},
+    )
+    names = list(schedule.clergy.order_by("is_assistant").values_list("name", flat=True))
+    assert names == ["Rev. Human", "Rev. Junior"]
+
+
+@pytest.mark.django_db
+def test_nameless_new_clergy_row_is_skipped_by_default(reviewer):
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["clergy"].append(
+        {**candidate["clergy"][0], "name": None, "is_assistant": True}
+    )
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    new = _clergy_sections(preview)[1]
+    assert new["skip_decision"]["selected"] == "baseline"
+    assert len(preview["proposed"]["clergy"]) == 1
+
+    # The reviewer can still add it explicitly, once it has a name.
+    preview = build_reconciliation_preview(
+        schedule,
+        source,
+        mixed=True,
+        decisions={
+            "entity.clergy.new.1": "comparison",
+            "clergy.new.1.name": {
+                "source": "edited",
+                "base": "comparison",
+                "value": "Rev. Corrected",
+            },
+        },
+    )
+    assert [row["name"] for row in preview["proposed"]["clergy"]] == [
+        "Rev. Agent",
+        "Rev. Corrected",
+    ]

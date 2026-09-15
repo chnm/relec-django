@@ -864,22 +864,27 @@ def build_mixed_review(before, candidate, decisions):
             )
         )
 
+    # Clergy pairs by position: a schedule holds at most one canonical pastor,
+    # and the comparison lists the pastor first, so row n meets row n. Extra
+    # comparison rows are new; the reviewer can skip any of them.
     proposed_clergy = []
-    clergy_matches, current_only_clergy, candidate_only_clergy = (
-        _match_snapshot_rows(
-            before["clergy"],
-            candidate["clergy"],
-            signature_fields=("name", "is_assistant"),
-            match_single=True,
-        )
+    current_clergy = sorted(before["clergy"], key=_snapshot_sort_key)
+    candidate_clergy = sorted(
+        candidate["clergy"], key=lambda row: bool(row.get("is_assistant"))
     )
-    for index, (current_person, candidate_person) in enumerate(
-        sorted(clergy_matches, key=lambda pair: _snapshot_sort_key(pair[0]))
-    ):
-        token = _snapshot_token("clergy", current_person, index)
+    for index, candidate_person in enumerate(candidate_clergy):
+        current_person = (
+            current_clergy[index] if index < len(current_clergy) else {}
+        )
+        if current_person:
+            token = _snapshot_token("clergy", current_person, index)
+            title = f"Clergy: {_snapshot_label(current_person, index + 1)}"
+        else:
+            token = f"clergy.new.{index}"
+            title = f"Clergy: {candidate_person.get('name') or index + 1}"
         proposed_person, section = _mixed_matched_entity(
             token,
-            f"Clergy: {_snapshot_label(current_person, index + 1)}",
+            title,
             current_person,
             candidate_person,
             CLERGY_FIELDS,
@@ -888,12 +893,25 @@ def build_mixed_review(before, candidate, decisions):
             used_decisions,
             "clergy",
         )
-        proposed_clergy.append(proposed_person)
+        if current_person:
+            proposed_clergy.append(proposed_person)
+        else:
+            key = f"entity.{token}"
+            selected = _selected_source(
+                decisions,
+                used_decisions,
+                key,
+                default="comparison" if candidate_person.get("name") else "baseline",
+            )
+            section["skip_decision"] = {"key": key, "selected": selected}
+            if selected == "comparison":
+                proposed_person["_force_create"] = candidate_person.get("id") is None
+                proposed_clergy.append(proposed_person)
         sections.append(section)
 
-    for index, current_person in enumerate(
-        sorted(current_only_clergy, key=_snapshot_sort_key)
-    ):
+    for index, current_person in enumerate(current_clergy):
+        if index < len(candidate_clergy):
+            continue
         token = _snapshot_token("clergy", current_person, index)
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
@@ -910,33 +928,6 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Retain baseline clergy row",
                 "Remove clergy row",
-                "clergy",
-            )
-        )
-
-    candidate_clergy_indices = {
-        id(row): index for index, row in enumerate(candidate["clergy"])
-    }
-    for candidate_person in candidate_only_clergy:
-        index = candidate_clergy_indices[id(candidate_person)]
-        token = f"clergy.new.{index}"
-        key = f"entity.{token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "comparison":
-            proposed_person = deepcopy(candidate_person)
-            proposed_person["_force_create"] = candidate_person.get("id") is None
-            proposed_clergy.append(proposed_person)
-        sections.append(
-            _entity_section(
-                f"Comparison clergy: {candidate_person.get('name') or index + 1}",
-                None,
-                candidate_person,
-                CLERGY_FIELDS,
-                CLERGY_LABELS,
-                key,
-                selected,
-                "Do not add clergy row",
-                "Add comparison clergy row",
                 "clergy",
             )
         )
@@ -1113,17 +1104,19 @@ def _mixed_matched_entity(
     rows = []
     for field in fields:
         key = f"{token}.{field}"
+        # An absent current row shows "Not captured" but proposes None.
+        current_value = current.get(field, MISSING)
         proposed[field] = _selected_value(
             decisions,
             used_decisions,
             key,
-            current.get(field),
+            None if current_value is MISSING else current_value,
             candidate.get(field),
         )
         rows.append(
             comparison_row(
                 labels[field],
-                current.get(field),
+                current_value,
                 candidate.get(field),
                 decision_key=key,
                 edit_type=_edit_type(key),
@@ -1178,8 +1171,8 @@ def _entity_section(
     }
 
 
-def _selected_source(decisions, used_decisions, key):
-    selected = decisions.get(key, "comparison")
+def _selected_source(decisions, used_decisions, key, default="comparison"):
+    selected = decisions.get(key, default)
     if selected not in {"baseline", "comparison"}:
         raise ReconciliationValidationError(
             f"Invalid source decision for {key!r}."

@@ -588,6 +588,20 @@
       margin-bottom: .35rem;
     }
 
+    .form-skip {
+      align-items: center;
+      color: #9a3412;
+      display: inline-flex;
+      font-size: .72rem;
+      font-weight: 600;
+      gap: .4rem;
+      margin-bottom: .35rem;
+    }
+
+    .form-panel.is-skipped .form-field {
+      opacity: .45;
+    }
+
     .form-panel-note {
       color: #6b7280;
       font-size: .7rem;
@@ -834,7 +848,9 @@
       // Form-level pill and "Use all" buttons summarise every decision on the page.
       const updateFormStatus = () => {
         if (!form) return;
-        const inputs = Array.from(form.querySelectorAll('input[name^="choice__"]'));
+        const inputs = Array.from(
+          form.querySelectorAll('input[type="radio"][name^="choice__"]')
+        );
         const names = new Set(inputs.map((input) => input.name));
         const checked = inputs.filter((input) => input.checked);
         let state = "none";
@@ -942,6 +958,13 @@
 
       document.querySelectorAll('.entity-decision input[name^="choice__"]').forEach((input) => {
         input.addEventListener("change", () => refresh(input));
+      });
+
+      document.querySelectorAll(".skip-choice").forEach((box) => {
+        const panel = box.closest("[data-decision-section]");
+        const sync = () => panel.classList.toggle("is-skipped", box.checked);
+        box.addEventListener("change", sync);
+        sync();
       });
 
       panels.forEach(updateSectionSelection);

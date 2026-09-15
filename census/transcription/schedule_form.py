@@ -157,6 +157,7 @@ def _split(section):
         # The retain/remove radio for an unmatched entity renders once.
         if panels:
             panel.pop("entity_decision", None)
+            panel.pop("skip_decision", None)
         panel["rows"] = [row for _, row in sorted(rows, key=lambda r: r[0])]
         panels.append((block, panel))
     return panels
