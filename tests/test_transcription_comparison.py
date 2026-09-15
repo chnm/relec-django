@@ -13,6 +13,7 @@ from census.transcription.reconciliation import (
 )
 from tests.factories import (
     CensusScheduleFactory,
+    PopulatedPlaceFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
     TranscriptionRunFactory,
@@ -101,6 +102,7 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
         census_record=schedule,
         denomination=schedule.schedule_denomination,
     )
+    PopulatedPlaceFactory(county=schedule.county, place_id=7777, name="Datalist Town")
     human_run = TranscriptionRunFactory(key="human-review", kind="human_snapshot")
     agent_run = TranscriptionRunFactory(
         key="agent-review",
@@ -147,6 +149,8 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b'class="source-choice"' in response.content
     assert b"edited-choice" in response.content
     assert b"form-correction" in response.content
+    assert b'<datalist id="place-options">' in response.content
+    assert b'<option value="7777">Datalist Town, ' in response.content
     assert b'class="schedule-form-block"' in response.content
     assert b"comparison-decision" not in response.content
     assert b'data-automatic-source="comparison"' in response.content

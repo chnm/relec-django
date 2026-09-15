@@ -81,7 +81,6 @@
           <div class="flex flex-wrap items-center justify-between gap-2 p-4 border-b border-gray-200 dark:border-gray-700">
             <div>
               <h2 class="font-semibold text-gray-800 dark:text-gray-100">Schedule image</h2>
-              <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400">100%</div>
             </div>
             {% if image_url %}
               <a href="{{ image_url }}" target="_blank" rel="noopener"
@@ -95,6 +94,7 @@
               <button id="zoom-out" type="button" class="comparison-button" aria-label="Zoom out">−</button>
               <button id="zoom-reset" type="button" class="comparison-button">Reset</button>
               <button id="zoom-in" type="button" class="comparison-button" aria-label="Zoom in">+</button>
+              <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400 content-center">100%</div>
             </div>
             <div id="image-viewport" class="comparison-image-viewport">
               <img id="schedule-image" src="{{ image_url }}"
@@ -122,9 +122,13 @@
             <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
             <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
           </div>
+          <datalist id="place-options">
+            {% for place in place_options %}
+              <option value="{{ place.place_id }}">{{ place.name }}, {{ place.county.state.code }}</option>
+            {% endfor %}
+          </datalist>
 
           <div class="schedule-form-masthead">
-            <div class="schedule-form-masthead-title">United States Census of Religious Bodies · Schedule: 1926</div>
             <div class="schedule-form-static">
               <span><b>a.</b> Denomination: {{ schedule.schedule_denomination|default:"—" }}</span>
               <span><b>e.</b> County: {{ schedule.county|default:"—" }}</span>
@@ -435,6 +439,7 @@
       display: grid;
       gap: 1rem;
       grid-template-columns: 1fr 1fr;
+      padding-bottom: 10px;
     }
 
     .comparison-source-heading {
@@ -465,9 +470,6 @@
       font-size: .72rem;
       margin-left: auto;
     }
-
-    .comparison-source-heading-baseline { border-left: 4px solid #0f766e; }
-    .comparison-source-heading-comparison { border-left: 4px solid #7c3aed; }
 
     .source-dots {
       align-items: center;
@@ -702,6 +704,18 @@
 
     .form-correction::placeholder { color: #9ca3af; font-style: italic; }
 
+    .form-correction-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: .15rem;
+      min-width: 0;
+    }
+
+    .place-name {
+      color: #6b7280;
+      font-size: .72rem;
+    }
+
     .form-correction:focus {
       border-bottom-color: #0060b1;
       box-shadow: 0 1px 0 #0060b1;
@@ -895,6 +909,18 @@
           selectCorrection(row);
           refresh(row);
         });
+        // Place corrections come from the county datalist; echo the chosen name.
+        const placeName = row.querySelector(".place-name");
+        if (placeName) {
+          const showPlaceName = () => {
+            const option = document.querySelector(
+              `#place-options option[value="${CSS.escape(correction.value)}"]`
+            );
+            placeName.textContent = option ? option.textContent : "";
+          };
+          correction.addEventListener("input", showPlaceName);
+          showPlaceName();
+        }
         correction.addEventListener("keydown", (event) => {
           if (event.key === "Enter") event.preventDefault();
         });

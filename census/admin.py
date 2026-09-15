@@ -1657,6 +1657,12 @@ class CensusScheduleAdmin(ModelAdmin):
             ),
             "comparison": comparison,
             "form": schedule_form_layout(comparison["sections"]),
+            "place_options": (
+                schedule.county.places.select_related("county__state")
+                .order_by("name")
+                if schedule.county_id
+                else []
+            ),
             "preview": preview,
             "reconciliation_error": reconciliation_error,
             "can_apply": can_apply,

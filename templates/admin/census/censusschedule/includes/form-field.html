@@ -35,6 +35,15 @@
             <option value="true" {% if row.selected == "edited" and row.edited_value is True %}selected{% endif %}>Yes</option>
             <option value="false" {% if row.selected == "edited" and row.edited_value is False %}selected{% endif %}>No</option>
           </select>
+        {% elif row.field == "populated_place_id" %}
+          <span class="form-correction-wrap">
+            <input class="form-correction inline-value-input"
+                   type="text" list="place-options" autocomplete="off"
+                   value="{% if row.selected == 'edited' %}{{ row.edited_input }}{% endif %}"
+                   placeholder="Search places in this county"
+                   aria-label="Correction for {{ row.label }}; choose a place in the schedule county">
+            <span class="place-name" aria-live="polite"></span>
+          </span>
         {% else %}
           <input class="form-correction inline-value-input"
                  type="{% if row.edit_type == 'date' %}date{% elif row.edit_type == 'integer' or row.edit_type == 'decimal' %}number{% else %}text{% endif %}"
