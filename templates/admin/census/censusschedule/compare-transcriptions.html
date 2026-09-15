@@ -217,12 +217,7 @@
               {% for row in section.rows %}
                 <div class="form-field comparison-row comparison-row-{{ row.status }}">
                   <div class="form-field-label"><span>{{ row.label }}</span></div>
-                  <div class="form-choices">
-                    <div class="form-choice comparison-source-value comparison-source-value-comparison" data-source-cell="comparison">
-                      <span class="source-dots"><span class="source-dot source-dot-comparison"></span></span>
-                      <span class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</span>
-                    </div>
-                  </div>
+                  <div class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</div>
                 </div>
               {% endfor %}
             </div>
