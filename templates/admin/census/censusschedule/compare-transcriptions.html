@@ -3,14 +3,13 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+  <div class="comparison-page flex flex-col flex-1 p-6">
+    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+      <div>
         <a href="{% url 'admin:census_censusschedule_change' schedule.pk %}"
            class="text-sm font-medium text-primary-600 hover:underline">
           ← Back to {{ schedule }}
         </a>
-
-  <div class="comparison-page flex flex-col flex-1 p-6">
-    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
-      <div>
         <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-gray-100">
           Reconcile and approve
         </h1>
@@ -45,6 +44,13 @@
           Compare sources
         </button>
       </div>
+      <div class="comparison-stats">
+        <span class="comparison-stat comparison-stat-same"><b>{{ comparison.counts.same }}</b> same</span>
+        <span class="comparison-stat comparison-stat-equivalent"><b>{{ comparison.counts.equivalent }}</b> equivalent format</span>
+        <span class="comparison-stat comparison-stat-different"><b>{{ comparison.counts.different }}</b> different</span>
+        <span class="comparison-stat comparison-stat-missing"><b>{{ comparison.counts.one_missing }}</b> one source only</span>
+        <span class="comparison-stat comparison-stat-blank-zero"><b>{{ comparison.counts.blank_zero }}</b> blank vs zero</span>
+      </div>
     </form>
 
     </div>
@@ -55,24 +61,6 @@
       </div>
     {% endif %}
 
-
-    <div class="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-5">
-      <div class="comparison-stat comparison-stat-same">
-        <strong>Same</strong>: {{ comparison.counts.same }}
-      </div>
-      <div class="comparison-stat comparison-stat-equivalent">
-        <strong>Equivalent format</strong>: {{ comparison.counts.equivalent }}
-      </div>
-      <div class="comparison-stat comparison-stat-different">
-        <strong>Different</strong>: {{ comparison.counts.different }}
-      </div>
-      <div class="comparison-stat comparison-stat-missing">
-        <strong>One source only</strong>: {{ comparison.counts.one_missing }}
-      </div>
-      <div class="comparison-stat comparison-stat-blank-zero">
-        <strong>Blank vs. zero</strong>: {{ comparison.counts.blank_zero }}
-      </div>
-    </div>
 
     <div class="comparison-layout">
       <aside class="comparison-image-column">
@@ -359,17 +347,25 @@
 
     .section-source.is-selected:hover { background: #00529a; }
 
-    .comparison-stat {
-      border: 1px solid;
-      border-radius: .5rem;
-      font-size: .75rem;
-      padding: .75rem;
+    .comparison-stats {
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
     }
 
-    .comparison-stat span {
-      display: block;
-      font-size: 1.25rem;
-      font-weight: 700;
+    .comparison-stat {
+      border: 1px solid;
+      border-radius: 999px;
+      font-size: .72rem;
+      padding: .3rem .7rem;
+    }
+
+    .comparison-stat b {
+      font-size: .85rem;
+      margin-right: .2rem;
     }
 
     .comparison-stat-same { background: #f9fafb; border-color: #e5e7eb; color: #4b5563; }
