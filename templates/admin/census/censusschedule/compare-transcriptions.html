@@ -3,13 +3,14 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-  <div class="comparison-page flex flex-col flex-1 p-6">
-    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
-      <div>
         <a href="{% url 'admin:census_censusschedule_change' schedule.pk %}"
            class="text-sm font-medium text-primary-600 hover:underline">
           ← Back to {{ schedule }}
         </a>
+
+  <div class="comparison-page flex flex-col flex-1 p-6">
+    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+      <div>
         <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-gray-100">
           Reconcile and approve
         </h1>
@@ -18,17 +19,6 @@
           Schedule {{ schedule.schedule_id }}
         </p>
       </div>
-      <div class="px-3 py-2 text-xs text-gray-600 border border-gray-200 rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-300">
-        Canonical data changes only after reviewer confirmation
-      </div>
-    </div>
-
-    {% if reconciliation_error %}
-      <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
-        <strong>Review required:</strong> {{ reconciliation_error }}
-      </div>
-    {% endif %}
-
     <form method="get" class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
       <div class="comparison-source-form">
         <div>
@@ -57,21 +47,30 @@
       </div>
     </form>
 
+    </div>
+
+    {% if reconciliation_error %}
+      <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
+        <strong>Review required:</strong> {{ reconciliation_error }}
+      </div>
+    {% endif %}
+
+
     <div class="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-5">
       <div class="comparison-stat comparison-stat-same">
-        <span>{{ comparison.counts.same }}</span> same
+        <strong>Same</strong>: {{ comparison.counts.same }}
       </div>
       <div class="comparison-stat comparison-stat-equivalent">
-        <span>{{ comparison.counts.equivalent }}</span> equivalent format
+        <strong>Equivalent format</strong>: {{ comparison.counts.equivalent }}
       </div>
       <div class="comparison-stat comparison-stat-different">
-        <span>{{ comparison.counts.different }}</span> different
+        <strong>Different</strong>: {{ comparison.counts.different }}
       </div>
       <div class="comparison-stat comparison-stat-missing">
-        <span>{{ comparison.counts.one_missing }}</span> one source only
+        <strong>One source only</strong>: {{ comparison.counts.one_missing }}
       </div>
       <div class="comparison-stat comparison-stat-blank-zero">
-        <span>{{ comparison.counts.blank_zero }}</span> blank vs zero
+        <strong>Blank vs. zero</strong>: {{ comparison.counts.blank_zero }}
       </div>
     </div>
 
@@ -117,7 +116,6 @@
         {% if form.bodies or form.schedule %}
         <div class="comparison-card schedule-form" id="schedule-form">
           <div class="schedule-form-toolbar">
-            <span class="section-selection-status" data-state="pending" aria-live="polite">Checking selection…</span>
             <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Use all baseline</button>
             <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
             <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
@@ -345,37 +343,6 @@
     .comparison-button:disabled {
       cursor: not-allowed;
       opacity: .5;
-    }
-
-    .section-selection-status {
-      background: #f3f4f6;
-      border: 1px solid #d1d5db;
-      border-radius: 999px;
-      color: #4b5563;
-      font-size: .7rem;
-      font-weight: 700;
-      line-height: 1;
-      padding: .45rem .65rem;
-      text-transform: uppercase;
-    }
-
-    .section-selection-status[data-state="baseline"],
-    .section-selection-status[data-state="comparison"] {
-      background: #eaf4ff;
-      border-color: #80b9e8;
-      color: #004f91;
-    }
-
-    .section-selection-status[data-state="mixed"] {
-      background: #fffbeb;
-      border-color: #fcd34d;
-      color: #92400e;
-    }
-
-    .section-selection-status[data-state="edited"] {
-      background: #fff7ed;
-      border-color: #fb923c;
-      color: #9a3412;
     }
 
     .section-source.is-selected {
@@ -789,11 +756,6 @@
       .comparison-select,
       .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
       .section-source.is-selected { background: #0875ce; border-color: #60a5fa; color: #fff; }
-      .section-selection-status { background: #1f2937; border-color: #4b5563; color: #d1d5db; }
-      .section-selection-status[data-state="baseline"],
-      .section-selection-status[data-state="comparison"] { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
-      .section-selection-status[data-state="mixed"] { background: #78350f; border-color: #f59e0b; color: #fef3c7; }
-      .section-selection-status[data-state="edited"] { background: #7c2d12; border-color: #fb923c; color: #ffedd5; }
       .schedule-form-toolbar { background: #1f2937; border-color: #374151; }
       .schedule-form-masthead-title,
       .schedule-form-body-title,
@@ -857,16 +819,6 @@
             state = sources.size === 1 ? checked[0].value : "mixed";
           }
         }
-        const labels = {
-          baseline: "All baseline",
-          comparison: "All comparison",
-          mixed: "Mixed",
-          edited: "Contains edits",
-          none: "No choices",
-        };
-        const status = form.querySelector(".section-selection-status");
-        status.dataset.state = state;
-        status.textContent = labels[state];
         form.querySelectorAll(".section-source").forEach((button) => {
           const selected = button.dataset.source === state;
           button.disabled = state === "none";

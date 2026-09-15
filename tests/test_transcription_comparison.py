@@ -140,7 +140,8 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"Apply and approve" in response.content
     assert b"Choose what becomes canonical" not in response.content
     assert b"Preview mixed selection" not in response.content
-    assert b"section-selection-status" in response.content
+    assert b"section-selection-status" not in response.content
+    assert b'class="comparison-button section-source"' in response.content
     assert b'aria-pressed="false"' in response.content
     assert b"source-dot-baseline" in response.content
     assert b"comparison-source-value-baseline" in response.content
