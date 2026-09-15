@@ -866,11 +866,13 @@ def build_mixed_review(before, candidate, decisions):
 
     # Clergy pairs by position: a schedule holds at most one canonical pastor,
     # and the comparison lists the pastor first, so row n meets row n. Extra
-    # comparison rows are new; the reviewer can skip any of them.
+    # comparison rows are new; the reviewer can skip any of them. A nameless
+    # row is the model reading the blank assistant lines as a person; drop it.
     proposed_clergy = []
     current_clergy = sorted(before["clergy"], key=_snapshot_sort_key)
     candidate_clergy = sorted(
-        candidate["clergy"], key=lambda row: bool(row.get("is_assistant"))
+        (row for row in candidate["clergy"] if row.get("name")),
+        key=lambda row: bool(row.get("is_assistant")),
     )
     for index, candidate_person in enumerate(candidate_clergy):
         current_person = (
@@ -897,12 +899,7 @@ def build_mixed_review(before, candidate, decisions):
             proposed_clergy.append(proposed_person)
         else:
             key = f"entity.{token}"
-            selected = _selected_source(
-                decisions,
-                used_decisions,
-                key,
-                default="comparison" if candidate_person.get("name") else "baseline",
-            )
+            selected = _selected_source(decisions, used_decisions, key)
             section["skip_decision"] = {"key": key, "selected": selected}
             if selected == "comparison":
                 proposed_person["_force_create"] = candidate_person.get("id") is None
@@ -1171,8 +1168,8 @@ def _entity_section(
     }
 
 
-def _selected_source(decisions, used_decisions, key, default="comparison"):
-    selected = decisions.get(key, default)
+def _selected_source(decisions, used_decisions, key):
+    selected = decisions.get(key, "comparison")
     if selected not in {"baseline", "comparison"}:
         raise ReconciliationValidationError(
             f"Invalid source decision for {key!r}."

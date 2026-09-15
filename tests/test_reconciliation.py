@@ -1308,7 +1308,7 @@ def test_clergy_rows_pair_by_position_and_extra_rows_are_new(reviewer):
 
 
 @pytest.mark.django_db
-def test_nameless_new_clergy_row_is_skipped_by_default(reviewer):
+def test_nameless_comparison_clergy_rows_are_dropped():
     schedule = canonical_schedule()
     candidate = agent_candidate()
     candidate["clergy"].append(
@@ -1316,25 +1316,5 @@ def test_nameless_new_clergy_row_is_skipped_by_default(reviewer):
     )
     source = agent_source(schedule, candidate)
     preview = build_reconciliation_preview(schedule, source, mixed=True)
-    new = _clergy_sections(preview)[1]
-    assert new["skip_decision"]["selected"] == "baseline"
-    assert len(preview["proposed"]["clergy"]) == 1
-
-    # The reviewer can still add it explicitly, once it has a name.
-    preview = build_reconciliation_preview(
-        schedule,
-        source,
-        mixed=True,
-        decisions={
-            "entity.clergy.new.1": "comparison",
-            "clergy.new.1.name": {
-                "source": "edited",
-                "base": "comparison",
-                "value": "Rev. Corrected",
-            },
-        },
-    )
-    assert [row["name"] for row in preview["proposed"]["clergy"]] == [
-        "Rev. Agent",
-        "Rev. Corrected",
-    ]
+    assert len(_clergy_sections(preview)) == 1
+    assert [row["name"] for row in preview["proposed"]["clergy"]] == ["Rev. Agent"]
