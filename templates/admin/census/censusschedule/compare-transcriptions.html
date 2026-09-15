@@ -104,8 +104,8 @@
         {% if form.bodies or form.schedule %}
         <div class="comparison-card schedule-form" id="schedule-form">
           <div class="schedule-form-toolbar">
-            <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Use all baseline</button>
-            <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
+            <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Select all baseline</button>
+            <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Select all comparison</button>
             <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
           </div>
           <datalist id="place-options">
@@ -358,7 +358,7 @@
 
     .comparison-stat {
       border: 1px solid;
-      border-radius: 999px;
+      border-radius: 4px;
       font-size: .72rem;
       padding: .3rem .7rem;
     }
