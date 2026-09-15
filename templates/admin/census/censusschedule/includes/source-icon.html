@@ -1,0 +1,8 @@
+{# Glyph for a transcription source: person for humans, robot tinted by vendor for models. #}
+<span class="source-mark source-mark-{{ source.vendor|default:'unknown' }}" title="{{ source.tooltip|default:'No source selected' }}" aria-hidden="true">
+  {% if source.icon == "robot" %}
+    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 0 1 1 1v1.1A5 5 0 0 1 15 9v1h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1V9a5 5 0 0 1 4-4.9V3a1 1 0 0 1 1-1Zm-3 9.5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm6 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5ZM7.5 14a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Z"/></svg>
+  {% else %}
+    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 7a6 6 0 0 1 12 0v.5H4V17Z"/></svg>
+  {% endif %}
+</span>

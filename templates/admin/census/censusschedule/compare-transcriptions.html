@@ -437,21 +437,25 @@
       align-items: center;
       display: inline-flex;
       gap: 2px;
-      margin-top: .35rem;
+      margin-top: .15rem;
     }
 
-    .source-dot {
-      background: #9ca3af;
-      border-radius: 999px;
-      display: inline-block;
+    .source-mark {
+      color: #9ca3af;
+      display: inline-flex;
       flex: none;
-      height: .55rem;
-      width: .55rem;
+      height: .95rem;
+      vertical-align: -.15rem;
+      width: .95rem;
     }
 
-    .source-dot-baseline { background: #0f766e; }
-    .source-dot-comparison { background: #7c3aed; }
-    .source-dot-edited { background: #f97316; }
+    .source-mark svg { height: 100%; width: 100%; }
+
+    .source-mark-human { color: #374151; }
+    .source-mark-model { color: #6b7280; }
+    .source-mark-anthropic { color: #c96442; }
+    .source-mark-google { color: #4285f4; }
+    .source-mark-edited { color: #f97316; }
 
     .schedule-form-masthead {
       border-bottom: 3px double #9ca3af;
@@ -762,6 +766,8 @@
       .schedule-form-block h4,
       .form-field-label,
       .form-choice { color: #e5e7eb; }
+      .source-mark-human { color: #d1d5db; }
+      .source-mark-model { color: #9ca3af; }
       .schedule-form-static { color: #d1d5db; }
       label.form-choice:hover { background: #1f2937; }
       .form-panel + .form-panel { border-color: #4b5563; }

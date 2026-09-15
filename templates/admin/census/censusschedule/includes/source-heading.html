@@ -1,7 +1,7 @@
 <div class="comparison-source-heading comparison-source-heading-{{ side }}">
   {% if source %}
     <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">
-      <span class="source-dot source-dot-{{ side }}"></span>
+      {% include "admin/census/censusschedule/includes/source-icon.html" with source=source %}
       {{ source.heading }}
     </div>
     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -20,7 +20,7 @@
     {% endif %}
   {% else %}
     <div class="text-sm text-gray-500 dark:text-gray-400">
-      <span class="source-dot source-dot-{{ side }}"></span>
+      {% include "admin/census/censusschedule/includes/source-icon.html" with source=None %}
       {{ fallback }}
     </div>
   {% endif %}
