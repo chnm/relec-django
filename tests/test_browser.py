@@ -148,7 +148,7 @@ def test_browser_leaflet_visualization_populates_from_api(page, live_server):
         render_type="custom",
         custom_view_name="denomination_geojson_map",
     )
-    page.route("**.basemaps.cartocdn.com/**", lambda route: route.abort())
+    page.route("**basemaps.cartocdn.com/**", lambda route: route.abort())
     page_errors = []
     page.on("pageerror", lambda error: page_errors.append(str(error)))
 
