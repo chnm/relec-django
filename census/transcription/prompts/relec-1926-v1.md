@@ -20,14 +20,16 @@ The constrained provider schema uses transport sentinels so it remains within th
 - Division and local church name are literal transcriptions. Do not add or remove the word "Church". Strip only surrounding/trailing punctuation.
 - Transcribe county and state as written. State is the two-letter abbreviation when it can be determined. Set `populated_place_id` only when one supplied candidate is supported by the image and county context; otherwise use null.
 - `census_code` is the handwritten red-pencil two-part code (for example `0-1` or '01'). The separate handwritten three-part code that is in blue or red or black ink (for example '1-2-3' or '123') belongs in `processing.denomination_code_stamp`. Hyphenate the three number `denomination_code_stamp` in the output field.
-- `urban_rural_code` is a handwritten alphabetic code (letter-code is written in either print or cursive styles) in red-pencil. `U` denotes 'urban' and `R` denotes 'rural'. If present on schedule, 'U' or 'R' should be inserted in `urban_rural_code` and 'null' if no handwritten 'U' or 'R' letter is present.
+- `urban_rural_code` is a handwritten alphabetic code (letter-code is written in either print or cursive styles) in red-pencil. `U` denotes 'urban' and `R` denotes 'rural'. If present on schedule, 'U' or 'R' should be inserted in `urban_rural_code` as 'Urban' or 'Rural' and 'null' if no handwritten 'U' or 'R' letter is present.
 
 ## Membership, buildings, and expenditures
+
+If the individual transcriptions do not sum accurately in fields 1-6 or 13-15, investigate which ones need to be examined to make the arithmetic work and correct the fields. Make a note in the AI notes field about the arithmetic and field discrepancies. This won't likely apply to fields 7-12.
 
 - Fields 1–6 map in order to male members, female members, total by sex, members under 13, members 13 and older, and total by age.
 - Field 3 should equal fields 1+2. Field 6 should equal fields 4+5, and fields 3 and 6 should agree. Preserve written values and note any discrepancy.
 - Fields 7–12 are number of edifices, edifice value, edifice debt, whether the church owns a pastor's residence, residence value, and residence debt. Do not infer zero for blank residence values.
-- Fields 13–15 are expenditures, benevolences, and total expenditures. Field 15 should equal fields 13+14; preserve and note discrepancies.
+- Fields 13–15 are expenditures, benevolences, and total expenditures. Field 15 should equal fields 13+14; if it does not, investigate how to make corrections that ensure accurate arithmetic.
 
 ## Church schools
 
