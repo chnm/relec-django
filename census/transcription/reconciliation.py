@@ -666,6 +666,11 @@ def _candidate_draft(schedule, transcription, before):
     bodies = []
     for body in data.get("religious_bodies") or []:
         values = {field: body.get(field) for field in BODY_FIELDS}
+        # The 1926 form's only church location is line d ("City, town,
+        # village, or township"), so the agent's body address is always
+        # the verbatim place, blank when line d is blank.
+        if transcription.run.kind == "agent":
+            values["address"] = fields.get("populated_place_verbatim")
         if body.get("id") is not None:
             values["id"] = body["id"]
         memberships = body.get("membership", [])
@@ -721,25 +726,40 @@ def _schedule_group_section(
             current_value,
             candidate_value,
         )
-        rows.append(
-            comparison_row(
-                label,
-                current_value,
-                candidate_value,
-                decision_key=key,
-                edit_type=_edit_type(key),
-                **_decision_row_options(used_decisions[key]),
-            )
+        row = comparison_row(
+            label,
+            current_value,
+            candidate_value,
+            decision_key=key,
+            edit_type=_edit_type(key),
+            field=field,
+            **_decision_row_options(used_decisions[key]),
         )
+        if field == "populated_place_id":
+            _annotate_place_names(row, current_value, candidate_value)
+        rows.append(row)
     return {
         "title": title,
-        "note": (
-            "Select a value cell. Double-click it, or use Edit, to "
-            "enter a reviewer correction."
-        ),
+        "note": "Select a source value, or type a reviewer correction.",
         "rows": rows,
         "decision_scope": "field",
+        "kind": "schedule",
     }
+
+
+def _annotate_place_names(row, *place_ids):
+    """Show the place name and state after a bare Apiary place ID."""
+    ids = {value for value in place_ids if isinstance(value, int)}
+    if not ids:
+        return
+    names = {}
+    for place in PopulatedPlace.objects.filter(place_id__in=ids).select_related(
+        "county__state"
+    ):
+        names.setdefault(place.place_id, f"{place.name}, {place.county.state.code}")
+    for side, value in (("left", place_ids[0]), ("right", place_ids[1])):
+        if value in names:
+            row[side]["text"] = f"{value} ({names[value]})"
 
 
 def build_mixed_review(before, candidate, decisions):
@@ -809,6 +829,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Retain baseline body",
                 "Remove body",
+                "body",
                 note=(
                     f"Baseline-only body with "
                     f"{len(current_body.get('membership', []))} membership row(s)."
@@ -840,6 +861,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Do not add body",
                 "Add comparison body",
+                "body",
                 note=(
                     f"Comparison-only body with "
                     f"{len(candidate_body.get('membership', []))} membership row(s)."
@@ -847,35 +869,51 @@ def build_mixed_review(before, candidate, decisions):
             )
         )
 
+    # Clergy pairs by position: a schedule holds at most one canonical pastor,
+    # and the comparison lists the pastor first, so row n meets row n. Extra
+    # comparison rows are new; the reviewer can skip any of them. A nameless
+    # row is the model reading the blank assistant lines as a person; drop it.
     proposed_clergy = []
-    clergy_matches, current_only_clergy, candidate_only_clergy = (
-        _match_snapshot_rows(
-            before["clergy"],
-            candidate["clergy"],
-            signature_fields=("name", "is_assistant"),
-            match_single=True,
-        )
+    current_clergy = sorted(before["clergy"], key=_snapshot_sort_key)
+    candidate_clergy = sorted(
+        (row for row in candidate["clergy"] if row.get("name")),
+        key=lambda row: bool(row.get("is_assistant")),
     )
-    for index, (current_person, candidate_person) in enumerate(
-        sorted(clergy_matches, key=lambda pair: _snapshot_sort_key(pair[0]))
-    ):
-        token = _snapshot_token("clergy", current_person, index)
+    for index, candidate_person in enumerate(candidate_clergy):
+        current_person = (
+            current_clergy[index] if index < len(current_clergy) else {}
+        )
+        if current_person:
+            token = _snapshot_token("clergy", current_person, index)
+            title = f"Clergy: {_snapshot_label(current_person, index + 1)}"
+        else:
+            token = f"clergy.new.{index}"
+            title = f"Clergy: {candidate_person.get('name') or index + 1}"
         proposed_person, section = _mixed_matched_entity(
             token,
-            f"Clergy: {_snapshot_label(current_person, index + 1)}",
+            title,
             current_person,
             candidate_person,
             CLERGY_FIELDS,
             CLERGY_LABELS,
             decisions,
             used_decisions,
+            "clergy",
         )
-        proposed_clergy.append(proposed_person)
+        if current_person:
+            proposed_clergy.append(proposed_person)
+        else:
+            key = f"entity.{token}"
+            selected = _selected_source(decisions, used_decisions, key)
+            section["skip_decision"] = {"key": key, "selected": selected}
+            if selected == "comparison":
+                proposed_person["_force_create"] = candidate_person.get("id") is None
+                proposed_clergy.append(proposed_person)
         sections.append(section)
 
-    for index, current_person in enumerate(
-        sorted(current_only_clergy, key=_snapshot_sort_key)
-    ):
+    for index, current_person in enumerate(current_clergy):
+        if index < len(candidate_clergy):
+            continue
         token = _snapshot_token("clergy", current_person, index)
         key = f"entity.{token}"
         selected = _selected_source(decisions, used_decisions, key)
@@ -892,32 +930,7 @@ def build_mixed_review(before, candidate, decisions):
                 selected,
                 "Retain baseline clergy row",
                 "Remove clergy row",
-            )
-        )
-
-    candidate_clergy_indices = {
-        id(row): index for index, row in enumerate(candidate["clergy"])
-    }
-    for candidate_person in candidate_only_clergy:
-        index = candidate_clergy_indices[id(candidate_person)]
-        token = f"clergy.new.{index}"
-        key = f"entity.{token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "comparison":
-            proposed_person = deepcopy(candidate_person)
-            proposed_person["_force_create"] = candidate_person.get("id") is None
-            proposed_clergy.append(proposed_person)
-        sections.append(
-            _entity_section(
-                f"Comparison clergy: {candidate_person.get('name') or index + 1}",
-                None,
-                candidate_person,
-                CLERGY_FIELDS,
-                CLERGY_LABELS,
-                key,
-                selected,
-                "Do not add clergy row",
-                "Add comparison clergy row",
+                "clergy",
             )
         )
 
@@ -940,7 +953,9 @@ def build_mixed_review(before, candidate, decisions):
             current_value = before["schedule_fields"].get(field)
             candidate_value = candidate["schedule_fields"].get(field)
             proposed_fields[field] = deepcopy(candidate_value)
-            rows.append(comparison_row(label, current_value, candidate_value))
+            rows.append(
+                comparison_row(label, current_value, candidate_value, field=field)
+            )
         sections.append(
             {
                 "title": title,
@@ -982,6 +997,7 @@ def _mixed_body(
         BODY_LABELS,
         decisions,
         used_decisions,
+        "body",
     )
     memberships = []
     membership_sections = []
@@ -1009,6 +1025,7 @@ def _mixed_body(
             MEMBERSHIP_LABELS,
             decisions,
             used_decisions,
+            "membership",
         )
         memberships.append(proposed_membership)
         membership_sections.append(section)
@@ -1036,6 +1053,7 @@ def _mixed_body(
                 selected,
                 "Retain baseline membership",
                 "Remove membership",
+                "membership",
             )
         )
     candidate_indices = {
@@ -1064,6 +1082,7 @@ def _mixed_body(
                 selected,
                 "Do not add membership",
                 "Add comparison membership",
+                "membership",
             )
         )
     proposed_body["membership"] = memberships
@@ -1079,6 +1098,7 @@ def _mixed_matched_entity(
     labels,
     decisions,
     used_decisions,
+    kind,
 ):
     proposed = {}
     if current.get("id") is not None:
@@ -1086,31 +1106,32 @@ def _mixed_matched_entity(
     rows = []
     for field in fields:
         key = f"{token}.{field}"
+        # An absent current row shows "Not captured" but proposes None.
+        current_value = current.get(field, MISSING)
         proposed[field] = _selected_value(
             decisions,
             used_decisions,
             key,
-            current.get(field),
+            None if current_value is MISSING else current_value,
             candidate.get(field),
         )
         rows.append(
             comparison_row(
                 labels[field],
-                current.get(field),
+                current_value,
                 candidate.get(field),
                 decision_key=key,
                 edit_type=_edit_type(key),
+                field=field,
                 **_decision_row_options(used_decisions[key]),
             )
         )
     return proposed, {
         "title": title,
-        "note": (
-            "Matched without relying on database or array order. Select a "
-            "value cell, or edit the selected value."
-        ),
+        "note": "Select a source value, or type a reviewer correction.",
         "rows": rows,
         "decision_scope": "field",
+        "kind": kind,
     }
 
 
@@ -1124,6 +1145,7 @@ def _entity_section(
     selected,
     current_label,
     candidate_label,
+    kind,
     note="",
 ):
     current = current or {}
@@ -1136,10 +1158,12 @@ def _entity_section(
                 labels[field],
                 current.get(field, MISSING),
                 candidate.get(field, MISSING),
+                field=field,
             )
             for field in fields
         ],
         "decision_scope": "entity",
+        "kind": kind,
         "entity_decision": {
             "key": key,
             "selected": selected,

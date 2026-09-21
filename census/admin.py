@@ -55,6 +55,7 @@ from .transcription.reconciliation import (
     rollback_reconciliation,
     serialize_canonical,
 )
+from .transcription.schedule_form import schedule_form_layout
 from .transcription.services import (
     LaunchError,
     launch_transcription_run,
@@ -1371,6 +1372,16 @@ def restore_previous_canonical_data(modeladmin, request, queryset):
     return render(request, "admin/census/bulk-reconciliation.html", context)
 
 
+def _model_vendor(model_name):
+    """Pick a glyph tint from the model name; unknown models stay neutral."""
+    name = (model_name or "").casefold()
+    if "claude" in name:
+        return "anthropic"
+    if "gemini" in name:
+        return "google"
+    return "model"
+
+
 @admin.register(CensusSchedule)
 class CensusScheduleAdmin(ModelAdmin):
     change_form_template = "admin/census/censusschedule/change_form.html"
@@ -1655,6 +1666,13 @@ class CensusScheduleAdmin(ModelAdmin):
                 jobs.get(comparison_source.run_id) if comparison_source else None,
             ),
             "comparison": comparison,
+            "form": schedule_form_layout(comparison["sections"]),
+            "place_options": (
+                schedule.county.places.select_related("county__state")
+                .order_by("name")
+                if schedule.county_id
+                else []
+            ),
             "preview": preview,
             "reconciliation_error": reconciliation_error,
             "can_apply": can_apply,
@@ -1775,6 +1793,9 @@ class CensusScheduleAdmin(ModelAdmin):
                     f"{schedule.get_transcription_status_display()}"
                 ),
                 "detail": "Approval target",
+                "icon": "human",
+                "vendor": "human",
+                "tooltip": "Current canonical data",
                 "job": None,
                 "raw_json": json.dumps(
                     serialize_canonical(schedule),
@@ -1803,6 +1824,17 @@ class CensusScheduleAdmin(ModelAdmin):
             ),
             "model": metadata.get("model", ""),
             "contract_version": metadata.get("contract_version", ""),
+            "icon": "robot" if source.run.kind == "agent" else "human",
+            "vendor": (
+                _model_vendor(metadata.get("model", ""))
+                if source.run.kind == "agent"
+                else "human"
+            ),
+            "tooltip": " · ".join(
+                value
+                for value in (source.run.get_kind_display(), metadata.get("model", ""), source.run.key)
+                if value
+            ),
             "job": job,
             "raw_json": source_raw_json(source),
         }

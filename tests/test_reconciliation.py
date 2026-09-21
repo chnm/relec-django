@@ -54,7 +54,7 @@ def reviewer(db):
 
 def agent_candidate(**schedule_overrides):
     schedule_fields = {
-        "populated_place_verbatim": None,
+        "populated_place_verbatim": "New Town",
         "populated_place_id": None,
         "county_verbatim": None,
         "state_verbatim": None,
@@ -82,7 +82,7 @@ def agent_candidate(**schedule_overrides):
                 "name": "Agent Church",
                 "census_code": "A-1",
                 "division": None,
-                "address": "22 New Street",
+                "address": "New Town",
                 "urban_rural_code": "U",
                 "membership": {
                     "male_members": 10,
@@ -234,7 +234,7 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
     assert schedule.respondent_name == "Agent Respondent"
     assert schedule.assigned_reviewer_id is None
     assert body.name == "Agent Church"
-    assert body.address == "22 New Street"
+    assert body.address == "New Town"
     assert body.geocode_status == "pending"
     assert membership.total_members_by_sex == 25
     assert schedule.clergy.get().name == "Rev. Agent"
@@ -248,7 +248,7 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
 def test_promotion_preserves_geocoding_when_address_is_unchanged(reviewer):
     schedule = canonical_schedule()
     candidate = agent_candidate()
-    candidate["religious_bodies"][0]["address"] = "11 Old Street"
+    candidate["schedule_fields"]["populated_place_verbatim"] = "11 Old Street"
     source = agent_source(schedule, candidate)
     preview = build_reconciliation_preview(schedule, source)
 
@@ -366,7 +366,7 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     ]
     assert schedule.ai_notes == "Candidate-only review context"
     assert body.name == "Human Church"
-    assert body.address == "22 New Street"
+    assert body.address == "New Town"
     assert body.geocode_status == "pending"
     assert membership.male_members == 4
     assert membership.female_members == 15
@@ -1193,3 +1193,144 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
     page = confirmation.content.decode()
     assert "Already promoted from" in page
     assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)
+
+
+@pytest.mark.django_db
+def test_schedule_form_layout_places_every_decision_row_once():
+    from census.transcription.schedule_form import schedule_form_layout
+
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    sections = preview["review_sections"]
+    form = schedule_form_layout(sections)
+
+    def panel_keys(panels):
+        return [
+            row["decision_key"]
+            for panel in panels
+            for row in panel["rows"]
+            if row["decision_key"]
+        ]
+
+    placed = []
+    placed += panel_keys(form["schedule"])
+    for body in form["bodies"]:
+        for block in ("header", "membership", "schools", "buildings", "expenditures"):
+            placed += panel_keys(body[block])
+    placed += panel_keys(form["pastor"])
+    placed += panel_keys(form["footer"])
+    placed += panel_keys(form["stamps"])
+
+    expected = [
+        row["decision_key"]
+        for section in sections
+        if section["decision_scope"] != "automatic"
+        for row in section["rows"]
+        if row["decision_key"]
+    ]
+    assert form["other"] == []
+    assert sorted(placed) == sorted(expected)
+    assert len(placed) == len(set(placed))
+    assert [s["title"] for s in form["context"]] == ["Marginalia", "Agent notes"]
+    # Form question numbers follow the printed 1926 schedule.
+    membership_numbers = [
+        row["number"] for row in form["bodies"][0]["membership"][0]["rows"]
+    ]
+    assert membership_numbers == ["1", "2", "3", "4", "5", "6"]
+    assert form["pastor"][0]["rows"][0]["number"] == "26"
+
+
+@pytest.mark.django_db
+def test_populated_place_row_shows_place_name_and_state():
+    schedule = canonical_schedule()
+    place = schedule.populated_place
+    place.place_id = 4242
+    place.name = "Mount Liberty"
+    place.county = schedule.county
+    place.save()
+    source = agent_source(schedule, agent_candidate(populated_place_id=4242))
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    row = preview["review_sections"][0]["rows"][0]
+    assert row["field"] == "populated_place_id"
+    state = place.county.state.code
+    assert row["left"]["text"] == f"4242 (Mount Liberty, {state})"
+    assert row["right"]["text"] == f"4242 (Mount Liberty, {state})"
+    assert row["left"]["input"] == "4242"
+
+
+def _clergy_sections(preview):
+    return [
+        section
+        for section in preview["review_sections"]
+        if section.get("kind") == "clergy"
+    ]
+
+
+@pytest.mark.django_db
+def test_clergy_rows_pair_by_position_and_extra_rows_are_new(reviewer):
+    schedule = canonical_schedule()
+    current_clergy = schedule.clergy.get()
+    candidate = agent_candidate()
+    candidate["clergy"] = [
+        {**candidate["clergy"][0], "name": "Rev. F.E. Banks", "is_assistant": False},
+        {**candidate["clergy"][0], "name": "Rev. Junior", "is_assistant": True},
+    ]
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    sections = _clergy_sections(preview)
+    assert [s["decision_scope"] for s in sections] == ["field", "field"]
+
+    paired = sections[0]
+    name_row = next(row for row in paired["rows"] if row["field"] == "name")
+    assert name_row["left"]["text"] == "Rev. Human"
+    assert name_row["right"]["text"] == "Rev. F.E. Banks"
+    assert "skip_decision" not in paired
+
+    new = sections[1]
+    name_row = next(row for row in new["rows"] if row["field"] == "name")
+    assert name_row["left"]["text"] == "Not captured"
+    assert name_row["right"]["text"] == "Rev. Junior"
+    assert new["skip_decision"] == {
+        "key": "entity.clergy.new.1",
+        "selected": "comparison",
+    }
+
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        decisions={f"clergy.{current_clergy.pk}.name": "baseline"},
+    )
+    names = list(schedule.clergy.order_by("is_assistant").values_list("name", flat=True))
+    assert names == ["Rev. Human", "Rev. Junior"]
+
+
+@pytest.mark.django_db
+def test_nameless_comparison_clergy_rows_are_dropped():
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["clergy"].append(
+        {**candidate["clergy"][0], "name": None, "is_assistant": True}
+    )
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    assert len(_clergy_sections(preview)) == 1
+    assert [row["name"] for row in preview["proposed"]["clergy"]] == ["Rev. Agent"]
+
+
+def test_agent_verbatim_place_replaces_body_address(reviewer):
+    """The form's only church location is line d, so it becomes the body address."""
+    schedule = canonical_schedule()
+    source = agent_source(
+        schedule, agent_candidate(populated_place_verbatim="Providence")
+    )
+    preview = build_reconciliation_preview(schedule, source)
+    body_section = next(
+        s for s in preview["comparison"]["sections"]
+        if s["title"].startswith("Religious body")
+    )
+    row = next(r for r in body_section["rows"] if r["label"].startswith("City, town"))
+    assert row["label"] == "City, town, village, etc."
+    assert row["right"]["text"] == "Providence"

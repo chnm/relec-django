@@ -28,7 +28,7 @@ RELIGIOUS_BODY_FIELDS = [
     ("name", "Name"),
     ("census_code", "Census code"),
     ("division", "Division or conference"),
-    ("address", "Address"),
+    ("address", "City, town, village, etc."),
     ("urban_rural_code", "Urban or rural"),
     ("num_edifices", "Number of edifices"),
     ("edifice_value", "Edifice value"),
@@ -219,15 +219,17 @@ def comparison_row(
     edited_base="",
     edited_value="",
     edit_type="text",
+    field="",
 ):
     """Build one display row with optional mixed-source decision metadata."""
     row = _row(label, left, right)
     edited_display = _display_value(edited_value)
     row.update(
         {
+            "field": field,
             "decision_key": decision_key,
             "selected": selected,
-            "can_choose": bool(decision_key) and row["status"] != "same",
+            "can_choose": bool(decision_key),
             "edited_base": edited_base,
             "edited_value": edited_value,
             "edited_display": edited_display["text"],

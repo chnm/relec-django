@@ -4,7 +4,7 @@
 
 {% block content %}
   <div class="comparison-page flex flex-col flex-1 p-6">
-    <div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+    <div class="mb-6">
       <div>
         <a href="{% url 'admin:census_censusschedule_change' schedule.pk %}"
            class="text-sm font-medium text-primary-600 hover:underline">
@@ -18,16 +18,7 @@
           Schedule {{ schedule.schedule_id }}
         </p>
       </div>
-      <div class="px-3 py-2 text-xs text-gray-600 border border-gray-200 rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-300">
-        Canonical data changes only after reviewer confirmation
-      </div>
     </div>
-
-    {% if reconciliation_error %}
-      <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
-        <strong>Review required:</strong> {{ reconciliation_error }}
-      </div>
-    {% endif %}
 
     <form method="get" class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
       <div class="comparison-source-form">
@@ -55,25 +46,21 @@
           Compare sources
         </button>
       </div>
+      <div class="comparison-stats">
+        <span class="comparison-stat comparison-stat-same"><b>{{ comparison.counts.same }}</b> same</span>
+        <span class="comparison-stat comparison-stat-equivalent"><b>{{ comparison.counts.equivalent }}</b> equivalent format</span>
+        <span class="comparison-stat comparison-stat-different"><b>{{ comparison.counts.different }}</b> different</span>
+        <span class="comparison-stat comparison-stat-missing"><b>{{ comparison.counts.one_missing }}</b> one source only</span>
+        <span class="comparison-stat comparison-stat-blank-zero"><b>{{ comparison.counts.blank_zero }}</b> blank vs zero</span>
+      </div>
     </form>
 
-    <div class="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-5">
-      <div class="comparison-stat comparison-stat-same">
-        <span>{{ comparison.counts.same }}</span> same
+    {% if reconciliation_error %}
+      <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
+        <strong>Review required:</strong> {{ reconciliation_error }}
       </div>
-      <div class="comparison-stat comparison-stat-equivalent">
-        <span>{{ comparison.counts.equivalent }}</span> equivalent format
-      </div>
-      <div class="comparison-stat comparison-stat-different">
-        <span>{{ comparison.counts.different }}</span> different
-      </div>
-      <div class="comparison-stat comparison-stat-missing">
-        <span>{{ comparison.counts.one_missing }}</span> one source only
-      </div>
-      <div class="comparison-stat comparison-stat-blank-zero">
-        <span>{{ comparison.counts.blank_zero }}</span> blank vs zero
-      </div>
-    </div>
+    {% endif %}
+
 
     <div class="comparison-layout">
       <aside class="comparison-image-column">
@@ -81,7 +68,6 @@
           <div class="flex flex-wrap items-center justify-between gap-2 p-4 border-b border-gray-200 dark:border-gray-700">
             <div>
               <h2 class="font-semibold text-gray-800 dark:text-gray-100">Schedule image</h2>
-              <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400">100%</div>
             </div>
             {% if image_url %}
               <a href="{{ image_url }}" target="_blank" rel="noopener"
@@ -95,6 +81,7 @@
               <button id="zoom-out" type="button" class="comparison-button" aria-label="Zoom out">−</button>
               <button id="zoom-reset" type="button" class="comparison-button">Reset</button>
               <button id="zoom-in" type="button" class="comparison-button" aria-label="Zoom in">+</button>
+              <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400 content-center">100%</div>
             </div>
             <div id="image-viewport" class="comparison-image-viewport">
               <img id="schedule-image" src="{{ image_url }}"
@@ -110,67 +97,117 @@
 
       <main class="min-w-0 space-y-5">
         <div class="comparison-source-headings">
-          <div></div>
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source fallback="No baseline selected" %}
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source fallback="No comparison selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source side="baseline" fallback="No baseline selected" %}
+          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source side="comparison" fallback="No comparison selected" %}
         </div>
 
-        {% for section in comparison.sections %}
-          <section class="comparison-card overflow-hidden" data-decision-section="section-{{ forloop.counter }}" data-automatic-source="{{ section.automatic_source|default:'' }}">
-            <div class="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-              <div>
-                <h2 class="font-semibold text-gray-800 dark:text-gray-100">{{ section.title }}</h2>
-                {% if section.note %}
-                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ section.note }}</p>
-                {% endif %}
+        {% if form.bodies or form.schedule %}
+        <div class="comparison-card schedule-form" id="schedule-form">
+          <div class="schedule-form-toolbar">
+            <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Select all baseline</button>
+            <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Select all comparison</button>
+            <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
+          </div>
+          <datalist id="place-options">
+            {% for place in place_options %}
+              <option value="{{ place.place_id }}">{{ place.name }}, {{ place.county.state.code }}</option>
+            {% endfor %}
+          </datalist>
+
+          <div class="schedule-form-masthead">
+            <div class="schedule-form-static">
+              <span><b>a.</b> Denomination: {{ schedule.schedule_denomination|default:"—" }}</span>
+              <span><b>e.</b> County: {{ schedule.county|default:"—" }}</span>
+              <span><b>f.</b> State: {{ schedule.county.state|default:"—" }}</span>
+            </div>
+            {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.schedule show_titles=False %}
+          </div>
+
+          {% for body in form.bodies %}
+            <section class="schedule-form-body">
+              {% if form.bodies|length > 1 %}<h3 class="schedule-form-body-title">{{ body.title }}</h3>{% endif %}
+              <div class="schedule-form-head">
+                {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.header show_titles=False %}
               </div>
-              {% if section.decision_scope == "field" %}
-                <div class="section-selection-controls">
-                  <span class="section-selection-status" data-state="pending" aria-live="polite">Checking selection…</span>
-                  <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Use all baseline</button>
-                  <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Use all comparison</button>
+              {% if forloop.first %}
+                <div class="schedule-form-block schedule-form-inline">
+                  <h4>Census Bureau stamps</h4>
+                  {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.stamps show_titles=False %}
                 </div>
               {% endif %}
-            </div>
-            {% if section.entity_decision %}
-              <fieldset class="entity-decision px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <legend class="sr-only">Decision for {{ section.title }}</legend>
-                <label>
-                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="baseline" {% if section.entity_decision.selected == "baseline" %}checked{% endif %}>
-                  {{ section.entity_decision.current_label }}
-                </label>
-                <label>
-                  <input form="reconciliation-form" type="radio" name="choice__{{ section.entity_decision.key }}" value="comparison" {% if section.entity_decision.selected == "comparison" %}checked{% endif %}>
-                  {{ section.entity_decision.candidate_label }}
-                </label>
-              </fieldset>
-            {% endif %}
-            <div class="comparison-table-scroll">
-              <div class="comparison-table">
-                {% for row in section.rows %}
-                  <div class="comparison-row comparison-row-{{ row.status }}">
-                    <div class="comparison-label">
-                      <span>{{ row.label }}</span>
-                      {% if row.status != "same" %}
-                        <small>{{ row.status_label }}</small>
-                      {% endif %}
-                    </div>
-                    {% if row.can_choose %}
-                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.left source_side="baseline" row=row %}
-                      {% include "admin/census/censusschedule/includes/selectable-comparison-value.html" with value=row.right source_side="comparison" row=row %}
-                    {% else %}
-                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.left source_side="baseline" %}
-                      {% include "admin/census/censusschedule/includes/comparison-value.html" with value=row.right source_side="comparison" %}
-                    {% endif %}
+              <div class="schedule-form-grid">
+                <div class="schedule-form-col">
+                  <div class="schedule-form-block">
+                    <h4>Membership</h4>
+                    {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.membership show_titles=body.membership|length|add:"-1" %}
                   </div>
-                {% endfor %}
+                  <div class="schedule-form-block">
+                    <h4>Church buildings</h4>
+                    {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.buildings show_titles=False %}
+                  </div>
+                  <div class="schedule-form-block">
+                    <h4>Expenditures</h4>
+                    {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.expenditures show_titles=False %}
+                  </div>
+                </div>
+                <div class="schedule-form-col">
+                  <div class="schedule-form-block">
+                    <h4>Church schools</h4>
+                    {% include "admin/census/censusschedule/includes/form-panel.html" with panels=body.schools show_titles=body.schools|length|add:"-1" %}
+                  </div>
+                  {% if forloop.last %}
+                    <div class="schedule-form-block">
+                      <h4>Pastor</h4>
+                      {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.pastor show_titles=form.pastor|length|add:"-2" %}
+                    </div>
+                  {% endif %}
+                </div>
               </div>
+            </section>
+          {% empty %}
+            <div class="schedule-form-block schedule-form-inline">
+              <h4>Census Bureau stamps</h4>
+              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.stamps show_titles=False %}
             </div>
-          </section>
-        {% empty %}
+            <div class="schedule-form-block">
+              <h4>Pastor</h4>
+              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.pastor show_titles=form.pastor|length|add:"-2" %}
+            </div>
+          {% endfor %}
+
+          {% if form.other %}
+            <div class="schedule-form-block">
+              <h4>Other fields</h4>
+              {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.other show_titles=True %}
+            </div>
+          {% endif %}
+
+          <div class="schedule-form-footer schedule-form-block schedule-form-inline">
+            <h4>Signature of person furnishing information</h4>
+            {% include "admin/census/censusschedule/includes/form-panel.html" with panels=form.footer show_titles=False %}
+          </div>
+        </div>
+        {% else %}
           <div class="comparison-card p-8 text-sm text-center text-gray-500 dark:text-gray-400">
             There are not yet two transcription sources to compare.
           </div>
+        {% endif %}
+
+        {% for section in form.context %}
+          <section class="comparison-card overflow-hidden" data-decision-section data-automatic-source="{{ section.automatic_source|default:'' }}">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+              <h2 class="font-semibold text-gray-800 dark:text-gray-100">{{ section.title }}</h2>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ section.note }}</p>
+            </div>
+            <div class="p-4 space-y-3">
+              {% for row in section.rows %}
+                <div class="form-field comparison-row comparison-row-{{ row.status }}">
+                  <div class="form-field-label"><span>{{ row.label }}</span></div>
+                  <div class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </section>
         {% endfor %}
 
         <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -235,9 +272,7 @@
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
     }
 
-    .comparison-image-column {
-      min-width: 0;
-    }
+    .comparison-image-column { min-width: 0; }
 
     .comparison-image-card {
       position: sticky;
@@ -282,9 +317,7 @@
       padding: .5rem .8rem;
     }
 
-    .comparison-button:hover {
-      background: #f3f4f6;
-    }
+    .comparison-button:hover { background: #f3f4f6; }
 
     .comparison-button-primary {
       background: #0060b1;
@@ -293,52 +326,11 @@
       min-height: 42px;
     }
 
-    .comparison-button-primary:hover {
-      background: #00529a;
-    }
+    .comparison-button-primary:hover { background: #00529a; }
 
     .comparison-button:disabled {
       cursor: not-allowed;
       opacity: .5;
-    }
-
-    .section-selection-controls {
-      align-items: center;
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem;
-      justify-content: flex-end;
-    }
-
-    .section-selection-status {
-      background: #f3f4f6;
-      border: 1px solid #d1d5db;
-      border-radius: 999px;
-      color: #4b5563;
-      font-size: .7rem;
-      font-weight: 700;
-      line-height: 1;
-      padding: .45rem .65rem;
-      text-transform: uppercase;
-    }
-
-    .section-selection-status[data-state="baseline"],
-    .section-selection-status[data-state="comparison"] {
-      background: #eaf4ff;
-      border-color: #80b9e8;
-      color: #004f91;
-    }
-
-    .section-selection-status[data-state="mixed"] {
-      background: #fffbeb;
-      border-color: #fcd34d;
-      color: #92400e;
-    }
-
-    .section-selection-status[data-state="edited"] {
-      background: #fff7ed;
-      border-color: #fb923c;
-      color: #9a3412;
     }
 
     .section-source.is-selected {
@@ -353,21 +345,27 @@
       margin-right: .35rem;
     }
 
-    .section-source.is-selected:hover {
-      background: #00529a;
+    .section-source.is-selected:hover { background: #00529a; }
+
+    .comparison-stats {
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
     }
 
     .comparison-stat {
       border: 1px solid;
-      border-radius: .5rem;
-      font-size: .75rem;
-      padding: .75rem;
+      border-radius: 4px;
+      font-size: .72rem;
+      padding: .3rem .7rem;
     }
 
-    .comparison-stat span {
-      display: block;
-      font-size: 1.25rem;
-      font-weight: 700;
+    .comparison-stat b {
+      font-size: .85rem;
+      margin-right: .2rem;
     }
 
     .comparison-stat-same { background: #f9fafb; border-color: #e5e7eb; color: #4b5563; }
@@ -389,20 +387,18 @@
 
     .comparison-image-viewport img {
       display: block;
+      flex: none;
       height: auto;
       max-width: none;
       transition: width .12s ease;
       width: 100%;
     }
 
-    .comparison-source-headings,
-    .comparison-row {
-      display: grid;
-      grid-template-columns: minmax(150px, .8fr) minmax(190px, 1fr) minmax(190px, 1fr);
-    }
-
     .comparison-source-headings {
+      display: grid;
       gap: 1rem;
+      grid-template-columns: 1fr 1fr;
+      padding-bottom: 10px;
     }
 
     .comparison-source-heading {
@@ -412,182 +408,300 @@
       padding: .9rem;
     }
 
-    .comparison-table-scroll {
-      overflow-x: auto;
+    /* Printed-form layout */
+    .schedule-form {
+      font-size: .8rem;
+      overflow: hidden;
     }
 
-    .comparison-table {
-      min-width: 680px;
-    }
-
-    .comparison-row {
+    .schedule-form-toolbar {
+      align-items: center;
+      background: #f9fafb;
       border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      padding: .75rem 1rem;
+    }
+
+    .schedule-form-hint {
+      color: #6b7280;
+      font-size: .72rem;
+      margin-left: auto;
+    }
+
+    .source-dots {
+      align-items: center;
+      display: inline-flex;
+      gap: 2px;
+      margin-top: .15rem;
+    }
+
+    .source-mark {
+      color: #9ca3af;
+      display: inline-flex;
+      flex: none;
+      height: 1.1rem;
+      vertical-align: -.2rem;
+      width: 1.1rem;
+    }
+
+    .source-mark svg { height: 100%; width: 100%; }
+
+    .source-mark-human { color: #374151; }
+    .source-mark-model { color: #6b7280; }
+    .source-mark-anthropic { color: #c96442; }
+    .source-mark-google { color: #4285f4; }
+    .source-mark-edited { color: #f97316; }
+
+    .schedule-form-masthead {
+      border-bottom: 3px double #9ca3af;
+      padding: 1rem 1.25rem .75rem;
+    }
+
+    .schedule-form-masthead-title {
+      color: #111827;
+      font-size: .95rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .schedule-form-static {
+      color: #374151;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem 1.5rem;
+      justify-content: center;
+      margin: .6rem 0 .4rem;
+    }
+
+    .schedule-form-body + .schedule-form-body {
+      border-top: 3px double #9ca3af;
+    }
+
+    .schedule-form-body-title {
+      color: #111827;
+      font-weight: 700;
+      padding: .75rem 1.25rem 0;
+    }
+
+    .schedule-form-head {
+      border-bottom: 3px double #9ca3af;
+      padding: .5rem 1.25rem;
+    }
+
+    .schedule-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .schedule-form-col + .schedule-form-col {
+      border-left: 1px solid #9ca3af;
+    }
+
+    .schedule-form-block {
+      padding: .75rem 1.25rem 1rem;
+    }
+
+    .schedule-form-block + .schedule-form-block {
+      border-top: 3px double #9ca3af;
+    }
+
+    .schedule-form-block h4 {
+      color: #111827;
+      font-size: .8rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      margin: 0 0 .5rem;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .schedule-form-footer {
+      border-top: 3px double #9ca3af;
+    }
+
+    .schedule-form-inline .form-panel {
+      display: grid;
+      gap: .5rem 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .schedule-form-inline .form-field {
+      border-bottom: 0;
+      grid-template-columns: 1fr;
+    }
+
+    .schedule-form-head + .schedule-form-inline {
+      border-bottom: 3px double #9ca3af;
+    }
+
+    .form-panel + .form-panel {
+      border-top: 1px dashed #d1d5db;
+      margin-top: .5rem;
+      padding-top: .5rem;
+    }
+
+    .form-panel-title {
+      color: #374151;
+      font-size: .72rem;
+      font-weight: 700;
+      margin-bottom: .35rem;
+    }
+
+    .form-skip {
+      align-items: center;
+      color: #9a3412;
+      display: inline-flex;
+      font-size: .72rem;
+      font-weight: 600;
+      gap: .4rem;
+      margin-bottom: .35rem;
+    }
+
+    .form-panel.is-skipped .form-field {
+      opacity: .45;
+    }
+
+    .form-panel-note {
+      color: #6b7280;
+      font-size: .7rem;
+      margin: .25rem 0 .5rem;
+    }
+
+    .form-field {
+      border-bottom: 1px dotted #9ca3af;
+      display: grid;
+      gap: .25rem .75rem;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      padding: .4rem 0;
+    }
+
+    .form-field:last-child { border-bottom: 0; }
+
+    .form-field-label {
+      color: #374151;
+      font-weight: 600;
+      line-height: 1.3;
+      padding-left: .5rem;
       position: relative;
     }
 
-    .comparison-row:last-child {
-      border-bottom: 0;
+    .form-field-number {
+      color: #6b7280;
+      display: inline-block;
+      font-variant-numeric: tabular-nums;
+      margin-right: .25rem;
     }
 
-    .comparison-row-different { border-left: 4px solid #f59e0b; }
-    .comparison-row-equivalent { border-left: 4px solid #10b981; }
-    .comparison-row-one_missing { border-left: 4px solid #3b82f6; }
-    .comparison-row-blank_zero { border-left: 4px solid #a855f7; }
-
-    .comparison-label,
-    .comparison-value {
-      min-width: 0;
-      padding: .75rem;
-    }
-
-    .comparison-label {
-      color: #374151;
-      font-size: .8rem;
-      font-weight: 600;
-    }
-
-    .comparison-label small {
+    .form-field-label small {
       color: #6b7280;
       display: block;
-      font-size: .65rem;
+      font-size: .62rem;
       font-weight: 500;
-      margin-top: .2rem;
       text-transform: uppercase;
     }
 
-    .comparison-value {
-      border-left: 1px solid #e5e7eb;
-      color: #111827;
-      font-size: .85rem;
-      overflow-wrap: anywhere;
-      transition: background-color .12s ease, box-shadow .12s ease;
-      white-space: pre-wrap;
-    }
-
-    .comparison-source-value.is-selected {
-      background: #eaf4ff;
-      box-shadow: inset 0 0 0 2px #4895d2;
-      color: #003d70;
-      font-weight: 600;
-    }
-
-    .comparison-source-value.is-edited {
-      background: #fff7ed;
-      box-shadow: inset 0 0 0 2px #f97316;
-      color: #9a3412;
-    }
-
-    .comparison-source-value.is-selectable {
-      align-items: flex-start;
-      cursor: pointer;
-      display: grid;
-      gap: .45rem;
-      grid-template-columns: minmax(0, 1fr);
-      position: relative;
-    }
-
-    .source-value-select {
-      background: transparent;
-      border: 0;
-      color: inherit;
-      cursor: pointer;
-      font: inherit;
-      min-width: 0;
-      padding: 0;
-      text-align: left;
-      white-space: pre-wrap;
-    }
-
-    .source-value-select:focus-visible {
-      border-radius: .25rem;
-      outline: 3px solid rgba(0, 96, 177, .3);
-      outline-offset: 3px;
-    }
-
-    .edited-value-summary small {
-      display: block;
-      font-size: .6rem;
-      font-weight: 800;
-      letter-spacing: .05em;
-      margin-bottom: .2rem;
-      text-transform: uppercase;
-    }
-
-    .edit-value-button {
-      align-items: center;
-      background: #fff;
-      border: 1px solid #80b9e8;
-      border-radius: .3rem;
-      color: #00529a;
-      cursor: pointer;
-      display: none;
-      height: 1.65rem;
-      justify-content: center;
-      padding: 0;
+    .comparison-row-different .form-field-label::before,
+    .comparison-row-equivalent .form-field-label::before,
+    .comparison-row-one_missing .form-field-label::before,
+    .comparison-row-blank_zero .form-field-label::before {
+      border-radius: 2px;
+      bottom: 0;
+      content: "";
+      left: 0;
       position: absolute;
-      right: .45rem;
-      top: .45rem;
-      width: 1.65rem;
-      z-index: 1;
+      top: 0;
+      width: 3px;
     }
 
-    .edit-value-button svg {
+    .comparison-row-different .form-field-label::before { background: #f59e0b; }
+    .comparison-row-equivalent .form-field-label::before { background: #10b981; }
+    .comparison-row-one_missing .form-field-label::before { background: #3b82f6; }
+    .comparison-row-blank_zero .form-field-label::before { background: #a855f7; }
+
+    .form-choices {
+      display: flex;
+      flex-direction: column;
+      gap: .1rem;
+      min-width: 0;
+    }
+
+    .form-choice {
+      align-items: flex-start;
+      border-radius: .3rem;
+      color: #111827;
+      display: grid;
+      gap: .4rem;
+      grid-template-columns: auto auto minmax(0, 1fr);
+      line-height: 1.3;
+      margin: 0;
+      min-width: 0;
+      padding: .15rem .3rem;
+    }
+
+    label.form-choice { cursor: pointer; }
+    label.form-choice:hover { background: #f3f4f6; }
+
+    .form-choice input[type="radio"] {
+      accent-color: #0060b1;
       height: .9rem;
+      margin: .2rem 0 0;
       width: .9rem;
     }
 
-    .edit-value-button:focus-visible {
-      outline: 3px solid rgba(0, 96, 177, .3);
-      outline-offset: 2px;
+    .form-choice-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
     }
 
-    .comparison-source-value.is-selected .edit-value-button {
-      display: inline-flex;
+    .form-choice.is-selected {
+      background: #eaf4ff;
+      font-weight: 600;
     }
 
-    .comparison-source-value.is-selected .source-value-select {
-      padding-right: 2rem;
+    .form-choice-edit.is-selected {
+      background: #fff7ed;
     }
 
-    .inline-value-editor {
-      grid-column: 1 / -1;
-    }
-
-    .comparison-source-value.is-editing .source-value-select,
-    .comparison-source-value.is-editing .edit-value-button {
-      display: none;
-    }
-
-    .inline-value-input {
-      background: #fff;
-      border: 1px solid #0060b1;
-      border-radius: .3rem;
+    .form-correction {
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid #d1d5db;
+      border-radius: 0;
       color: #111827;
       font: inherit;
-      padding: .45rem .55rem;
+      padding: .1rem .25rem;
+      text-align: left;
       width: 100%;
     }
 
-    .inline-editor-actions {
+    .form-correction::placeholder { color: #9ca3af; font-style: italic; }
+
+    .form-correction-wrap {
       display: flex;
-      gap: .4rem;
-      margin-top: .45rem;
+      flex-direction: column;
+      gap: .15rem;
+      min-width: 0;
     }
 
-    .inline-editor-actions button {
-      background: #fff;
-      border: 1px solid #d1d5db;
-      border-radius: .3rem;
-      color: #374151;
-      cursor: pointer;
-      font-size: .68rem;
-      font-weight: 700;
-      padding: .3rem .5rem;
+    .place-name {
+      color: #6b7280;
+      font-size: .72rem;
     }
 
-    .save-inline-edit {
-      border-color: #0060b1 !important;
-      color: #00529a !important;
+    .form-correction:focus {
+      border-bottom-color: #0060b1;
+      box-shadow: 0 1px 0 #0060b1;
+      outline: none;
+    }
+
+    .form-choice-edit.is-selected .form-correction {
+      border-bottom-color: #f97316;
+      color: #9a3412;
     }
 
     .entity-decision label {
@@ -601,6 +715,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 1.25rem;
+      margin-bottom: .35rem;
     }
 
     .comparison-value-blank,
@@ -611,7 +726,7 @@
 
     .comparison-value-structured {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: .75rem;
+      font-size: .72rem;
     }
 
     .comparison-raw pre {
@@ -631,7 +746,9 @@
     }
 
     @media (max-width: 900px) {
-      .comparison-source-form { grid-template-columns: 1fr; }
+      .comparison-source-form,
+      .schedule-form-grid { grid-template-columns: 1fr; }
+      .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
     }
 
     @media (prefers-color-scheme: dark) {
@@ -640,231 +757,171 @@
       .comparison-select,
       .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
       .section-source.is-selected { background: #0875ce; border-color: #60a5fa; color: #fff; }
-      .section-selection-status { background: #1f2937; border-color: #4b5563; color: #d1d5db; }
-      .section-selection-status[data-state="baseline"],
-      .section-selection-status[data-state="comparison"] { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
-      .section-selection-status[data-state="mixed"] { background: #78350f; border-color: #f59e0b; color: #fef3c7; }
-      .section-selection-status[data-state="edited"] { background: #7c2d12; border-color: #fb923c; color: #ffedd5; }
-      .comparison-label,
-      .comparison-value { color: #e5e7eb; }
-      .comparison-source-value.is-selected { background: #0c4a6e; box-shadow: inset 0 0 0 2px #38bdf8; color: #f0f9ff; }
-      .comparison-source-value.is-edited { background: #7c2d12; box-shadow: inset 0 0 0 2px #fb923c; color: #ffedd5; }
-      .edit-value-button,
-      .inline-value-input,
-      .inline-editor-actions button { background: #111827; color: #e5e7eb; }
-      .comparison-row,
-      .comparison-value { border-color: #374151; }
+      .schedule-form-toolbar { background: #1f2937; border-color: #374151; }
+      .schedule-form-masthead-title,
+      .schedule-form-body-title,
+      .schedule-form-block h4,
+      .form-field-label,
+      .form-choice { color: #e5e7eb; }
+      .source-mark-human { color: #d1d5db; }
+      .source-mark-model { color: #9ca3af; }
+      .schedule-form-static { color: #d1d5db; }
+      label.form-choice:hover { background: #1f2937; }
+      .form-panel + .form-panel { border-color: #4b5563; }
+      .form-field { border-color: #4b5563; }
+      .form-choice.is-selected { background: #0c4a6e; color: #f0f9ff; }
+      .form-choice-edit.is-selected { background: #7c2d12; color: #ffedd5; }
+      .form-correction { border-color: #4b5563; color: #e5e7eb; }
+      .form-choice-edit.is-selected .form-correction { color: #ffedd5; }
       .comparison-image-viewport { background: #030712; }
     }
   </style>
 
   <script>
     (() => {
-      const updateSectionSelection = (section) => {
-        const automaticSource = section.dataset.automaticSource;
+      const form = document.getElementById("schedule-form");
+      const panels = Array.from(document.querySelectorAll("[data-decision-section]"));
+
+      const rowChoiceFor = (row, panel) => {
+        const own = row.querySelector('input[name^="choice__"]:checked');
+        if (own) return own.value;
+        if (panel.querySelector(".entity-decision")) {
+          return panel.querySelector('input[name^="choice__"]:checked')?.value;
+        }
+        return panel.dataset.automaticSource || undefined;
+      };
+
+      // Highlight the chosen row (source value or correction) in every field of one panel.
+      const updateSectionSelection = (panel) => {
+        panel.querySelectorAll(".comparison-row").forEach((row) => {
+          const choice = rowChoiceFor(row, panel);
+          row.classList.toggle("is-edited", choice === "edited");
+          row.querySelectorAll(".form-choice").forEach((option) => {
+            option.classList.toggle(
+              "is-selected",
+              Boolean(choice) && option.dataset.sourceCell.split(" ").includes(choice)
+            );
+          });
+        });
+      };
+
+      // Form-level pill and "Use all" buttons summarise every decision on the page.
+      const updateFormStatus = () => {
+        if (!form) return;
         const inputs = Array.from(
-          section.querySelectorAll('input[name^="choice__"]')
+          form.querySelectorAll('input[type="radio"][name^="choice__"]')
         );
-        const decisionNames = new Set(inputs.map((input) => input.name));
+        const names = new Set(inputs.map((input) => input.name));
         const checked = inputs.filter((input) => input.checked);
         let state = "none";
-
-        if (decisionNames.size && checked.length === decisionNames.size) {
+        if (names.size && checked.length === names.size) {
           if (checked.some((input) => input.value === "edited")) {
             state = "edited";
           } else {
-            const selectedSources = new Set(
-              checked.map((input) => input.value)
-            );
-            state = selectedSources.size === 1
-              ? checked[0].value
-              : "mixed";
+            const sources = new Set(checked.map((input) => input.value));
+            state = sources.size === 1 ? checked[0].value : "mixed";
           }
         }
-
-        const status = section.querySelector(".section-selection-status");
-        if (status) {
-          const labels = {
-            baseline: "All baseline",
-            comparison: "All comparison",
-            mixed: "Mixed",
-            edited: "Contains edits",
-            none: "No choices",
-          };
-          status.dataset.state = state;
-          status.textContent = labels[state];
-        }
-
-        section.querySelectorAll(".section-source").forEach((button) => {
+        form.querySelectorAll(".section-source").forEach((button) => {
           const selected = button.dataset.source === state;
           button.disabled = state === "none";
           button.classList.toggle("is-selected", selected);
           button.setAttribute("aria-pressed", selected ? "true" : "false");
         });
+      };
 
-        const entityChoice = section.querySelector(".entity-decision")
-          ? checked[0]
-          : null;
-        const automaticChoice = automaticSource
-          ? {value: automaticSource}
-          : null;
-        section.querySelectorAll(".comparison-row").forEach((row) => {
-          const rowChoice = row.querySelector(
-            'input[name^="choice__"]:checked'
-          ) || entityChoice || automaticChoice;
-          const editedBase = row.querySelector(
-            'input[name^="edit_base__"]'
-          )?.value;
-          const selectedSource = rowChoice?.value === "edited"
-            ? editedBase
-            : rowChoice?.value;
-          row.querySelectorAll(".comparison-source-value").forEach((value) => {
-            const selected = Boolean(selectedSource)
-            && value.dataset.sourceCell === selectedSource;
-            value.classList.toggle(
-              "is-selected",
-              selected
-            );
-            value.classList.toggle(
-              "is-edited",
-              selected && rowChoice?.value === "edited"
-            );
-            value.querySelector(".source-value-select")?.setAttribute(
-              "aria-pressed",
-              selected ? "true" : "false"
-            );
-            const editedSummary = value.querySelector(
-              ".edited-value-summary"
-            );
-            const originalValue = value.querySelector(
-              ".source-value-original"
-            );
-            if (editedSummary) {
-              const showEdited = selected && rowChoice?.value === "edited";
-              editedSummary.hidden = !showEdited;
-              originalValue.hidden = showEdited;
-            }
+      const refresh = (row) => {
+        updateSectionSelection(row.closest("[data-decision-section]"));
+        updateFormStatus();
+      };
+
+      // The last source the reviewer picked is the base a correction starts from.
+      const selectSource = (row, source) => {
+        row.querySelector(`.source-choice[value="${source}"]`).checked = true;
+        row.querySelector('input[name^="edit_base__"]').value = source;
+        row.querySelector('input[name^="edit__"]').value = "";
+        const correction = row.querySelector(".form-correction");
+        if (correction) correction.value = "";
+      };
+
+      const selectCorrection = (row) => {
+        const base = row.querySelector('input[name^="edit_base__"]');
+        if (!base.value) base.value = "comparison";
+        row.querySelector(".edited-choice").checked = true;
+        row.querySelector('input[name^="edit__"]').value = (
+          row.querySelector(".form-correction").value
+        );
+      };
+
+      document.querySelectorAll("[data-form-row]").forEach((row) => {
+        const correction = row.querySelector(".form-correction");
+        if (!correction) return;
+        const base = row.querySelector('input[name^="edit_base__"]');
+        if (!base.value) {
+          base.value = row.querySelector(".source-choice:checked")?.value || "comparison";
+        }
+        row.querySelectorAll(".source-choice").forEach((radio) => {
+          radio.addEventListener("change", () => {
+            selectSource(row, radio.value);
+            refresh(row);
           });
         });
-      };
-
-      const closeEditor = (cell) => {
-        cell.classList.remove("is-editing");
-        cell.querySelector(".inline-value-editor").hidden = true;
-      };
-
-      const startEditing = (cell) => {
-        document.querySelectorAll(".comparison-source-value.is-editing")
-          .forEach(closeEditor);
-        const row = cell.closest(".comparison-row");
-        const source = cell.dataset.sourceCell;
-        const editedChoice = row.querySelector(".edited-choice");
-        const editedBase = row.querySelector('input[name^="edit_base__"]');
-        const editedValue = row.querySelector('input[name^="edit__"]');
-        const input = cell.querySelector(".inline-value-input");
-        const continuingEdit = editedChoice.checked
-        && editedBase.value === source;
-        input.value = continuingEdit
-          ? editedValue.value
-          : cell.dataset.sourceInput;
-        cell.classList.add("is-editing");
-        cell.querySelector(".inline-value-editor").hidden = false;
-        input.focus();
-        if (input.select) input.select();
-      };
-
-      const editedDisplay = (input) => {
-        if (input.value === "") return "Blank";
-        if (input.tagName === "SELECT") {
-          return input.options[input.selectedIndex].text;
-        }
-        return input.value;
-      };
-
-      const saveEdit = (cell) => {
-        const row = cell.closest(".comparison-row");
-        const input = cell.querySelector(".inline-value-input");
-        const editedChoice = row.querySelector(".edited-choice");
-        row.querySelector('input[name^="edit__"]').value = input.value;
-        row.querySelector('input[name^="edit_base__"]').value = (
-          cell.dataset.sourceCell
-        );
-        row.querySelectorAll(".edited-value-text").forEach((display) => {
-          display.textContent = editedDisplay(input);
+        row.querySelector(".edited-choice").addEventListener("change", () => {
+          selectCorrection(row);
+          refresh(row);
+          correction.focus();
         });
-        editedChoice.checked = true;
-        closeEditor(cell);
-        updateSectionSelection(cell.closest("[data-decision-section]"));
-      };
-
-      document.querySelectorAll(".source-value-select").forEach((button) => {
-        button.addEventListener("click", () => {
-          const cell = button.closest(".comparison-source-value");
-          cell.querySelector(
-            `.source-choice[value="${button.dataset.source}"]`
-          ).checked = true;
-          updateSectionSelection(cell.closest("[data-decision-section]"));
+        correction.addEventListener("input", () => {
+          selectCorrection(row);
+          refresh(row);
+        });
+        // Place corrections come from the county datalist; echo the chosen name.
+        const placeName = row.querySelector(".place-name");
+        if (placeName) {
+          const showPlaceName = () => {
+            const option = document.querySelector(
+              `#place-options option[value="${CSS.escape(correction.value)}"]`
+            );
+            placeName.textContent = option ? option.textContent : "";
+          };
+          correction.addEventListener("input", showPlaceName);
+          showPlaceName();
+        }
+        correction.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") event.preventDefault();
         });
       });
 
-      document.querySelectorAll(".comparison-source-value.is-selectable")
-        .forEach((cell) => {
-          cell.addEventListener("dblclick", (event) => {
-            if (!event.target.closest(".inline-value-editor")) {
-              startEditing(cell);
-            }
-          });
-          cell.querySelector(".edit-value-button").addEventListener(
-            "click",
-            () => startEditing(cell)
-          );
-          cell.querySelector(".save-inline-edit").addEventListener(
-            "click",
-            () => saveEdit(cell)
-          );
-          cell.querySelector(".cancel-inline-edit").addEventListener(
-            "click",
-            () => closeEditor(cell)
-          );
-          cell.querySelector(".inline-value-input").addEventListener(
-            "keydown",
-            (event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                saveEdit(cell);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                closeEditor(cell);
-              }
-            }
-          );
-        });
-
-      document.querySelectorAll(".section-source").forEach((button) => {
+      form?.querySelectorAll(".section-source").forEach((button) => {
         button.addEventListener("click", () => {
-          const section = button.closest("[data-decision-section]");
-          section.querySelectorAll(".comparison-source-value.is-editing")
-            .forEach(closeEditor);
-          section.querySelectorAll(
-            `input[type="radio"][value="${button.dataset.source}"]`
-          ).forEach((input) => {
+          const source = button.dataset.source;
+          form.querySelectorAll("[data-form-row]").forEach((row) => {
+            if (row.querySelector(".source-choice")) selectSource(row, source);
+          });
+          form.querySelectorAll(`.entity-decision input[value="${source}"]`).forEach((input) => {
             input.checked = true;
           });
-          updateSectionSelection(section);
+          panels.forEach(updateSectionSelection);
+          updateFormStatus();
         });
       });
 
-      document.querySelectorAll('input[name^="choice__"]').forEach((input) => {
-        input.addEventListener("change", () => {
-          updateSectionSelection(input.closest("[data-decision-section]"));
-        });
+      document.querySelectorAll('.entity-decision input[name^="choice__"]').forEach((input) => {
+        input.addEventListener("change", () => refresh(input));
       });
 
-      document.querySelectorAll("[data-decision-section]").forEach(
-        updateSectionSelection
-      );
+      document.querySelectorAll(".skip-choice").forEach((box) => {
+        const panel = box.closest("[data-decision-section]");
+        const sync = () => panel.classList.toggle("is-skipped", box.checked);
+        box.addEventListener("change", sync);
+        sync();
+      });
+
+      panels.forEach(updateSectionSelection);
+      updateFormStatus();
     })();
   </script>
+
 
   {% if image_url %}
     <script>

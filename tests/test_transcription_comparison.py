@@ -13,6 +13,7 @@ from census.transcription.reconciliation import (
 )
 from tests.factories import (
     CensusScheduleFactory,
+    PopulatedPlaceFactory,
     ReligiousBodyFactory,
     ScheduleTranscriptionFactory,
     TranscriptionRunFactory,
@@ -101,6 +102,7 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
         census_record=schedule,
         denomination=schedule.schedule_denomination,
     )
+    PopulatedPlaceFactory(county=schedule.county, place_id=7777, name="Datalist Town")
     human_run = TranscriptionRunFactory(key="human-review", kind="human_snapshot")
     agent_run = TranscriptionRunFactory(
         key="agent-review",
@@ -138,15 +140,20 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b"Apply and approve" in response.content
     assert b"Choose what becomes canonical" not in response.content
     assert b"Preview mixed selection" not in response.content
-    assert b"section-selection-status" in response.content
+    assert b"section-selection-status" not in response.content
+    assert b'class="comparison-button section-source"' in response.content
     assert b'aria-pressed="false"' in response.content
+    assert b"source-mark-human" in response.content
+    assert b"source-mark-model" in response.content
     assert b"comparison-source-value-baseline" in response.content
     assert b"comparison-source-value-comparison" in response.content
     assert b"updateSectionSelection" in response.content
-    assert b"source-value-select" in response.content
+    assert b'class="source-choice"' in response.content
     assert b"edited-choice" in response.content
-    assert b"save-inline-edit" in response.content
-    assert b'addEventListener("dblclick"' in response.content
+    assert b"form-correction" in response.content
+    assert b'<datalist id="place-options">' in response.content
+    assert b'<option value="7777">Datalist Town, ' in response.content
+    assert b'class="schedule-form-block"' in response.content
     assert b"comparison-decision" not in response.content
     assert b'data-automatic-source="comparison"' in response.content
     assert b"carried from the comparison evidence automatically" in response.content
