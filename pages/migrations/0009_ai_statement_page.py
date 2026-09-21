@@ -54,9 +54,8 @@ def create_page(apps, schema_editor):
             "content": CONTENT,
             "meta_description": META_DESCRIPTION,
             "is_published": True,
-            "show_in_nav": True,
-            "nav_title": "AI Statement",
-            "nav_order": 3,
+            # Linked from the footer in base.html rather than the header nav.
+            "show_in_nav": False,
         },
     )
 
