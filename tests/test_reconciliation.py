@@ -54,7 +54,7 @@ def reviewer(db):
 
 def agent_candidate(**schedule_overrides):
     schedule_fields = {
-        "populated_place_verbatim": None,
+        "populated_place_verbatim": "New Town",
         "populated_place_id": None,
         "county_verbatim": None,
         "state_verbatim": None,
@@ -82,7 +82,7 @@ def agent_candidate(**schedule_overrides):
                 "name": "Agent Church",
                 "census_code": "A-1",
                 "division": None,
-                "address": "22 New Street",
+                "address": "New Town",
                 "urban_rural_code": "U",
                 "membership": {
                     "male_members": 10,
@@ -234,7 +234,7 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
     assert schedule.respondent_name == "Agent Respondent"
     assert schedule.assigned_reviewer_id is None
     assert body.name == "Agent Church"
-    assert body.address == "22 New Street"
+    assert body.address == "New Town"
     assert body.geocode_status == "pending"
     assert membership.total_members_by_sex == 25
     assert schedule.clergy.get().name == "Rev. Agent"
@@ -248,7 +248,7 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
 def test_promotion_preserves_geocoding_when_address_is_unchanged(reviewer):
     schedule = canonical_schedule()
     candidate = agent_candidate()
-    candidate["religious_bodies"][0]["address"] = "11 Old Street"
+    candidate["schedule_fields"]["populated_place_verbatim"] = "11 Old Street"
     source = agent_source(schedule, candidate)
     preview = build_reconciliation_preview(schedule, source)
 
@@ -366,7 +366,7 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     ]
     assert schedule.ai_notes == "Candidate-only review context"
     assert body.name == "Human Church"
-    assert body.address == "22 New Street"
+    assert body.address == "New Town"
     assert body.geocode_status == "pending"
     assert membership.male_members == 4
     assert membership.female_members == 15
@@ -1318,3 +1318,19 @@ def test_nameless_comparison_clergy_rows_are_dropped():
     preview = build_reconciliation_preview(schedule, source, mixed=True)
     assert len(_clergy_sections(preview)) == 1
     assert [row["name"] for row in preview["proposed"]["clergy"]] == ["Rev. Agent"]
+
+
+def test_agent_verbatim_place_replaces_body_address(reviewer):
+    """The form's only church location is line d, so it becomes the body address."""
+    schedule = canonical_schedule()
+    source = agent_source(
+        schedule, agent_candidate(populated_place_verbatim="Providence")
+    )
+    preview = build_reconciliation_preview(schedule, source)
+    body_section = next(
+        s for s in preview["comparison"]["sections"]
+        if s["title"].startswith("Religious body")
+    )
+    row = next(r for r in body_section["rows"] if r["label"].startswith("City, town"))
+    assert row["label"] == "City, town, village, etc."
+    assert row["right"]["text"] == "Providence"

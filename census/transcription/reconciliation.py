@@ -666,6 +666,11 @@ def _candidate_draft(schedule, transcription, before):
     bodies = []
     for body in data.get("religious_bodies") or []:
         values = {field: body.get(field) for field in BODY_FIELDS}
+        # The 1926 form's only church location is line d ("City, town,
+        # village, or township"), so the agent's body address is always
+        # the verbatim place, blank when line d is blank.
+        if transcription.run.kind == "agent":
+            values["address"] = fields.get("populated_place_verbatim")
         if body.get("id") is not None:
             values["id"] = body["id"]
         memberships = body.get("membership", [])
