@@ -581,11 +581,15 @@
         </div>
 
     <!-- Navigation -->
-        <div class="mt-8 pt-6 border-t border-gray-200">
+        <div class="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <a href="{% url 'census_browser' %}"
                class="inline-flex items-center text-religious-primary hover:text-primary-700 font-medium transition-colors">
                 ← Back to Census Browser
             </a>
+            <p class="text-sm text-content-tertiary sm:text-right">
+                Some data here was transcribed by generative AI and reviewed by our team.
+                <a href="{% url 'page_detail' 'ai-statement' %}" class="text-religious-primary hover:text-primary-700 underline">Read our methodology</a>.
+            </p>
         </div>
     </div>
 {% endblock %}

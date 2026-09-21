@@ -98,6 +98,14 @@ class TestCensusDetail:
         content = response.content.decode()
         assert census_schedule.schedule_title in content
 
+    def test_detail_links_to_ai_statement(self, census_schedule, client):
+        response = client.get(
+            reverse("census_detail", kwargs={"resource_id": census_schedule.resource_id})
+        )
+        content = response.content.decode()
+        assert "transcribed by generative AI" in content
+        assert 'href="/ai-statement/"' in content
+
     def test_detail_shows_incomplete_schedule(self, census_schedule, client):
         assert census_schedule.transcription_status == "unassigned"
 
