@@ -1,0 +1,60 @@
+name: Research or data task
+description: Track an investigation, source-gathering effort, or research-data deliverable.
+labels:
+  - research
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Frame the research question and the deliverable it should produce.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+      description: What are we trying to learn, verify, or document?
+      placeholder: State the question as specifically as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and significance
+      description: Why does this question matter to the project or its interpretation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources or inputs
+      description: Identify known datasets, archival sources, APIs, records, or people involved.
+      placeholder: Include links and access notes where available.
+
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Expected deliverable
+      description: What artifact, dataset, recommendation, or documented finding should result?
+    validations:
+      required: true
+
+  - type: textarea
+    id: completion
+    attributes:
+      label: Completion criteria
+      description: How will we know the research task is finished?
+      placeholder: |
+        - [ ] Sources reviewed or data gathered
+        - [ ] Findings documented
+        - [ ] Result shared or incorporated
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: Related issues or resources
+      description: Link related issues, documents, datasets, or prior discussion.
+      placeholder: "#123, https://…"

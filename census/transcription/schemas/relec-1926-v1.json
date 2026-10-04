@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://religiousecologies.org/schemas/transcription/relec-1926-v1.json",
+  "title": "Religious Ecologies 1926 schedule candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schedule_fields",
+    "religious_bodies",
+    "clergy"
+  ],
+  "properties": {
+    "schema_version": {"const": "relec-1926-v1"},
+    "schedule_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "populated_place_verbatim",
+        "populated_place_id",
+        "county_verbatim",
+        "state_verbatim",
+        "num_assistant_pastors",
+        "respondent",
+        "processing",
+        "marginalia",
+        "ai_notes"
+      ],
+      "properties": {
+        "populated_place_verbatim": {"type": ["string", "null"]},
+        "populated_place_id": {"type": ["integer", "null"]},
+        "county_verbatim": {"type": ["string", "null"]},
+        "state_verbatim": {"type": ["string", "null"]},
+        "num_assistant_pastors": {"type": ["integer", "null"], "minimum": 0},
+        "respondent": {"$ref": "#/$defs/respondent"},
+        "processing": {"$ref": "#/$defs/processing"},
+        "marginalia": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/marginalia"}
+        },
+        "ai_notes": {"type": ["string", "null"]}
+      }
+    },
+    "religious_bodies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/religious_body"}
+    },
+    "clergy": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/clergy"}
+    }
+  },
+  "$defs": {
+    "respondent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "po_address", "date_signed"],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "title": {"type": ["string", "null"]},
+        "po_address": {"type": ["string", "null"]},
+        "date_signed": {"type": ["string", "null"]}
+      }
+    },
+    "processing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date_received", "district_stamp", "denomination_code_stamp"],
+      "properties": {
+        "date_received": {"type": ["string", "null"]},
+        "district_stamp": {"type": ["string", "null"]},
+        "denomination_code_stamp": {"type": ["string", "null"]}
+      }
+    },
+    "marginalia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_location", "marginalia_transcription"],
+      "properties": {
+        "page_location": {"type": "string"},
+        "marginalia_transcription": {"type": "string"}
+      }
+    },
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "male_members", "female_members", "total_members_by_sex",
+        "members_under_13", "members_13_and_older", "total_members_by_age",
+        "sunday_school_num_officers_teachers", "sunday_school_num_scholars",
+        "vbs_num_officers_teachers", "vbs_num_scholars",
+        "weekday_num_officers_teachers", "weekday_num_scholars",
+        "parochial_num_administrators", "parochial_num_elementary_teachers",
+        "parochial_num_secondary_teachers", "parochial_num_elementary_scholars",
+        "parochial_num_secondary_scholars"
+      ],
+      "properties": {
+        "male_members": {"type": ["integer", "null"], "minimum": 0},
+        "female_members": {"type": ["integer", "null"], "minimum": 0},
+        "total_members_by_sex": {"type": ["integer", "null"], "minimum": 0},
+        "members_under_13": {"type": ["integer", "null"], "minimum": 0},
+        "members_13_and_older": {"type": ["integer", "null"], "minimum": 0},
+        "total_members_by_age": {"type": ["integer", "null"], "minimum": 0},
+        "sunday_school_num_officers_teachers": {"type": ["integer", "null"], "minimum": 0},
+        "sunday_school_num_scholars": {"type": ["integer", "null"], "minimum": 0},
+        "vbs_num_officers_teachers": {"type": ["integer", "null"], "minimum": 0},
+        "vbs_num_scholars": {"type": ["integer", "null"], "minimum": 0},
+        "weekday_num_officers_teachers": {"type": ["integer", "null"], "minimum": 0},
+        "weekday_num_scholars": {"type": ["integer", "null"], "minimum": 0},
+        "parochial_num_administrators": {"type": ["integer", "null"], "minimum": 0},
+        "parochial_num_elementary_teachers": {"type": ["integer", "null"], "minimum": 0},
+        "parochial_num_secondary_teachers": {"type": ["integer", "null"], "minimum": 0},
+        "parochial_num_elementary_scholars": {"type": ["integer", "null"], "minimum": 0},
+        "parochial_num_secondary_scholars": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "religious_body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "census_code", "division", "address", "urban_rural_code",
+        "membership", "num_edifices", "edifice_value", "edifice_debt",
+        "has_pastors_residence", "residence_value", "residence_debt",
+        "expenses", "benevolences", "total_expenditures"
+      ],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "census_code": {"type": ["string", "null"]},
+        "division": {"type": ["string", "null"]},
+        "address": {"type": ["string", "null"]},
+        "urban_rural_code": {"type": ["string", "null"], "enum": ["U", "R", null]},
+        "membership": {"$ref": "#/$defs/membership"},
+        "num_edifices": {"type": ["integer", "null"], "minimum": 0},
+        "edifice_value": {"type": ["integer", "null"], "minimum": 0},
+        "edifice_debt": {"type": ["integer", "null"], "minimum": 0},
+        "has_pastors_residence": {"type": ["boolean", "null"]},
+        "residence_value": {"type": ["integer", "null"], "minimum": 0},
+        "residence_debt": {"type": ["integer", "null"], "minimum": 0},
+        "expenses": {"type": ["integer", "null"], "minimum": 0},
+        "benevolences": {"type": ["integer", "null"], "minimum": 0},
+        "total_expenditures": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "clergy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "is_assistant", "college", "theological_seminary",
+        "num_other_churches_served", "serving_congregation"
+      ],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "is_assistant": {"type": "boolean"},
+        "college": {"type": ["string", "null"]},
+        "theological_seminary": {"type": ["string", "null"]},
+        "num_other_churches_served": {"type": ["integer", "null"], "minimum": 0},
+        "serving_congregation": {"type": ["boolean", "null"]}
+      }
+    }
+  }
+}

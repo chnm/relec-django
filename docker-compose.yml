@@ -24,13 +24,18 @@ services:
       - DB_PORT=5432
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
-      - DB_PASSWORD=password
+      - DB_PASS=password
       - OBJ_STORAGE=True
       - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
       - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
       - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
       - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
       - MEMCACHED_URL=memcached:11211
+      - APPLICATION_REVISION=${APPLICATION_REVISION:-}
+      - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
+      - CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=${CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD:-100}
+      - CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=${CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:-10000}
+      - CLAUDE_TRANSCRIPTION_PRICING
     command: >
       sh -c "uv run manage.py migrate &&
              uv run manage.py runserver 0.0.0.0:8000"
@@ -39,6 +44,50 @@ services:
         condition: service_healthy
       memcached:
         condition: service_started
+  transcription-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      no_cache: true
+    image: "rrchnm/relec-django"
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    profiles: ["transcription"]
+    volumes:
+      - dj-data:/app
+    environment:
+      - DEBUG=True
+      - DJANGO_SECRET_KEY=thisisnotasecretkey
+      - DJANGO_ALLOWED_HOSTS=localhost
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=religious_ecologies
+      - DB_USER=religious_ecologies
+      - DB_PASS=password
+      - OBJ_STORAGE=True
+      - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
+      - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
+      - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
+      - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+      - MEMCACHED_URL=memcached:11211
+      - APPLICATION_REVISION=${APPLICATION_REVISION:-}
+      - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: uv run manage.py run_transcription_worker --idle-when-disabled
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,sys,time; p='/tmp/transcription-worker-alive'; sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 600 else 1)"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    depends_on:
+      app:
+        condition: service_healthy
   memcached:
     image: memcached:1-alpine
     restart: unless-stopped

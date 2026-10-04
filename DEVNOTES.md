@@ -338,7 +338,7 @@ records.
 #### Admin Interface Features
 
 **Enhanced Filtering**: Multiple filter panels for efficient record management
-- **Transcription Workflow**: Unassigned, Assigned to Me, Review Queue, Imported - Needs Review, In Progress, Student Work - Ready for Review, Approved
+- **Transcription Workflow**: Unassigned, Assigned to Me, Review Queue, Needs Review, In Progress, Ready for Review, Approved
 - **Assignment Status**: Has/No Transcriber, Has/No Reviewer, Fully Assigned, Completely Unassigned
 - **Location Status**: Has County, Missing County, Missing Location
 

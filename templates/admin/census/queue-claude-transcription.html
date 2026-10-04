@@ -1,0 +1,353 @@
+{% extends "unfold/layouts/base.html" %}
+{% load humanize i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">{{ title }}</h1>
+      <p class="mt-2 max-w-3xl text-sm text-gray-600">
+        Create an immutable transcription run for the selected schedules. A separate
+        worker submits the images to Anthropic; no result is promoted into canonical
+        census fields.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Selected</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-800">{{ selected_count }}</div>
+        {% if select_across == "1" %}<div class="mt-1 text-xs text-gray-500">All matching records</div>{% endif %}
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Ready</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-800">{{ eligible_count }}</div>
+        <div class="mt-1 text-xs text-gray-500">Image and no active job</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Will queue</div>
+        <div id="planned-job-count" class="mt-1 text-2xl font-semibold text-gray-800">—</div>
+        <div class="mt-1 text-xs text-gray-500">One job per schedule</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Provider batches</div>
+        <div id="planned-batch-count" class="mt-1 text-2xl font-semibold text-gray-800">—</div>
+        <div class="mt-1 text-xs text-gray-500">Up to {{ batch_size }} jobs each</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Contract</div>
+        <div class="mt-2 text-sm font-semibold text-gray-800">{{ prompt_version }}</div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Workflow</div>
+        {% if transcription_enabled %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">Enabled</span>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">Disabled</span>
+        {% endif %}
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">Worker</div>
+        {% if worker_status.tone == "ok" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-green-700 bg-green-100 rounded-full">{{ worker_status.label }}</span>
+        {% elif worker_status.tone == "alert" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-red-700 bg-red-100 rounded-full">{{ worker_status.label }}</span>
+        {% elif worker_status.tone == "warn" %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">{{ worker_status.label }}</span>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-full">{{ worker_status.label }}</span>
+        {% endif %}
+        <div class="mt-1 text-xs leading-4 text-gray-500">
+          {{ worker_status.detail }}
+          {% if worker_status.last_activity %}
+            Last activity {{ worker_status.last_activity|timesince }} ago.
+          {% endif %}
+        </div>
+      </div>
+      <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div class="text-xs font-medium tracking-wide text-gray-500 uppercase">App revision</div>
+        {% if revision_configured %}
+          <div class="mt-2 font-mono text-xs text-gray-800 break-all">{{ application_revision }}</div>
+        {% else %}
+          <span class="inline-flex px-2 py-1 mt-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-full">Not recorded</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if not transcription_enabled %}
+      <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
+        <strong>Configuration required.</strong>
+        The run cannot be queued until CLAUDE_TRANSCRIPTION_ENABLED is set in
+        the deployment environment. The API key is held only by the
+        transcription worker, so this page cannot report on it.
+      </div>
+    {% endif %}
+
+    {% if pricing_errors %}
+      <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-200 rounded-lg bg-amber-50">
+        <strong>Some allowed models cannot currently be queued.</strong>
+        Select a model with frozen rates below; an unpriced or expired model
+        will be blocked when the form is submitted.
+        <ul class="mt-2 space-y-1 list-disc list-inside">
+          {% for model, error in pricing_errors.items %}<li><code>{{ model }}</code>: {{ error }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" class="claude-run-form space-y-6">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="p-4 text-sm text-red-700 border border-red-200 rounded-lg bg-red-50">
+          {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <h2 class="text-lg font-semibold text-gray-800">Run settings</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          These values become permanent provenance for the run.
+        </p>
+
+        <div class="grid grid-cols-1 gap-6 mt-5 md:grid-cols-2 xl:grid-cols-4">
+          {% for field in form %}
+            <div id="field-{{ field.name }}">
+              <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                {{ field.label }}{% if field.field.required %}<span class="text-red-600"> *</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}
+                <p class="mt-2 text-xs leading-5 text-gray-500">{{ field.help_text }}</p>
+              {% endif %}
+              {% for error in field.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800">What will happen</h2>
+          <ol class="mt-3 space-y-3 text-sm leading-6 text-gray-600 list-decimal list-inside">
+            <li>
+              Every ready selected schedule is queued under the single run key above.
+              {% if missing_image_count %}<strong>{{ missing_image_count }}</strong> without an original image will be skipped.{% endif %}
+              {% if active_work_count %}<strong>{{ active_work_count }}</strong> with already queued or active work will be skipped.{% endif %}
+            </li>
+            <li>
+              Leave <strong>Pilot size</strong> blank for the complete ready selection.
+              Enter a number only when you intentionally want a smaller trial, chosen
+              in internal record-ID order. Successfully transcribed schedules may be
+              queued again in a new run; only active work is excluded.
+            </li>
+            <li>
+              The worker groups those jobs into provider batches of up to
+              {{ batch_size }} requests, subject to the encoded-size safety limit.
+              All of those batches still belong to this one named run. The emergency
+              ceiling is {{ max_run_jobs|intcomma }} jobs per run.
+            </li>
+            <li>
+              <strong>{{ max_tokens|intcomma }} max output tokens</strong> is applied to
+              each schedule. It limits generated response length; it is not an input
+              limit, a predicted usage amount, or a spending cap. Claude Sonnet 5 runs
+              use brief low-effort adaptive thinking so most of this budget remains
+              available for the structured transcription; that behavior is frozen
+              with the run.
+            </li>
+            <li>
+              The run key, model, prompt/schema contract, application revision, and
+              pricing below become immutable provenance. Results remain comparison
+              candidates and never overwrite canonical census data automatically.
+            </li>
+          </ol>
+        </section>
+
+        <section class="p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800">Frozen pricing estimate</h2>
+          <p class="mt-1 text-sm leading-6 text-gray-500">
+            Rates are USD per million tokens for Anthropic’s Batch service. Actual
+            cost depends on provider-reported usage, so this page cannot give an
+            exact total in advance.
+          </p>
+          <div id="pricing-details" class="mt-4 text-sm text-gray-600">
+            Select a configured model to see its rates.
+          </div>
+          <div id="historical-cost-details" class="p-3 mt-4 text-sm text-gray-600 rounded-md bg-gray-50"></div>
+          <p class="mt-4 text-xs leading-5 text-gray-500">
+            The selected rates are copied into this run. Future pricing changes do
+            not alter historical estimates.
+          </p>
+        </section>
+      </div>
+
+      {% for object_id in selected %}
+        <input type="hidden" name="_selected_action" value="{{ object_id }}">
+      {% endfor %}
+      <input type="hidden" name="select_across" value="{{ select_across }}">
+      <input type="hidden" name="action" value="queue_claude_transcription">
+      <input type="hidden" name="apply" value="1">
+
+      <div class="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <a href="{% url 'admin:census_censusschedule_changelist' %}"
+           class="button secondary text-center">
+          ← Cancel
+        </a>
+        <button type="submit" class="button primary">
+          Create run and queue jobs
+        </button>
+      </div>
+    </form>
+
+    <div class="mt-8 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-base font-semibold text-gray-800">Selected schedules</h2>
+        <p class="mt-1 text-xs text-gray-500">Showing the first 100 selected records.</p>
+      </div>
+      <div class="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for object in objects %}
+          <div class="px-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md bg-gray-50">
+            <span class="font-medium">{{ object.schedule_id }}</span>
+            <span class="text-gray-500">— {{ object.schedule_title|truncatechars:48 }}</span>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No schedules selected.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {{ pricing_snapshots|json_script:"claude-pricing-snapshots" }}
+  {{ historical_cost_estimates|json_script:"claude-historical-cost-estimates" }}
+
+  <style>
+    .claude-run-form input[type="text"],
+    .claude-run-form input[type="number"],
+    .claude-run-form select {
+      background-color: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      color: #374151;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      min-height: 40px;
+      padding: 0.55rem 0.75rem;
+      width: 100%;
+    }
+
+    .claude-run-form input:focus,
+    .claude-run-form select:focus {
+      border-color: #0060b1;
+      box-shadow: 0 0 0 3px rgba(0, 96, 177, 0.12);
+      outline: none;
+    }
+
+    .button.primary {
+      background-color: #0060b1 !important;
+      border: 1px solid #0060b1 !important;
+      border-radius: 0.375rem !important;
+      color: #fff !important;
+      cursor: pointer;
+      display: inline-block;
+      font-weight: 600 !important;
+      padding: 0.65rem 1.25rem !important;
+      text-decoration: none !important;
+    }
+
+    .button.primary:hover {
+      background-color: #00529a !important;
+      border-color: #00529a !important;
+    }
+
+    .button.secondary {
+      background-color: #fff !important;
+      border: 1px solid #d1d5db !important;
+      border-radius: 0.375rem !important;
+      color: #374151 !important;
+      display: inline-block;
+      font-weight: 500 !important;
+      padding: 0.65rem 1rem !important;
+      text-decoration: none !important;
+    }
+
+    .button.secondary:hover {
+      background-color: #f3f4f6 !important;
+    }
+  </style>
+
+  <script>
+    (() => {
+      const eligibleCount = {{ eligible_count }};
+      const pilotInput = document.getElementById("id_pilot_size");
+      const confirmationField = document.getElementById("field-confirmation_job_count");
+      const modelInput = document.getElementById("id_model");
+      const plannedCount = document.getElementById("planned-job-count");
+      const plannedBatchCount = document.getElementById("planned-batch-count");
+      const pricingDetails = document.getElementById("pricing-details");
+      const historicalCostDetails = document.getElementById("historical-cost-details");
+      const batchSize = {{ batch_size }};
+      const largeRunThreshold = {{ large_run_threshold }};
+      const snapshots = JSON.parse(
+        document.getElementById("claude-pricing-snapshots").textContent
+      );
+      const historicalEstimates = JSON.parse(
+        document.getElementById("claude-historical-cost-estimates").textContent
+      );
+
+      const money = (value) => Number(value).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4,
+      });
+
+      const updatePlan = () => {
+        const pilot = Number.parseInt(pilotInput.value, 10);
+        const jobs = Number.isFinite(pilot) && pilot > 0
+          ? Math.min(eligibleCount, pilot)
+          : eligibleCount;
+        plannedCount.textContent = jobs.toLocaleString();
+        plannedBatchCount.textContent = Math.ceil(jobs / batchSize).toLocaleString();
+        confirmationField.classList.toggle("hidden", jobs < largeRunThreshold);
+        updateHistoricalCost(jobs);
+      };
+
+      const updateHistoricalCost = (jobs) => {
+        const estimate = historicalEstimates[modelInput.value];
+        if (!estimate) {
+          historicalCostDetails.innerHTML = "No historical total is shown yet. At least three priced successful jobs for this model are required before extrapolating.";
+          return;
+        }
+        const total = Number(estimate.cost_per_success) * jobs;
+        historicalCostDetails.innerHTML = `<strong>Historical planning estimate:</strong> about $${money(total)} ${estimate.currency} for ${jobs.toLocaleString()} successful schedules, based on ${estimate.priced_successes.toLocaleString()} prior priced successes. This is an extrapolation, not a quote or spending cap.`;
+      };
+
+      const updatePricing = () => {
+        const snapshot = snapshots[modelInput.value];
+        if (!snapshot) {
+          pricingDetails.innerHTML = '<span class="text-red-700">No valid pricing is configured for this model. The run cannot be queued.</span>';
+          updatePlan();
+          return;
+        }
+        const rates = snapshot.rates;
+        pricingDetails.innerHTML = `
+          <dl class="grid grid-cols-2 gap-x-5 gap-y-3">
+            <div><dt class="text-xs text-gray-500">Ordinary input</dt><dd class="font-semibold">$${money(rates.input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">Output</dt><dd class="font-semibold">$${money(rates.output_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">5-minute cache write</dt><dd class="font-semibold">$${money(rates.cache_creation_input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">1-hour cache write</dt><dd class="font-semibold">$${money(rates.cache_creation_1h_input_tokens)}</dd></div>
+            <div><dt class="text-xs text-gray-500">Cache read</dt><dd class="font-semibold">$${money(rates.cache_read_input_tokens)}</dd></div>
+                            <div><dt class="text-xs text-gray-500">Effective</dt><dd class="font-semibold">${snapshot.effective_date}${snapshot.valid_through ? `–${snapshot.valid_through}` : ""}</dd></div>
+          </dl>
+          <p class="mt-3 text-xs text-gray-500">${snapshot.service_tier} · ${snapshot.currency} · <a class="text-primary-600 underline" href="${snapshot.source}" target="_blank" rel="noopener">pricing source</a></p>
+        `;
+        updatePlan();
+      };
+
+      pilotInput.addEventListener("input", updatePlan);
+      modelInput.addEventListener("change", updatePricing);
+      updatePlan();
+      updatePricing();
+    })();
+  </script>
+{% endblock %}

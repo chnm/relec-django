@@ -43,7 +43,7 @@ def api_root(request, format=None):
                 "religious_bodies": {
                     "list": f"{base_url}religious-bodies/?page_size=10",
                     "detail": f"{base_url}religious-bodies/{{id}}/",
-                    "description": "Individual congregation records with location, denomination, membership, finances, pastors, and transcription status",
+                    "description": "Individual congregation records with location, denomination, membership, finances, pastors, and candidate transcription runs",
                     "filters": [
                         "denomination (integer, denomination ID)",
                         "family_census (string, census family name)",
@@ -76,10 +76,10 @@ def api_root(request, format=None):
                         "respondent": "Person who signed the form: name, title, po_address, date_signed (null if no data)",
                         "processing": "Census Bureau intake metadata: date_received (ISO date), district_stamp, denomination_code_stamp (null if no data)",
                         "marginalia": "Array of {page_location, marginalia_transcription} for handwritten marks on the form (null if none)",
-                        "transcription": "Nested object with status, raw AI JSON, frozen human JSON, and AI notes; view=map returns status only",
+                        "transcriptions": "Array of immutable candidate outputs with a run key, kind, and raw JSON data; agent notes are stored inside data",
                         "schedule_id": "Census schedule identifier",
                         "urls.image": "Direct URL to the original census schedule image in object storage (null if not yet fetched)",
-                        "view=map": "Returns transcription.status but omits transcription.ai, transcription.human, transcription.ai_notes, pastors, num_assistant_pastors, respondent, processing, and marginalia",
+                        "view=map": "Omits transcriptions, pastors, num_assistant_pastors, respondent, processing, and marginalia",
                     },
                 },
                 "denomination_families": {

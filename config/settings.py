@@ -40,6 +40,82 @@ CSRF_TRUSTED_ORIGINS = env.list(
     "DJANGO_CSRF_TRUSTED_ORIGINS", default=["http://localhost"]
 )
 
+# Claude batch transcription is opt-in. Secrets remain in the environment; the
+# database and admin record only whether the provider is configured.
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+ANTHROPIC_API_BASE_URL = env(
+    "ANTHROPIC_API_BASE_URL", default="https://api.anthropic.com"
+)
+CLAUDE_TRANSCRIPTION_ENABLED = env.bool("CLAUDE_TRANSCRIPTION_ENABLED", default=False)
+CLAUDE_TRANSCRIPTION_MODELS = env.list(
+    "CLAUDE_TRANSCRIPTION_MODELS",
+    default=["claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-4-8"],
+)
+CLAUDE_TRANSCRIPTION_MAX_TOKENS = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_TOKENS", default=8192
+)
+CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS", default=10000
+)
+CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD = env.int(
+    "CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD", default=100
+)
+CLAUDE_TRANSCRIPTION_BATCH_SIZE = env.int("CLAUDE_TRANSCRIPTION_BATCH_SIZE", default=25)
+CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES", default=1
+)
+CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES", default=200 * 1024 * 1024
+)
+CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES = env.int(
+    "CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES", default=10 * 1024 * 1024
+)
+CLAUDE_TRANSCRIPTION_LEASE_SECONDS = env.int(
+    "CLAUDE_TRANSCRIPTION_LEASE_SECONDS", default=300
+)
+CLAUDE_TRANSCRIPTION_POLL_SECONDS = env.int(
+    "CLAUDE_TRANSCRIPTION_POLL_SECONDS", default=60
+)
+CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT = env.int(
+    "CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT", default=120
+)
+DEFAULT_CLAUDE_TRANSCRIPTION_PRICING = {
+    "schema_version": 1,
+    "currency": "USD",
+    "unit": "per_million_tokens",
+    "service_tier": "batch",
+    "effective_date": "2026-08-11",
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "models": {
+        "claude-sonnet-4-6": {
+            "rates": {
+                "input_tokens": "1.50",
+                "output_tokens": "7.50",
+                "cache_creation_input_tokens": "1.875",
+                "cache_creation_1h_input_tokens": "3.00",
+                "cache_read_input_tokens": "0.15",
+            }
+        },
+        "claude-sonnet-5": {
+            "rates": {
+                "input_tokens": "1.00",
+                "output_tokens": "5.00",
+                "cache_creation_input_tokens": "1.25",
+                "cache_creation_1h_input_tokens": "2.00",
+                "cache_read_input_tokens": "0.10",
+            },
+        },
+    },
+}
+CLAUDE_TRANSCRIPTION_PRICING = (
+    env.json(
+        "CLAUDE_TRANSCRIPTION_PRICING",
+        default=DEFAULT_CLAUDE_TRANSCRIPTION_PRICING,
+    )
+    or DEFAULT_CLAUDE_TRANSCRIPTION_PRICING
+)
+APPLICATION_REVISION = env("APPLICATION_REVISION", default="").strip()
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -191,7 +267,7 @@ AUTHENTICATION_BACKENDS = [
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "America/New_York"
 
 USE_I18N = True
 USE_TZ = True
@@ -253,7 +329,16 @@ THUMBNAIL_ALIASES = {
     },
 }
 
+
 # Django Unfold Configuration
+def can_view_ai_transcription(request):
+    """Keep paid AI workflow navigation limited to reviewers."""
+    return (
+        request.user.is_superuser
+        or request.user.groups.filter(name="Reviewers").exists()
+    )
+
+
 UNFOLD = {
     "SITE_TITLE": "Religious Ecologies",
     "SITE_HEADER": "Religious Ecologies",
@@ -276,7 +361,6 @@ UNFOLD = {
             {
                 "title": "Analytics & Reporting",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Analytics Home",
@@ -311,34 +395,45 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Transcriptions",
+                "title": "Project Management",
                 "separator": True,
-                "collapsible": True,
                 "items": [
-                    {
-                        "title": "Census Schedules",
-                        "icon": "description",
-                        "link": lambda request: "/admin/census/censusschedule/",
-                    },
                     {
                         "title": "Review Queue",
                         "icon": "rate_review",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=review_queue",
                     },
                     {
-                        "title": "Imported - Needs Review",
+                        "title": "Needs Review",
                         "icon": "fact_check",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=needs_review",
                     },
                     {
-                        "title": "Student Work - Ready",
+                        "title": "Ready for Review",
                         "icon": "assignment_turned_in",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=completed",
+                    },
+                    {
+                        "title": "AI Transcriptions - Ready for Review",
+                        "icon": "smart_toy",
+                        "link": lambda request: "/admin/census/censusschedule/?ai_status=transcribed",
+                        "permission": can_view_ai_transcription,
                     },
                     {
                         "title": "Assigned to Me",
                         "icon": "assignment_ind",
                         "link": lambda request: "/admin/census/censusschedule/?workflow_view=assigned_to_me",
+                    },
+                ],
+            },
+            {
+                "title": "Transcriptions",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Census Schedules",
+                        "icon": "description",
+                        "link": lambda request: "/admin/census/censusschedule/",
                     },
                     {
                         "title": "Religious Bodies",
@@ -361,6 +456,12 @@ UNFOLD = {
                         "link": lambda request: "/admin/census/clergy/",
                     },
                     {
+                        "title": "Reconciliation History",
+                        "icon": "verified",
+                        "link": lambda request: "/admin/census/schedulereconciliation/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
                         "title": "Missing Location",
                         "icon": "wrong_location",
                         "link": lambda request: "/admin/census/censusschedule/?schedule_location_status=missing_location",
@@ -368,9 +469,38 @@ UNFOLD = {
                 ],
             },
             {
+                "title": "AI Transcription",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Usage & Costs",
+                        "icon": "payments",
+                        "link": lambda request: "/admin/census/transcriptionrun/usage/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Transcription Runs",
+                        "icon": "history",
+                        "link": lambda request: "/admin/census/transcriptionrun/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Batches",
+                        "icon": "stacks",
+                        "link": lambda request: "/admin/census/transcriptionbatch/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
+                        "title": "Jobs",
+                        "icon": "checklist",
+                        "link": lambda request: "/admin/census/transcriptionjob/",
+                        "permission": can_view_ai_transcription,
+                    },
+                ],
+            },
+            {
                 "title": "Location Data",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "States",
@@ -392,7 +522,6 @@ UNFOLD = {
             {
                 "title": "Content Management",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Blog Posts",
@@ -419,7 +548,6 @@ UNFOLD = {
             {
                 "title": "System Administration",
                 "separator": True,
-                "collapsible": True,
                 "items": [
                     {
                         "title": "Users",

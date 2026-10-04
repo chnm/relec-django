@@ -1,20 +1,28 @@
+import csv
 import datetime
+import json
 import os
 import re
 from collections import defaultdict
 
 import requests
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
+from django.contrib.admin import helpers
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError, models, transaction
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
+from import_export.admin import ImportExportModelAdmin
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
-from import_export.admin import ImportExportModelAdmin
+from simple_history.utils import bulk_update_with_history
 from unfold.admin import ModelAdmin, StackedInline
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from urllib3.util.retry import Retry
@@ -27,9 +35,41 @@ from .models import (
     Denomination,
     DenominationCensusReport,
     Membership,
+    ReconciliationSource,
     ReligiousBody,
+    ScheduleReconciliation,
+    ScheduleTranscription,
+    TranscriptionBatch,
+    TranscriptionJob,
+    TranscriptionRun,
 )
 from .resources import CensusScheduleResource, DenominationResource
+from .transcription.comparison import source_raw_json
+from .transcription.contracts import CONTRACT_VERSION
+from .transcription.reconciliation import (
+    ReconciliationError,
+    apply_reconciliation,
+    build_reconciliation_preview,
+    canonical_fingerprint,
+    latest_reversible_reconciliation,
+    rollback_reconciliation,
+    serialize_canonical,
+)
+from .transcription.schedule_form import schedule_form_layout
+from .transcription.services import (
+    LaunchError,
+    launch_transcription_run,
+    transcription_selection_summary,
+    worker_status,
+)
+from .transcription.status import AI_STATUS_LABELS, with_ai_status
+from .transcription.usage import (
+    USAGE_EXPORT_FIELDS,
+    configured_pricing_snapshots,
+    historical_cost_estimates,
+    usage_export_rows,
+    usage_report,
+)
 from .workflow import (
     LOCKED_FOR_TRANSCRIBERS,
     TRANSCRIBER_ACTIONS,
@@ -79,6 +119,29 @@ class HasCountyFilter(admin.SimpleListFilter):
         return queryset
 
 
+class CensusScheduleDenominationFilter(admin.RelatedFieldListFilter):
+    """Include the census denomination ID in schedule filter labels."""
+
+    def field_choices(self, field, request, model_admin):
+        choices = list(super().field_choices(field, request, model_admin))
+        denomination_ids = {
+            denomination.pk: denomination.denomination_id
+            for denomination in Denomination.objects.filter(
+                pk__in=[pk for pk, _label in choices]
+            )
+        }
+
+        return [
+            (
+                pk,
+                f"{label} ({denomination_ids[pk]})"
+                if denomination_ids.get(pk)
+                else label,
+            )
+            for pk, label in choices
+        ]
+
+
 class CensusScheduleLocationFilter(admin.SimpleListFilter):
     """Custom filter for Census Schedules based on their Religious Body locations"""
 
@@ -102,6 +165,21 @@ class CensusScheduleLocationFilter(admin.SimpleListFilter):
         return queryset
 
 
+class AITranscriptionFilter(admin.SimpleListFilter):
+    """Filter schedules by their latest AI workflow state."""
+
+    title = "AI status"
+    parameter_name = "ai_status"
+
+    def lookups(self, request, model_admin):
+        return tuple(AI_STATUS_LABELS.items())
+
+    def queryset(self, request, queryset):
+        if self.value() in AI_STATUS_LABELS:
+            return with_ai_status(queryset).filter(_ai_status=self.value())
+        return queryset
+
+
 class TranscriptionWorkflowFilter(admin.SimpleListFilter):
     """Custom filter for common transcription workflow views"""
 
@@ -113,9 +191,9 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
             ("unassigned", "Unassigned Records"),
             ("assigned_to_me", "Assigned to Me"),
             ("review_queue", "Review Queue"),
-            ("needs_review", "Imported - Needs Review"),
+            ("needs_review", "Needs Review"),
             ("in_progress", "In Progress"),
-            ("completed", "Student Work - Ready for Review"),
+            ("completed", "Ready for Review"),
             ("approved", "Approved"),
         )
 
@@ -273,6 +351,320 @@ class ReligiousBodyInline(StackedInline):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
+class ScheduleTranscriptionInline(StackedInline):
+    model = ScheduleTranscription
+    extra = 0
+    tab = True
+    fields = ["run", "data", "created_at"]
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("run")
+
+
+class ReviewerReadOnlyModelAdmin(ModelAdmin):
+    """Expose orchestration evidence to reviewers without mutation rights."""
+
+    def has_module_permission(self, request):
+        return is_reviewer(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return is_reviewer(request.user)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TranscriptionRun)
+class TranscriptionRunAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = ["key", "kind", "job_progress", "token_summary", "created_at"]
+    list_filter = ["kind"]
+    search_fields = ["key"]
+    readonly_fields = ["key", "kind", "metadata", "created_at", "token_usage"]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "usage/",
+                self.admin_site.admin_view(self.usage_dashboard_view),
+                name="census_transcription_usage",
+            ),
+            path(
+                "usage/export.csv",
+                self.admin_site.admin_view(self.usage_csv_view),
+                name="census_transcription_usage_csv",
+            ),
+            path(
+                "usage/export.json",
+                self.admin_site.admin_view(self.usage_json_view),
+                name="census_transcription_usage_json",
+            ),
+        ]
+        return custom_urls + urls
+
+    def _require_reporting_permission(self, request):
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+    def usage_dashboard_view(self, request):
+        self._require_reporting_permission(request)
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Claude usage & cost reporting",
+            "opts": self.model._meta,
+            "report": usage_report(),
+        }
+        return render(
+            request,
+            "admin/census/transcriptionrun/usage-dashboard.html",
+            context,
+        )
+
+    def usage_csv_view(self, request):
+        self._require_reporting_permission(request)
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            'attachment; filename="claude-transcription-usage.csv"'
+        )
+        writer = csv.DictWriter(response, fieldnames=USAGE_EXPORT_FIELDS)
+        writer.writeheader()
+        writer.writerows(usage_export_rows())
+        return response
+
+    def usage_json_view(self, request):
+        self._require_reporting_permission(request)
+        response = JsonResponse(
+            list(usage_export_rows()),
+            safe=False,
+            json_dumps_params={"indent": 2},
+        )
+        response["Content-Disposition"] = (
+            'attachment; filename="claude-transcription-usage.json"'
+        )
+        return response
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                job_count=models.Count("transcription_jobs"),
+                queued_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state=TranscriptionJob.State.QUEUED
+                    ),
+                ),
+                active_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state__in=(
+                            TranscriptionJob.State.PREPARING,
+                            TranscriptionJob.State.SUBMITTED,
+                        )
+                    ),
+                ),
+                succeeded_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state=TranscriptionJob.State.SUCCEEDED
+                    ),
+                ),
+                attention_job_count=models.Count(
+                    "transcription_jobs",
+                    filter=models.Q(
+                        transcription_jobs__state__in=(
+                            TranscriptionJob.State.FAILED,
+                            TranscriptionJob.State.EXPIRED,
+                            TranscriptionJob.State.CANCELED,
+                            TranscriptionJob.State.INVALID,
+                            TranscriptionJob.State.NEEDS_RECOVERY,
+                        )
+                    ),
+                ),
+                aggregate_input_tokens=models.Sum("transcription_jobs__input_tokens"),
+                aggregate_cache_creation_tokens=models.Sum(
+                    "transcription_jobs__cache_creation_input_tokens"
+                ),
+                aggregate_cache_read_tokens=models.Sum(
+                    "transcription_jobs__cache_read_input_tokens"
+                ),
+                aggregate_output_tokens=models.Sum("transcription_jobs__output_tokens"),
+            )
+        )
+
+    @admin.display(description="Progress")
+    def job_progress(self, obj):
+        return (
+            f"{obj.succeeded_job_count:,}/{obj.job_count:,} succeeded · "
+            f"{obj.active_job_count:,} active · {obj.queued_job_count:,} queued · "
+            f"{obj.attention_job_count:,} attention"
+        )
+
+    @admin.display(description="Tokens")
+    def token_summary(self, obj):
+        total_input = sum(
+            value or 0
+            for value in (
+                obj.aggregate_input_tokens,
+                obj.aggregate_cache_creation_tokens,
+                obj.aggregate_cache_read_tokens,
+            )
+        )
+        return f"in {total_input:,} / out {obj.aggregate_output_tokens or 0:,}"
+
+
+@admin.register(ScheduleReconciliation)
+class ScheduleReconciliationAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = [
+        "census_schedule",
+        "outcome",
+        "reviewer",
+        "applied_at",
+    ]
+    list_filter = ["outcome", "applied_at"]
+    search_fields = [
+        "census_schedule__schedule_id",
+        "census_schedule__resource_id",
+        "reviewer__username",
+    ]
+    readonly_fields = [
+        "census_schedule",
+        "reviewer",
+        "outcome",
+        "notes",
+        "canonical_before",
+        "canonical_after",
+        "before_fingerprint",
+        "after_fingerprint",
+        "decisions",
+        "reverses",
+        "applied_at",
+    ]
+
+
+@admin.register(ReconciliationSource)
+class ReconciliationSourceAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = ["transcription", "disposition", "reconciliation"]
+    list_filter = ["disposition"]
+    search_fields = [
+        "transcription__run__key",
+        "transcription__census_schedule__schedule_id",
+    ]
+    readonly_fields = ["reconciliation", "transcription", "disposition"]
+
+
+@admin.register(TranscriptionBatch)
+class TranscriptionBatchAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = [
+        "id",
+        "run",
+        "state",
+        "provider_batch_id",
+        "request_count",
+        "submitted_at",
+        "collected_at",
+    ]
+    list_filter = ["state", "provider"]
+    search_fields = ["provider_batch_id", "run__key"]
+    readonly_fields = [field.name for field in TranscriptionBatch._meta.fields]
+
+
+@admin.register(TranscriptionJob)
+class TranscriptionJobAdmin(ReviewerReadOnlyModelAdmin):
+    actions = ["cancel_queued_jobs"]
+    list_display = [
+        "custom_id",
+        "census_schedule",
+        "run",
+        "state",
+        "total_input_tokens_display",
+        "output_tokens",
+        "completed_at",
+    ]
+    list_filter = ["state", "run"]
+    search_fields = [
+        "custom_id",
+        "census_schedule__schedule_id",
+        "census_schedule__schedule_title",
+        "run__key",
+    ]
+    readonly_fields = [field.name for field in TranscriptionJob._meta.fields]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("census_schedule", "run")
+
+    @admin.display(description="Input tokens")
+    def total_input_tokens_display(self, obj):
+        return obj.total_input_tokens
+
+    @admin.action(
+        description="Cancel selected locally queued jobs", permissions=["view"]
+    )
+    def cancel_queued_jobs(self, request, queryset):
+        """Cancel only jobs that have not been claimed or submitted."""
+        if not is_reviewer(request.user):
+            self.message_user(
+                request,
+                "Only reviewers can cancel queued Claude jobs.",
+                level=messages.ERROR,
+            )
+            return
+        selected_count = queryset.count()
+        with transaction.atomic():
+            queued_jobs = list(
+                queryset.select_for_update(skip_locked=True).filter(
+                    state=TranscriptionJob.State.QUEUED,
+                    batch__isnull=True,
+                    raw_result__isnull=True,
+                )
+            )
+            completed_at = timezone.now()
+            for job in queued_jobs:
+                job.state = TranscriptionJob.State.CANCELED
+                job.completed_at = completed_at
+                job.error_type = "canceled_by_reviewer"
+                job.error_message = (
+                    f"Canceled by {request.user.get_username()} before claim."
+                )
+            if queued_jobs:
+                bulk_update_with_history(
+                    queued_jobs,
+                    TranscriptionJob,
+                    fields=[
+                        "state",
+                        "completed_at",
+                        "error_type",
+                        "error_message",
+                    ],
+                    batch_size=1000,
+                    default_user=request.user,
+                    default_change_reason="Canceled locally queued Claude job",
+                )
+        canceled_count = len(queued_jobs)
+        skipped_count = selected_count - canceled_count
+        self.message_user(
+            request,
+            f"Canceled {canceled_count:,} locally queued job(s); "
+            f"skipped {skipped_count:,} claimed or completed job(s).",
+            level=messages.SUCCESS if canceled_count else messages.WARNING,
+        )
+
+
 @admin.action(description="Fetch denominations from Apiary")
 def sync_denominations(modeladmin, request, queryset):
     """Custom admin action to sync denominations from the API."""
@@ -367,7 +759,13 @@ class DenominationAdmin(ImportExportModelAdmin, ModelAdmin):
         "family_census",
         "published_churches_count",
     ]
-    search_fields = ["name", "short_name", "denomination_id", "family_relec", "family_census"]
+    search_fields = [
+        "name",
+        "short_name",
+        "denomination_id",
+        "family_relec",
+        "family_census",
+    ]
     ordering = ["name"]
     list_filter = ["family_relec", "family_census"]
     actions = [sync_denominations]
@@ -418,7 +816,7 @@ mark_in_progress.short_description = "Mark as in progress"
 
 
 def mark_needs_review(modeladmin, request, queryset):
-    """Mark imported or untriaged records as needing review."""
+    """Mark records as needing review."""
     eligible = schedules_with_religious_bodies(queryset)
     count = eligible.update(transcription_status="needs_review")
     skipped = queryset.count() - count
@@ -449,15 +847,6 @@ def mark_completed(modeladmin, request, queryset):
 
 
 mark_completed.short_description = "Mark as ready for review"
-
-
-def mark_approved(modeladmin, request, queryset):
-    """Admin action to approve transcribed records"""
-    count = queryset.update(transcription_status="approved")
-    modeladmin.message_user(request, f"{count} records approved.")
-
-
-mark_approved.short_description = "Mark as approved"
 
 
 # Assignment actions
@@ -570,14 +959,439 @@ def bulk_assign_users(modeladmin, request, queryset):
 bulk_assign_users.short_description = "Bulk assign users/status to selected records"
 
 
+class ClaudeTranscriptionRunForm(forms.Form):
+    run_key = forms.SlugField(
+        max_length=120,
+        help_text="A permanent provenance key; it cannot be renamed later.",
+    )
+    model = forms.ChoiceField(
+        help_text=(
+            "The provider model used for every schedule in this run. Its Batch "
+            "pricing and model-specific inference behavior are frozen with the run."
+        )
+    )
+    pilot_size = forms.IntegerField(
+        required=False,
+        min_value=1,
+        help_text=(
+            "Optional. Queue only this many ready schedules as a smaller test. "
+            "Leave blank to queue the complete ready selection."
+        ),
+    )
+    confirmation_job_count = forms.IntegerField(
+        required=False,
+        min_value=1,
+        label="Confirm planned job count",
+        help_text=(
+            "For a large run, type the exact number shown under Will queue. "
+            "This confirms the campaign size; it is not a spending cap."
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.eligible_count = kwargs.pop("eligible_count", 0)
+        super().__init__(*args, **kwargs)
+        self.fields["model"].choices = [
+            (model, model) for model in settings.CLAUDE_TRANSCRIPTION_MODELS
+        ]
+        self.fields["pilot_size"].max_value = settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS
+
+    def clean(self):
+        cleaned_data = super().clean()
+        pilot_size = cleaned_data.get("pilot_size")
+        planned_count = (
+            min(self.eligible_count, pilot_size) if pilot_size else self.eligible_count
+        )
+        if planned_count > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:
+            raise ValidationError(
+                f"This run would queue {planned_count:,} jobs, above the emergency "
+                f"ceiling of {settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:,}."
+            )
+        if (
+            planned_count >= settings.CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD
+            and cleaned_data.get("confirmation_job_count") != planned_count
+        ):
+            self.add_error(
+                "confirmation_job_count",
+                f"Enter {planned_count:,} to confirm this large run.",
+            )
+        return cleaned_data
+
+
+@admin.action(description="Queue selected schedules for Claude transcription")
+def queue_claude_transcription(modeladmin, request, queryset):
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can launch paid transcription runs.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(reverse("admin:census_censusschedule_changelist"))
+
+    selection = transcription_selection_summary(queryset)
+    initial = {
+        "run_key": timezone.now().strftime("claude-%Y%m%d-%H%M%S"),
+        "model": settings.CLAUDE_TRANSCRIPTION_MODELS[0],
+    }
+    form = ClaudeTranscriptionRunForm(
+        request.POST if request.POST.get("apply") else None,
+        initial=initial,
+        eligible_count=selection["eligible_count"],
+    )
+    if request.POST.get("apply") and form.is_valid():
+        try:
+            run = launch_transcription_run(
+                queryset=queryset,
+                key=form.cleaned_data["run_key"],
+                model=form.cleaned_data["model"],
+                pilot_size=form.cleaned_data["pilot_size"],
+                confirmed_job_count=form.cleaned_data["confirmation_job_count"],
+                user=request.user,
+            )
+        except (LaunchError, ValidationError, IntegrityError) as exc:
+            form.add_error(None, str(exc))
+        else:
+            modeladmin.message_user(
+                request,
+                f"Queued {run.metadata['schedule_count']} schedules in run {run.key}.",
+            )
+            return HttpResponseRedirect(
+                reverse("admin:census_transcriptionrun_change", args=[run.pk])
+            )
+
+    selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+    pricing_snapshots, pricing_errors = configured_pricing_snapshots(
+        settings.CLAUDE_TRANSCRIPTION_PRICING,
+        settings.CLAUDE_TRANSCRIPTION_MODELS,
+    )
+    return render(
+        request,
+        "admin/census/queue-claude-transcription.html",
+        {
+            "form": form,
+            "objects": queryset[:100],
+            "selected": selected,
+            **selection,
+            "select_across": request.POST.get("select_across", "0"),
+            "opts": modeladmin.model._meta,
+            "title": "Queue Claude transcription run",
+            "application_revision": settings.APPLICATION_REVISION,
+            "revision_configured": bool(settings.APPLICATION_REVISION),
+            "transcription_enabled": settings.CLAUDE_TRANSCRIPTION_ENABLED,
+            "worker_status": worker_status(),
+            "prompt_version": CONTRACT_VERSION,
+            "max_tokens": settings.CLAUDE_TRANSCRIPTION_MAX_TOKENS,
+            "batch_size": settings.CLAUDE_TRANSCRIPTION_BATCH_SIZE,
+            "max_run_jobs": settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS,
+            "large_run_threshold": (settings.CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD),
+            "pricing_snapshots": pricing_snapshots,
+            "pricing_errors": pricing_errors,
+            "historical_cost_estimates": historical_cost_estimates(),
+        },
+    )
+
+
+def _latest_agent_transcription(schedule):
+    return (
+        schedule.transcriptions.filter(run__kind="agent")
+        .select_related("run")
+        .order_by(
+            "-run__created_at",
+            "-run__pk",
+            "-created_at",
+            "-pk",
+        )
+        .first()
+    )
+
+
+def _already_promoted_from(schedule, source):
+    """True when the newest unreversed reconciliation accepted this run."""
+    latest = schedule.reconciliations.filter(reverses__isnull=True).first()
+    return bool(
+        latest
+        and not latest.reversals.exists()
+        and latest.sources.filter(
+            transcription=source,
+            disposition=ReconciliationSource.Disposition.ACCEPTED,
+        ).exists()
+    )
+
+
+def _bulk_reconciliation_context(
+    modeladmin,
+    request,
+    queryset,
+    *,
+    action_name,
+    title,
+    heading,
+    explanation,
+    warning,
+    button_label,
+    item_builder,
+    eligible_count,
+):
+    total_count = queryset.count()
+    items = [
+        item_builder(schedule) for schedule in queryset.order_by("pk")[:100]
+    ]
+    if total_count <= len(items):
+        eligible_count = sum(item["eligible"] for item in items)
+    return {
+        **modeladmin.admin_site.each_context(request),
+        "opts": modeladmin.model._meta,
+        "action_name": action_name,
+        "title": title,
+        "heading": heading,
+        "explanation": explanation,
+        "warning": warning,
+        "button_label": button_label,
+        "items": items,
+        "total_count": total_count,
+        "eligible_count": eligible_count,
+        "skipped_count": total_count - eligible_count,
+        "truncated": total_count > len(items),
+        "selected": request.POST.getlist(helpers.ACTION_CHECKBOX_NAME),
+        "select_across": request.POST.get("select_across", "0"),
+        "notes": request.POST.get("notes", ""),
+        "confirmation_error": (
+            "Check the confirmation box before applying this action."
+            if request.POST.get("apply")
+            and request.POST.get("confirmed") != "yes"
+            else ""
+        ),
+    }
+
+
+def _bulk_action_messages(modeladmin, request, completed, skipped, action_label):
+    if completed:
+        modeladmin.message_user(
+            request,
+            f"{action_label} for {completed} schedule(s).",
+            level=messages.SUCCESS,
+        )
+    if skipped:
+        reasons = "; ".join(
+            f"{reason} ({count})" for reason, count in skipped.items()
+        )
+        modeladmin.message_user(
+            request,
+            f"Skipped {sum(skipped.values())} schedule(s): {reasons}",
+            level=messages.WARNING,
+        )
+
+
+@admin.action(description="Promote latest model transcription")
+def promote_latest_model_transcription(modeladmin, request, queryset):
+    """Apply each schedule's newest agent run as trusted canonical data."""
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can promote model transcriptions.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    if request.POST.get("apply") and request.POST.get("confirmed") == "yes":
+        completed = 0
+        skipped = defaultdict(int)
+        reviewer_notes = request.POST.get("notes", "").strip()
+        for schedule in queryset.order_by("pk").iterator(chunk_size=100):
+            source = _latest_agent_transcription(schedule)
+            if source is None:
+                skipped["no model transcription"] += 1
+                continue
+            if _already_promoted_from(schedule, source):
+                skipped["already promoted from this run"] += 1
+                continue
+            try:
+                preview = build_reconciliation_preview(schedule, source)
+                notes = f"Bulk-promoted latest model run {source.run.key}."
+                if reviewer_notes:
+                    notes = f"{notes}\n{reviewer_notes}"
+                apply_reconciliation(
+                    schedule_id=schedule.pk,
+                    reviewer=request.user,
+                    expected_fingerprint=preview["before_fingerprint"],
+                    comparison_transcription_id=source.pk,
+                    notes=notes,
+                )
+            except ReconciliationError as exc:
+                skipped[str(exc)] += 1
+            else:
+                completed += 1
+        _bulk_action_messages(
+            modeladmin,
+            request,
+            completed,
+            skipped,
+            "Promoted the latest model transcription",
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    def promotion_item(schedule):
+        source = _latest_agent_transcription(schedule)
+        if source is None:
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": "No model transcription available",
+            }
+        model = source.run.metadata.get("model", "Unspecified model")
+        if _already_promoted_from(schedule, source):
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": f"Already promoted from {source.run.key} · {model}",
+            }
+        return {
+            "schedule": schedule,
+            "eligible": True,
+            "detail": f"{source.run.key} · {model}",
+        }
+
+    context = _bulk_reconciliation_context(
+        modeladmin,
+        request,
+        queryset,
+        action_name="promote_latest_model_transcription",
+        title="Promote latest model transcription",
+        heading="Trust the newest model run for each schedule",
+        explanation=(
+            "Each eligible schedule will use the output from its most recently "
+            "created agent run. No model is selected manually."
+        ),
+        warning=(
+            "This assumes the newest model transcription is correct and replaces "
+            "canonical schedule data. Every change remains reversible through the "
+            "reconciliation history."
+        ),
+        button_label="Promote and approve",
+        item_builder=promotion_item,
+        eligible_count=queryset.filter(
+            transcriptions__run__kind="agent"
+        ).distinct().count(),
+    )
+    return render(request, "admin/census/bulk-reconciliation.html", context)
+
+
+@admin.action(description="Restore previous canonical data")
+def restore_previous_canonical_data(modeladmin, request, queryset):
+    """Step each schedule back to its newest unreversed canonical state."""
+    if not is_reviewer(request.user):
+        modeladmin.message_user(
+            request,
+            "Only reviewers can restore canonical data.",
+            level=messages.ERROR,
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    if request.POST.get("apply") and request.POST.get("confirmed") == "yes":
+        completed = 0
+        skipped = defaultdict(int)
+        reviewer_notes = request.POST.get("notes", "").strip()
+        for schedule in queryset.order_by("pk").iterator(chunk_size=100):
+            snapshot = serialize_canonical(schedule)
+            target = latest_reversible_reconciliation(schedule, snapshot)
+            if target is None:
+                skipped["no restorable canonical state"] += 1
+                continue
+            try:
+                notes = f"Bulk-restored the state before reconciliation #{target.pk}."
+                if reviewer_notes:
+                    notes = f"{notes}\n{reviewer_notes}"
+                rollback_reconciliation(
+                    schedule_id=schedule.pk,
+                    reviewer=request.user,
+                    reconciliation_id=target.pk,
+                    expected_fingerprint=canonical_fingerprint(snapshot),
+                    notes=notes,
+                )
+            except ReconciliationError as exc:
+                skipped[str(exc)] += 1
+            else:
+                completed += 1
+        _bulk_action_messages(
+            modeladmin,
+            request,
+            completed,
+            skipped,
+            "Restored previous canonical data",
+        )
+        return HttpResponseRedirect(
+            reverse("admin:census_censusschedule_changelist")
+        )
+
+    def rollback_item(schedule):
+        snapshot = serialize_canonical(schedule)
+        target = latest_reversible_reconciliation(schedule, snapshot)
+        if target is None:
+            return {
+                "schedule": schedule,
+                "eligible": False,
+                "detail": "No previous canonical data state available",
+            }
+        return {
+            "schedule": schedule,
+            "eligible": True,
+            "detail": (
+                f"Restore state before reconciliation #{target.pk} · "
+                f"{target.get_outcome_display()}"
+            ),
+        }
+
+    context = _bulk_reconciliation_context(
+        modeladmin,
+        request,
+        queryset,
+        action_name="restore_previous_canonical_data",
+        title="Restore previous canonical data",
+        heading="Step backward through reconciliation history",
+        explanation=(
+            "Each eligible schedule will return to the canonical data that existed "
+            "immediately before its newest unreversed reconciliation."
+        ),
+        warning=(
+            "The current canonical data will be replaced, but not erased from "
+            "history. The restore itself is recorded as a new reconciliation event."
+        ),
+        button_label="Restore previous data",
+        item_builder=rollback_item,
+        eligible_count=queryset.filter(
+            reconciliations__reverses__isnull=True,
+            reconciliations__reversals__isnull=True,
+        ).distinct().count(),
+    )
+    return render(request, "admin/census/bulk-reconciliation.html", context)
+
+
+def _model_vendor(model_name):
+    """Pick a glyph tint from the model name; unknown models stay neutral."""
+    name = (model_name or "").casefold()
+    if "claude" in name:
+        return "anthropic"
+    if "gemini" in name:
+        return "google"
+    return "model"
+
+
 @admin.register(CensusSchedule)
 class CensusScheduleAdmin(ModelAdmin):
+    change_form_template = "admin/census/censusschedule/change_form.html"
     list_display = [
-        "schedule_title",
+        "schedule_title_display",
         "schedule_id",
         "resource_id",
         "get_location_display",
         "transcription_status_display",
+        "ai_status_display",
         "assigned_transcriber",
         "assigned_reviewer",
     ]
@@ -601,12 +1415,13 @@ class CensusScheduleAdmin(ModelAdmin):
     ]
     list_filter = [
         TranscriptionWorkflowFilter,
+        AITranscriptionFilter,
         "transcription_status",
         AssignmentStatusFilter,
         "assigned_transcriber",
         "assigned_reviewer",
         "county__state",
-        "schedule_denomination",
+        ("schedule_denomination", CensusScheduleDenominationFilter),
         CensusScheduleLocationFilter,
     ]
     actions = [
@@ -616,17 +1431,23 @@ class CensusScheduleAdmin(ModelAdmin):
         mark_in_progress,
         mark_needs_review,
         mark_completed,
-        mark_approved,
         # Assignments
         assign_to_me,
         unassign_transcriber,
         unassign_reviewer,
         bulk_assign_users,
+        queue_claude_transcription,
+        promote_latest_model_transcription,
+        restore_previous_canonical_data,
     ]
-    ordering = ["schedule_title"]
+    ordering = ["title_sort_key", "pk"]
 
     class Media:
         js = ["js/admin_cascade_populated_place.js"]
+
+    @admin.display(description="Schedule title", ordering="title_sort_key")
+    def schedule_title_display(self, obj):
+        return obj.schedule_title
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -669,8 +1490,354 @@ class CensusScheduleAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.location_export_view),
                 name="census_schedule_location_export",
             ),
+            path(
+                "<path:object_id>/compare-transcriptions/",
+                self.admin_site.admin_view(self.compare_transcriptions_view),
+                name="census_censusschedule_compare_transcriptions",
+            ),
         ]
         return custom_urls + urls
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["show_transcription_comparison"] = bool(
+            object_id
+            and is_reviewer(request.user)
+            and ScheduleTranscription.objects.filter(
+                census_schedule_id=object_id
+            ).exists()
+        )
+        return super().changeform_view(
+            request,
+            object_id=object_id,
+            form_url=form_url,
+            extra_context=extra_context,
+        )
+
+    def compare_transcriptions_view(self, request, object_id):
+        """Preview and apply one reviewer-controlled reconciliation decision."""
+        if not is_reviewer(request.user):
+            raise PermissionDenied
+
+        schedule = get_object_or_404(
+            CensusSchedule.objects.select_related(
+                "county__state",
+                "populated_place__county__state",
+                "schedule_denomination",
+            ),
+            pk=object_id,
+        )
+        transcriptions = list(
+            schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
+        )
+        requested_baseline = request.POST.get("baseline") or request.GET.get(
+            "baseline"
+        )
+        requested_comparison = request.POST.get(
+            "comparison"
+        ) or request.GET.get("comparison")
+        baseline_ref, comparison_ref = self._comparison_source_refs(
+            transcriptions,
+            requested_baseline,
+            requested_comparison,
+        )
+        baseline = self._source_transcription(transcriptions, baseline_ref)
+        comparison_source = self._source_transcription(
+            transcriptions, comparison_ref
+        )
+
+        jobs = {
+            job.run_id: job
+            for job in schedule.transcription_jobs.filter(
+                state=TranscriptionJob.State.SUCCEEDED
+            ).select_related("run")
+        }
+        reconciliation_error = ""
+        can_apply = bool(
+            baseline_ref
+            and comparison_ref
+            and baseline_ref != comparison_ref
+            and (baseline is not None or comparison_source is not None)
+        )
+        posted_decisions = self._reconciliation_decisions(request)
+        try:
+            # Draft-level field problems (validate=False) must not block the
+            # display or disable Apply: the reviewer's actual mixed selection
+            # is what gets validated below, on POST. Only candidate-level
+            # errors (unsupported contract/kind) should still disable it.
+            preview = build_reconciliation_preview(
+                schedule,
+                comparison_source,
+                baseline_transcription=baseline,
+                validate=False,
+            )
+        except ReconciliationError as exc:
+            preview = build_reconciliation_preview(schedule, validate=False)
+            reconciliation_error = str(exc)
+            can_apply = False
+        comparison = preview["comparison"]
+
+        if request.method == "POST":
+            if not can_apply:
+                if not reconciliation_error:
+                    reconciliation_error = (
+                        "Choose two distinct comparison sources."
+                    )
+            else:
+                try:
+                    preview = build_reconciliation_preview(
+                        schedule,
+                        comparison_source,
+                        baseline_transcription=baseline,
+                        decisions=posted_decisions,
+                        mixed=True,
+                    )
+                except ReconciliationError as exc:
+                    reconciliation_error = str(exc)
+                else:
+                    reconciliation_error = ""
+                    comparison = preview["comparison"]
+
+            if (
+                not reconciliation_error
+                and request.POST.get("confirmed") != "yes"
+            ):
+                reconciliation_error = (
+                    "Confirm that you reviewed the source image and proposed data."
+                )
+            elif not reconciliation_error:
+                try:
+                    reconciliation = apply_reconciliation(
+                        schedule_id=schedule.pk,
+                        reviewer=request.user,
+                        expected_fingerprint=request.POST.get(
+                            "expected_fingerprint", ""
+                        ),
+                        baseline_transcription_id=(
+                            baseline.pk if baseline is not None else None
+                        ),
+                        comparison_transcription_id=(
+                            comparison_source.pk
+                            if comparison_source is not None
+                            else None
+                        ),
+                        notes=request.POST.get("notes", ""),
+                        decisions=posted_decisions,
+                    )
+                except ReconciliationError as exc:
+                    reconciliation_error = str(exc)
+                else:
+                    self.message_user(
+                        request,
+                        f"Reconciliation #{reconciliation.pk} applied; "
+                        f"{schedule} is approved.",
+                        level=messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect(
+                        reverse(
+                            "admin:census_censusschedule_change",
+                            args=[schedule.pk],
+                        )
+                    )
+        try:
+            image_url = schedule.original_image.url if schedule.original_image else ""
+        except ValueError:
+            image_url = ""
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Reconcile and approve: {schedule}",
+            "opts": self.model._meta,
+            "schedule": schedule,
+            "image_url": image_url,
+            "source_options": self._comparison_source_options(transcriptions),
+            "baseline_ref": baseline_ref,
+            "comparison_ref": comparison_ref,
+            "baseline_source": self._comparison_source_details(
+                schedule,
+                baseline_ref,
+                baseline,
+                jobs.get(baseline.run_id) if baseline else None,
+            ),
+            "comparison_source": self._comparison_source_details(
+                schedule,
+                comparison_ref,
+                comparison_source,
+                jobs.get(comparison_source.run_id) if comparison_source else None,
+            ),
+            "comparison": comparison,
+            "form": schedule_form_layout(comparison["sections"]),
+            "place_options": (
+                schedule.county.places.select_related("county__state")
+                .order_by("name")
+                if schedule.county_id
+                else []
+            ),
+            "preview": preview,
+            "reconciliation_error": reconciliation_error,
+            "can_apply": can_apply,
+            "recent_reconciliations": schedule.reconciliations.select_related(
+                "reviewer"
+            )[:5],
+        }
+        return render(
+            request,
+            "admin/census/censusschedule/compare-transcriptions.html",
+            context,
+        )
+
+    @staticmethod
+    def _comparison_source_refs(
+        sources, requested_baseline, requested_comparison
+    ):
+        valid_refs = {"canonical", *(str(source.pk) for source in sources)}
+        human_sources = [
+            source for source in sources if source.run.kind == "human_snapshot"
+        ]
+        baseline_default = (
+            str(human_sources[0].pk) if human_sources else "canonical"
+        )
+        baseline_ref = (
+            requested_baseline
+            if requested_baseline in valid_refs
+            else baseline_default
+        )
+
+        comparison_order = [
+            str(source.pk) for source in sources if source.run.kind == "agent"
+        ]
+        comparison_order.extend(str(source.pk) for source in sources)
+        comparison_order.append("canonical")
+        comparison_default = next(
+            (ref for ref in comparison_order if ref != baseline_ref), ""
+        )
+        comparison_ref = (
+            requested_comparison
+            if requested_comparison in valid_refs
+            and requested_comparison != baseline_ref
+            else comparison_default
+        )
+        return baseline_ref, comparison_ref
+
+    @staticmethod
+    def _source_transcription(sources, source_ref):
+        if not source_ref or source_ref == "canonical":
+            return None
+        return next(
+            (source for source in sources if str(source.pk) == source_ref),
+            None,
+        )
+
+    @staticmethod
+    def _comparison_source_options(sources):
+        options = [
+            {
+                "value": "canonical",
+                "label": "Current canonical · live structured data",
+            }
+        ]
+        ordered_sources = sorted(
+            sources,
+            key=lambda source: (
+                source.run.kind != "human_snapshot",
+                -source.created_at.timestamp(),
+                -source.pk,
+            ),
+        )
+        for source in ordered_sources:
+            metadata = source.run.metadata
+            kind = source.run.get_kind_display()
+            model = metadata.get("model", "")
+            detail = f" · {model}" if model else ""
+            options.append(
+                {
+                    "value": str(source.pk),
+                    "label": (
+                        f"{kind} · {source.run.key}{detail} · "
+                        f"{source.created_at:%b %d, %Y %H:%M}"
+                    ),
+                }
+            )
+        return options
+
+    @staticmethod
+    def _reconciliation_decisions(request):
+        prefix = "choice__"
+        decisions = {}
+        for key, value in request.POST.items():
+            if not key.startswith(prefix):
+                continue
+            decision_key = key.removeprefix(prefix)
+            if value == "edited":
+                decisions[decision_key] = {
+                    "source": "edited",
+                    "base": request.POST.get(
+                        f"edit_base__{decision_key}", ""
+                    ),
+                    "value": request.POST.get(f"edit__{decision_key}", ""),
+                }
+            else:
+                decisions[decision_key] = value
+        return decisions
+
+    @staticmethod
+    def _comparison_source_details(schedule, source_ref, source, job):
+        if not source_ref:
+            return None
+        if source_ref == "canonical":
+            return {
+                "ref": "canonical",
+                "heading": "Current canonical",
+                "subtitle": (
+                    f"Live structured data · "
+                    f"{schedule.get_transcription_status_display()}"
+                ),
+                "detail": "Approval target",
+                "icon": "human",
+                "vendor": "human",
+                "tooltip": "Current canonical data",
+                "job": None,
+                "raw_json": json.dumps(
+                    serialize_canonical(schedule),
+                    indent=2,
+                    sort_keys=True,
+                    default=str,
+                ),
+            }
+        metadata = source.run.metadata
+        return {
+            "ref": str(source.pk),
+            "object": source,
+            "run": source.run,
+            "heading": source.run.key,
+            "subtitle": (
+                f"{source.run.get_kind_display()} · "
+                f"{source.created_at:%b %d, %Y %H:%M}"
+            ),
+            "detail": " · ".join(
+                value
+                for value in (
+                    metadata.get("model", ""),
+                    metadata.get("contract_version", ""),
+                )
+                if value
+            ),
+            "model": metadata.get("model", ""),
+            "contract_version": metadata.get("contract_version", ""),
+            "icon": "robot" if source.run.kind == "agent" else "human",
+            "vendor": (
+                _model_vendor(metadata.get("model", ""))
+                if source.run.kind == "agent"
+                else "human"
+            ),
+            "tooltip": " · ".join(
+                value
+                for value in (source.run.get_kind_display(), metadata.get("model", ""), source.run.key)
+                if value
+            ),
+            "job": job,
+            "raw_json": source_raw_json(source),
+        }
 
     def schedule_gap_analysis_view(self, request):
         """View to analyze gaps in schedule IDs by denomination"""
@@ -877,11 +2044,11 @@ class CensusScheduleAdmin(ModelAdmin):
             "total_missing_county": total_missing_county,
             "total_blank_county": total_blank_county,
             "total_issues": total_issues,
-            "completion_percentage": round(
-                (total_with_county / total_schedules) * 100, 1
-            )
-            if total_schedules > 0
-            else 0,
+            "completion_percentage": (
+                round((total_with_county / total_schedules) * 100, 1)
+                if total_schedules > 0
+                else 0
+            ),
             "state_summary": state_summary,
             "schedules_missing_location": schedules_missing_location[
                 :50
@@ -961,17 +2128,28 @@ class CensusScheduleAdmin(ModelAdmin):
         ),
     ]
     autocomplete_fields = ["county", "populated_place", "schedule_denomination"]
-    inlines = [ReligiousBodyInline, MembershipInline, ClergyInline]
+    inlines = [
+        ReligiousBodyInline,
+        MembershipInline,
+        ClergyInline,
+        ScheduleTranscriptionInline,
+    ]
 
     def get_fieldsets(self, request, obj=None):
         """Restrict Project Management fields for transcribers."""
         fieldsets = super().get_fieldsets(request, obj)
         if is_transcriber_only(request.user):
             return [
-                (name, opts) if name != "Project Management"
-                else (
-                    name,
-                    {**opts, "fields": ["transcription_status", "transcription_notes"]},
+                (
+                    (name, opts)
+                    if name != "Project Management"
+                    else (
+                        name,
+                        {
+                            **opts,
+                            "fields": ["transcription_status", "transcription_notes"],
+                        },
+                    )
                 )
                 for name, opts in fieldsets
             ]
@@ -1040,9 +2218,7 @@ class CensusScheduleAdmin(ModelAdmin):
                 if place.county and place.county.state
                 else "Unknown"
             )
-            location_str = f"{place.name}_{county_name}_{state_code}".replace(
-                " ", "_"
-            )
+            location_str = f"{place.name}_{county_name}_{state_code}".replace(" ", "_")
             filename = f"census_schedules_{location_str}"
 
             # Return appropriate response based on format
@@ -1087,6 +2263,15 @@ class CensusScheduleAdmin(ModelAdmin):
 
     transcription_status_display.short_description = "Status"
 
+    @admin.display(description="AI status", ordering="_ai_status")
+    def ai_status_display(self, obj):
+        status = obj._ai_status
+        return format_html(
+            '<span class="status-badge status-{}">{}</span>',
+            status.replace("_", "-"),
+            AI_STATUS_LABELS[status],
+        )
+
     @admin.display(description="County")
     def get_location_display(self, obj):
         """Display location from county/state hierarchy"""
@@ -1099,6 +2284,7 @@ class CensusScheduleAdmin(ModelAdmin):
     def get_queryset(self, request):
         """Filter records based on user permissions and optimize queries"""
         qs = super().get_queryset(request)
+        qs = with_ai_status(qs)
 
         # Optimize foreign key lookups (including new location hierarchy)
         qs = qs.select_related(

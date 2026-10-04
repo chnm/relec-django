@@ -49,6 +49,8 @@ make test
 
 For a faster backend-only run, use `make test-fast`. To run only the Playwright tests, use `make test-e2e`. Browser tests are local and headless by default; no hosted testing service is required.
 
+Run `make test-coverage` to measure branch coverage for the backend suite. It prints missing lines in the terminal and writes a browsable report to `htmlcov/index.html`. Coverage is an audit signal rather than a merge gate for now; new and changed behavior should still receive focused tests.
+
 ## Documentation
 
 - **`DEVNOTES.md`**: Complete technical documentation and development workflow

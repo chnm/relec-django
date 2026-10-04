@@ -1,0 +1,10 @@
+<details class="comparison-card comparison-raw overflow-hidden">
+  <summary class="px-4 py-3 text-sm font-semibold text-gray-700 cursor-pointer dark:text-gray-200">
+    {{ title }}
+  </summary>
+  {% if source %}
+    <pre>{{ source.raw_json }}</pre>
+  {% else %}
+    <p class="p-4 text-sm text-gray-500 dark:text-gray-400">No source available.</p>
+  {% endif %}
+</details>

@@ -1,0 +1,71 @@
+{# One printed-form field: label, then a radio per source value and one for a correction. #}
+<div class="form-field comparison-row comparison-row-{{ row.status }}{% if row.selected == 'edited' %} is-edited{% endif %}" data-form-row>
+  <div class="form-field-label">
+    {% if row.number %}<span class="form-field-number">{{ row.number }}.</span>{% endif %}
+    <span>{{ row.label }}</span>
+    {% if row.status != "same" %}<small>{{ row.status_label }}</small>{% endif %}
+  </div>
+  {% if row.can_choose %}
+    <div class="form-choices">
+      {% if row.status == "same" %}
+        <label class="form-choice comparison-source-value comparison-source-value-baseline comparison-source-value-comparison" data-source-cell="baseline comparison">
+          <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="comparison" {% if row.selected == "comparison" %}checked{% endif %} aria-label="Use the agreed value for {{ row.label }}">
+          <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="baseline" {% if row.selected == "baseline" %}checked{% endif %} hidden>
+          <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=baseline_source %}{% include "admin/census/censusschedule/includes/source-icon.html" with source=comparison_source %}</span>
+          <span class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</span>
+        </label>
+      {% else %}
+        <label class="form-choice comparison-source-value comparison-source-value-baseline" data-source-cell="baseline">
+          <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="baseline" {% if row.selected == "baseline" %}checked{% endif %} aria-label="Use baseline value for {{ row.label }}">
+          <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=baseline_source %}</span>
+          <span class="form-choice-value comparison-value-{{ row.left.kind }}">{{ row.left.text }}</span>
+        </label>
+        <label class="form-choice comparison-source-value comparison-source-value-comparison" data-source-cell="comparison">
+          <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="comparison" {% if row.selected == "comparison" %}checked{% endif %} aria-label="Use comparison value for {{ row.label }}">
+          <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=comparison_source %}</span>
+          <span class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</span>
+        </label>
+      {% endif %}
+      <div class="form-choice form-choice-edit comparison-source-value" data-source-cell="edited">
+        <input form="reconciliation-form" type="radio" class="edited-choice" name="choice__{{ row.decision_key }}" value="edited" {% if row.selected == "edited" %}checked{% endif %} aria-label="Use a correction for {{ row.label }}">
+        <span class="source-dots"><span class="source-mark source-mark-edited" title="Reviewer correction" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.6 2.6a2 2 0 0 1 2.8 0l1 1a2 2 0 0 1 0 2.8L7.2 16.6 2 18l1.4-5.2L13.6 2.6Z"/></svg></span></span>
+        {% if row.edit_type == "boolean" %}
+          <select class="form-correction inline-value-input" aria-label="Correction for {{ row.label }}">
+            <option value="" {% if row.selected == "edited" and row.edited_value is None %}selected{% endif %}>Blank</option>
+            <option value="true" {% if row.selected == "edited" and row.edited_value is True %}selected{% endif %}>Yes</option>
+            <option value="false" {% if row.selected == "edited" and row.edited_value is False %}selected{% endif %}>No</option>
+          </select>
+        {% elif row.field == "populated_place_id" %}
+          <span class="form-correction-wrap">
+            <input class="form-correction inline-value-input"
+                   type="text" list="place-options" autocomplete="off"
+                   value="{% if row.selected == 'edited' %}{{ row.edited_input }}{% endif %}"
+                   placeholder="Search places in this county"
+                   aria-label="Correction for {{ row.label }}; choose a place in the schedule county">
+            <span class="place-name" aria-live="polite"></span>
+          </span>
+        {% else %}
+          <input class="form-correction inline-value-input"
+                 type="{% if row.edit_type == 'date' %}date{% elif row.edit_type == 'integer' or row.edit_type == 'decimal' %}number{% else %}text{% endif %}"
+                 {% if row.edit_type == "integer" %}step="1" min="0"{% elif row.edit_type == "decimal" %}step="0.01" min="0"{% endif %}
+                 value="{% if row.selected == 'edited' %}{{ row.edited_input }}{% endif %}"
+                 placeholder="Correction"
+                 aria-label="Correction for {{ row.label }}">
+        {% endif %}
+      </div>
+      <input form="reconciliation-form" type="hidden" name="edit__{{ row.decision_key }}" value="{{ row.edited_input }}">
+      <input form="reconciliation-form" type="hidden" name="edit_base__{{ row.decision_key }}" value="{{ row.edited_base }}">
+    </div>
+  {% else %}
+    <div class="form-choices">
+      <div class="form-choice comparison-source-value comparison-source-value-baseline" data-source-cell="baseline">
+        <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=baseline_source %}</span>
+        <span class="form-choice-value comparison-value-{{ row.left.kind }}">{{ row.left.text }}</span>
+      </div>
+      <div class="form-choice comparison-source-value comparison-source-value-comparison" data-source-cell="comparison">
+        <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=comparison_source %}</span>
+        <span class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</span>
+      </div>
+    </div>
+  {% endif %}
+</div>

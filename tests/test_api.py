@@ -10,6 +10,8 @@ from tests.factories import (
     DenominationFactory,
     MembershipFactory,
     ReligiousBodyFactory,
+    ScheduleTranscriptionFactory,
+    TranscriptionRunFactory,
 )
 
 
@@ -30,20 +32,35 @@ def test_religious_body_list_uses_bounded_queries(client):
 
 @pytest.mark.django_db
 def test_religious_body_list_preserves_nested_response(client):
-    ai_transcription = {
+    agent_transcription = {
         "schedule_fields": {"schedule_id": "AI-123"},
         "religious_bodies": [{"name": "AI Church"}],
         "clergy": [],
+        "ai_notes": "The total is difficult to read.",
     }
     human_transcription = {
         "schedule_fields": {"schedule_id": "HUMAN-123"},
         "religious_bodies": [{"name": "Human Church"}],
         "clergy": [],
     }
-    schedule = CensusScheduleFactory(
-        ai_transcription=ai_transcription,
-        human_transcription=human_transcription,
-        ai_notes="The total is difficult to read.",
+    schedule = CensusScheduleFactory()
+    human_run = TranscriptionRunFactory(
+        key="human-snapshot",
+        kind="human_snapshot",
+    )
+    agent_run = TranscriptionRunFactory(
+        key="walter-gemini-2026-08-26",
+        kind="agent",
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=human_run,
+        data=human_transcription,
+    )
+    ScheduleTranscriptionFactory(
+        census_schedule=schedule,
+        run=agent_run,
+        data=agent_transcription,
     )
     body = ReligiousBodyFactory(census_record=schedule)
     MembershipFactory(
@@ -58,31 +75,32 @@ def test_religious_body_list_preserves_nested_response(client):
     result = response.json()["results"][0]
     assert result["membership_details"]["total_members"] == 125
     assert result["pastors"][0]["name"] == "Rev. Example"
-    assert result["transcription"] == {
-        "status": schedule.transcription_status,
-        "ai": ai_transcription,
-        "human": human_transcription,
-        "ai_notes": "The total is difficult to read.",
-    }
+    assert result["transcriptions"] == [
+        {
+            "key": "human-snapshot",
+            "kind": "human_snapshot",
+            "data": human_transcription,
+        },
+        {
+            "key": "walter-gemini-2026-08-26",
+            "kind": "agent",
+            "data": agent_transcription,
+        },
+    ]
     assert "transcription_status" not in result
     assert "ai_transcription" not in result
     assert "human_transcription" not in result
+    assert "transcription" not in result
 
 
 @pytest.mark.django_db
-def test_religious_body_transcriptions_are_null_when_unavailable(client):
-    ReligiousBodyFactory(
-        census_record=CensusScheduleFactory(
-            ai_transcription=None,
-            human_transcription=None,
-        )
-    )
+def test_religious_body_transcriptions_are_empty_when_unavailable(client):
+    ReligiousBodyFactory(census_record=CensusScheduleFactory())
 
     response = client.get(reverse("religiousbody-list"))
 
     result = response.json()["results"][0]
-    assert result["transcription"]["ai"] is None
-    assert result["transcription"]["human"] is None
+    assert result["transcriptions"] == []
 
 
 @pytest.mark.django_db
@@ -104,7 +122,7 @@ def test_map_view_uses_smaller_payload_and_fewer_queries(client):
     assert "location_details" in result
     assert "membership_details" in result
     assert "pastors" not in result
-    assert result["transcription"] == {"status": schedule.transcription_status}
+    assert "transcriptions" not in result
 
 
 @pytest.mark.django_db
@@ -182,7 +200,7 @@ def test_api_root_uses_live_totals_and_documents_current_filters(client):
     assert "has_location (boolean)" in filters
     assert "page (integer, default page size 100)" in filters
     response_notes = data["endpoints"]["religious_bodies"]["response_notes"]
-    assert "transcription" in response_notes
+    assert "transcriptions" in response_notes
     assert "ai_transcription" not in response_notes
     assert "human_transcription" not in response_notes
 
@@ -198,4 +216,4 @@ def test_api_documentation_describes_current_contract(client):
     assert '<span class="param-name">has_location</span>' in content
     assert '<span class="param-name">ordering</span>' in content
     assert '"pastors": [{' in content
-    assert '"transcription": {' in content
+    assert '"transcriptions": [' in content

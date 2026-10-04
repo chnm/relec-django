@@ -144,6 +144,7 @@ celerybeat.pid
 
 # Environments
 .env
+.claude_key
 .venv
 env/
 venv/
@@ -301,3 +302,4 @@ relec-website/
 
 # Data fixture dumps live in object storage, not the repo (LFS budget)
 census/fixtures/*.json
+prompt.md
