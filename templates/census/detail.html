@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static thumbnail %}
+{% load static census_thumbnails %}
 
 {% block title %}{{ census_record.schedule_title|default:"Census Record" }} - Detail{% endblock %}
 
@@ -232,9 +232,22 @@
                     <h2 class="text-lg font-semibold text-content-primary mb-4">Original Census Image</h2>
                     <div class="image-viewer">
                         {% if census_record.original_image %}
-                            <img src="{% thumbnail census_record.original_image 'large' %}"
-                                 alt="Archival image of census schedule {{ census_record.resource_id }}. See the transcription below for the contents of this document."
-                                 class="w-full h-auto">
+                            {% existing_thumbnail_url census_record.original_image 'large' as thumb_url %}
+                            {% if thumb_url %}
+                                <img src="{{ thumb_url }}"
+                                     alt="Archival image of census schedule {{ census_record.resource_id }}. See the transcription below for the contents of this document."
+                                     class="w-full h-auto">
+                            {% else %}
+                                <div class="image-placeholder">
+                                    <div class="text-center">
+                                        <svg class="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <div class="text-lg font-medium mb-2">Preview Not Yet Available</div>
+                                        <div class="text-sm">Use the link below to view the original image</div>
+                                    </div>
+                                </div>
+                            {% endif %}
                             <div class="p-4 bg-gray-50 text-sm text-content-tertiary">
                                 <a href="{{ census_record.original_image.url }}"
                                    target="_blank"

@@ -1,3 +1,4 @@
+import importlib.util
 import mimetypes
 import os
 from pathlib import Path
@@ -34,6 +35,17 @@ SECRET_KEY = env(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
+
+# Only the trusted Gateway supplies this header; pods are not publicly exposed.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
+# Subdomain and preload scope belong to the parent domain owner; the site
+# frames its own pages, so X_FRAME_OPTIONS stays SAMEORIGIN (below).
+SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W019", "security.W021"]
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost"])
 CSRF_TRUSTED_ORIGINS = env.list(
@@ -185,7 +197,9 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 # ------------------------------------------------------------------------------
 # django-debug-toolbar
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#prerequisites
-if DEBUG:
+# The image installs no dev dependencies, so DEBUG=True there runs without it.
+DEBUG_TOOLBAR = DEBUG and importlib.util.find_spec("debug_toolbar") is not None
+if DEBUG_TOOLBAR:
     INSTALLED_APPS += ["debug_toolbar"]
     # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#middleware
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
@@ -238,6 +252,10 @@ DATABASES = {
         "CONN_HEALTH_CHECK": True,
     }
 }
+# The migrate Job sets this so a migration blocked behind the nightly pg_dump
+# fails and retries instead of holding the app's queries behind its lock.
+if DB_LOCK_TIMEOUT := env("DB_LOCK_TIMEOUT", default=""):
+    DATABASES["default"]["OPTIONS"] = {"options": f"-c lock_timeout={DB_LOCK_TIMEOUT}"}
 
 
 # Password validation
@@ -296,21 +314,27 @@ STORAGES = {
 }
 
 # Media files
-OBJ_STORAGE = env("OBJ_STORAGE", default=False)
+MEDIA_URL = "/media/"
+OBJ_STORAGE = env.bool("OBJ_STORAGE", default=False)
 if OBJ_STORAGE:
     AWS_ACCESS_KEY_ID = env("OBJ_STORAGE_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = env("OBJ_STORAGE_SECRET_ACCESS_KEY")
     AWS_STORAGE_BUCKET_NAME = env("OBJ_STORAGE_BUCKET_NAME")
     AWS_S3_ENDPOINT_URL = env("OBJ_STORAGE_ENDPOINT_URL")
+    # Garage signs requests with its own region name and serves dotted bucket
+    # names only with path-style addressing.
+    AWS_S3_REGION_NAME = env("OBJ_STORAGE_REGION", default=None)
+    AWS_S3_ADDRESSING_STYLE = "path"
+    # Browsers never see the bucket: the pod's Caddy sidecar proxies
+    # https://<APP_FQDN>/media/<key> to Garage's internal web endpoint, so
+    # URLs are unsigned and same-origin.
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_CUSTOM_DOMAIN = f"{env('APP_FQDN', default='localhost')}/media"
 
-    MEDIA_URL = f"{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/"
-
-    # override default storage backend for media
     STORAGES["default"] = {
         "BACKEND": "storages.backends.s3.S3Storage",
     }
 else:
-    MEDIA_URL = "media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "mediafiles")
 
 # Default primary key field type
@@ -318,12 +342,14 @@ else:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Easy Thumbnails Configuration
+# Only aliases that templates actually render — every alias here is
+# generated for every uploaded image (saved_file signal +
+# generate_thumbnails command), and adding one later means re-downloading
+# every original to backfill it.
 THUMBNAIL_ALIASES = {
     "": {
-        "admin_thumbnail": {"size": (100, 75), "crop": True},
-        "small": {"size": (200, 150), "crop": True},
-        "medium": {"size": (400, 300), "crop": False},
-        "large": {"size": (800, 600), "crop": False},
+        "medium": {"size": (400, 300), "crop": False},  # census browser list
+        "large": {"size": (800, 600), "crop": False},  # record detail page
     },
 }
 

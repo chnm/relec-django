@@ -20,6 +20,12 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 
 @pytest.fixture(autouse=True)
+def _plain_http(settings):
+    """The test client speaks plain HTTP; production redirects it to HTTPS."""
+    settings.SECURE_SSL_REDIRECT = False
+
+
+@pytest.fixture(autouse=True)
 def _clear_cache():
     """Clear cache before and after every test to avoid cross-test pollution."""
     django_cache.clear()

@@ -1,3 +1,0 @@
-census/fixtures/census.json filter=lfs diff=lfs merge=lfs -text
-census/fixtures/denomination.json filter=lfs diff=lfs merge=lfs -text
-census/fixtures/location.json filter=lfs diff=lfs merge=lfs -text

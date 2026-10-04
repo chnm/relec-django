@@ -1,0 +1,35 @@
+---
+# This app's own outbound services. DNS + same-namespace isolation, the backup
+# egress and the app pod's Garage access (media-garage) come from the
+# k8s-django components.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: external-services
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  endpointSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [app, transcription-worker] }
+  egress:
+    - toFQDNs:
+        - { matchName: api.anthropic.com }
+      toPorts:
+        - ports: [{ port: "443", protocol: TCP }]
+---
+# The worker reads schedule images over the S3 API; media-garage covers only
+# the app pod.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: worker-garage
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app: transcription-worker
+  egress:
+    - toFQDNs:
+        - { matchName: obj.rrchnm.internal }
+      toPorts:
+        - ports: [{ port: "3900", protocol: TCP }]
