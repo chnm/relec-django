@@ -19,7 +19,7 @@ jobs:
   deployment:
     permissions:
       contents: write   # the reusable pins the digest back to this repository
-    uses: chnm/.github/.github/workflows/django--k0s.yml@06668f535ac81803f564e0511642dd31affe4bfb # pinned; bump deliberately
+    uses: chnm/.github/.github/workflows/django--k0s.yml@33481c3e14d9ca408396865acec1ca1b3664110d # pinned; bump deliberately
     with:
       image: rrchnm/relec-django
       # Argo CD tracks main. Pull requests (into main or preview) only build.
