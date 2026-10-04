@@ -9,7 +9,7 @@ metadata:
   annotations: { argocd.argoproj.io/sync-wave: "-2" }
 data:
   APP: relec-django
-  FQDN: dev.religiousecologies.org
+  FQDN: religiousecologies.org
   DB_NAME: releco
   DB_USER: releco
   APP_SECRET: eso/relec-django

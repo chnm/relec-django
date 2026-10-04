@@ -3,7 +3,7 @@ name: Django CI and k0s deployment
 on:
   workflow_dispatch:
   push:
-    branches: [main, preview]
+    branches: [main]
     paths-ignore: [k8s/kustomization.yaml]
   pull_request:
     branches: [main, preview]
@@ -22,8 +22,7 @@ jobs:
     uses: chnm/.github/.github/workflows/django--k0s.yml@6e731b92c14048272c279f929cf86306240510c8 # pinned; bump deliberately
     with:
       image: rrchnm/relec-django
-      # Argo CD tracks preview until cutover, then main. Any other branch only
-      # builds; the reusable publishes and pins only when the push is on `ref`.
-      ref: ${{ github.ref_name == 'main' && 'main' || 'preview' }}
+      # Argo CD tracks main. Pull requests (into main or preview) only build.
+      ref: main
     secrets:
       ZOT_TOKEN: ${{ secrets.ZOT_TOKEN }}
