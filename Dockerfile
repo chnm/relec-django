@@ -6,6 +6,8 @@ WORKDIR /app
 COPY . .
 RUN cd theme/static_src && npm ci && npm run build
 
+FROM stagex/core-go:sx2026.06.0@sha256:cb940590e2f59d1c87291b15a94ff425a5fdaf55fa07bb65badfde9b956bf262 AS zoneinfo
+
 FROM stagex/pallet-python:sx2026.06.0@sha256:8b238a3f0ee6a4d30fb5a081868d910d8b90362d33ae6674ab6d548d8c9f0fd7 AS base
 COPY --from=uv /uv /uvx /bin/
 # UV_PYTHON: use the base image's interpreter instead of the .python-version pin.
@@ -17,6 +19,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PYTHON=/usr/bin/python \
     UV_PROJECT_ENVIRONMENT=/venv \
     PATH=/venv/bin:$PATH
+# StageX ships no zoneinfo; TIME_ZONE needs it. Unpacked from Go's copy so no
+# tzdata dependency is added; Python's zoneinfo reads /usr/share/zoneinfo first.
+COPY --from=zoneinfo /usr/lib/go/lib/time/zoneinfo.zip /tmp/zoneinfo.zip
+RUN python -c "import zipfile; zipfile.ZipFile('/tmp/zoneinfo.zip').extractall('/usr/share/zoneinfo')" \
+    && rm /tmp/zoneinfo.zip
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
