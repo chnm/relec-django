@@ -41,6 +41,9 @@ configMapGenerator:
                   # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
                   # exec fails under no_new_privs unless the cap is grantable
                   # (infra k0s/vibes/irc/relay-client.yaml).
+                # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
+                # exec fails under no_new_privs unless the cap is grantable
+                # (infra k0s/vibes/irc/relay-client.yaml).
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -150,5 +153,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/relec-django
-- digest: sha256:f452488a6a8f83265ceff5db04d8487d6aedaa210ddbed507a5efdac9d1fa82f
+- digest: sha256:8f130137e3e5e84ad073dd284623c47510bd181130ae7a12111c55ed965a979e
   name: oci.rrchnm.internal/rrchnm/relec-django
