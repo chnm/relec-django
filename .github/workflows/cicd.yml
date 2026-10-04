@@ -19,10 +19,12 @@ jobs:
   deployment:
     permissions:
       contents: write   # the reusable pins the digest back to this repository
-    uses: chnm/.github/.github/workflows/django--k0s.yml@6e731b92c14048272c279f929cf86306240510c8 # pinned; bump deliberately
+    uses: chnm/.github/.github/workflows/django--k0s.yml@06668f535ac81803f564e0511642dd31affe4bfb # pinned; bump deliberately
     with:
       image: rrchnm/relec-django
       # Argo CD tracks main. Pull requests (into main or preview) only build.
       ref: main
     secrets:
       ZOT_TOKEN: ${{ secrets.ZOT_TOKEN }}
+      # Org pin GitHub App: main's ruleset lets it push the digest pin.
+      PIN_APP_PRIVATE_KEY: ${{ secrets.PIN_APP_PRIVATE_KEY }}
