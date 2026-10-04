@@ -19,5 +19,8 @@ spec:
     - filters:
         - type: RequestRedirect
           requestRedirect:
+            # Explicit scheme (and so its default port), or the Location header
+            # carries :443.
+            scheme: https
             hostname: religiousecologies.org
             statusCode: 301
