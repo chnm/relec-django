@@ -4,122 +4,143 @@ kind: Kustomization
 namespace: relec
 
 resources:
-  - app-deploy.yaml
-  - netpol.yaml
-  - transcription-worker.yaml
+- app-deploy.yaml
+- netpol.yaml
+- transcription-worker.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
 # Pinned by commit; bump every ref together. Media lives in Garage, so no
 # media component.
 components:
-  - https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=2c95a94d48b568d33430da42aad066fc65b9831d
-  - https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=2c95a94d48b568d33430da42aad066fc65b9831d
-  - https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=2c95a94d48b568d33430da42aad066fc65b9831d
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
-configMapGenerator:
-  - name: app-env
-    literals:
-      - OBJ_STORAGE=True
-      - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
-      - OBJ_STORAGE_REGION=rrchnm
-      - OBJ_STORAGE_BUCKET_NAME=religiousecologies.org
       # Both the web pod (launches runs) and the worker read this
       # (docs/AI_TRANSCRIPTION.md); ANTHROPIC_API_KEY comes from kv/eso/relec-django.
-      - CLAUDE_TRANSCRIPTION_ENABLED=True
-    options:
-      annotations: { argocd.argoproj.io/sync-wave: "-2" }
-  - name: media-caddy
-    files:
-      - Caddyfile
-    options:
-      annotations: { argocd.argoproj.io/sync-wave: "-2" }
+configMapGenerator:
+- literals:
+  - OBJ_STORAGE=True
+  - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
+  - OBJ_STORAGE_REGION=rrchnm
+  - OBJ_STORAGE_BUCKET_NAME=religiousecologies.org
+  - CLAUDE_TRANSCRIPTION_ENABLED=True
+  name: app-env
+  options:
+    annotations:
+      argocd.argoproj.io/sync-wave: "-2"
+- files:
+  - Caddyfile
+  name: media-caddy
+  options:
+    annotations:
+      argocd.argoproj.io/sync-wave: "-2"
 
-patches:
   # Media sidecar: same-origin /media/ proxied to the Garage bucket (Caddyfile).
-  - target: { kind: Deployment, name: app }
-    patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata: { name: app }
-      spec:
-        template:
-          spec:
-            containers:
-              - name: app
-                resources:
-                  requests: { cpu: 100m, memory: 256Mi }
-                  limits: { cpu: "1", memory: 1Gi }
-              - name: media
-                image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
-                args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
-                ports:
-                  - { name: media, containerPort: 8081 }
-                env:
-                  - { name: XDG_CONFIG_HOME, value: /tmp/config }
-                  - { name: XDG_DATA_HOME, value: /tmp/data }
-                readinessProbe:
-                  tcpSocket: { port: media }
-                  periodSeconds: 10
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  readOnlyRootFilesystem: true
                   # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
                   # exec fails under no_new_privs unless the cap is grantable
                   # (infra k0s/vibes/irc/relay-client.yaml).
-                  capabilities: { drop: [ALL], add: [NET_BIND_SERVICE] }
-                resources:
-                  requests: { cpu: 10m, memory: 32Mi }
-                  limits: { cpu: 500m, memory: 128Mi }
-                volumeMounts:
-                  - { name: media-tmp, mountPath: /tmp }
-                  - { name: media-caddy, mountPath: /etc/caddy, readOnly: true }
-            volumes:
-              - { name: media-tmp, emptyDir: {} }
-              - name: media-caddy
-                configMap: { name: media-caddy }
-  - target: { kind: Service, name: app }
-    patch: |-
-      - op: add
-        path: /spec/ports/-
-        value: { name: media, port: 8081, targetPort: media, protocol: TCP }
-  - target: { kind: HTTPRoute, name: app }
-    patch: |-
-      - op: add
-        path: /spec/rules/-
-        value:
-          matches:
-            - path: { type: PathPrefix, value: /media/ }
-          backendRefs:
-            - { group: "", kind: Service, name: app, port: 8081, weight: 1 }
-  - target: { kind: Job, name: migrate }
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/command
-        value: ["sh", "-c", "python manage.py migrate --noinput && python manage.py setup_transcription_groups"]
-  - target: { kind: StatefulSet, name: postgres }
-    patch: |-
-      - op: replace
-        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
-        value: 10Gi
-  - target: { kind: CronJob, name: postgres-backup }
-    patch: |-
-      - op: replace
-        path: /spec/schedule
-        value: "15 3 * * *"
+patches:
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: { name: app }
+    spec:
+      template:
+        spec:
+          containers:
+            - name: app
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { cpu: "1", memory: 1Gi }
+            - name: media
+              image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+              args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+              ports:
+                - { name: media, containerPort: 8081 }
+              env:
+                - { name: XDG_CONFIG_HOME, value: /tmp/config }
+                - { name: XDG_DATA_HOME, value: /tmp/data }
+              readinessProbe:
+                tcpSocket: { port: media }
+                periodSeconds: 10
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
+                # exec fails under no_new_privs unless the cap is grantable
+                # (infra k0s/vibes/irc/relay-client.yaml).
+                capabilities: { drop: [ALL], add: [NET_BIND_SERVICE] }
+              resources:
+                requests: { cpu: 10m, memory: 32Mi }
+                limits: { cpu: 500m, memory: 128Mi }
+              volumeMounts:
+                - { name: media-tmp, mountPath: /tmp }
+                - { name: media-caddy, mountPath: /etc/caddy, readOnly: true }
+          volumes:
+            - { name: media-tmp, emptyDir: {} }
+            - name: media-caddy
+              configMap: { name: media-caddy }
+  target:
+    kind: Deployment
+    name: app
+- patch: |-
+    - op: add
+      path: /spec/ports/-
+      value: { name: media, port: 8081, targetPort: media, protocol: TCP }
+  target:
+    kind: Service
+    name: app
+- patch: |-
+    - op: add
+      path: /spec/rules/-
+      value:
+        matches:
+          - path: { type: PathPrefix, value: /media/ }
+        backendRefs:
+          - { group: "", kind: Service, name: app, port: 8081, weight: 1 }
+  target:
+    kind: HTTPRoute
+    name: app
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value: ["sh", "-c", "python manage.py migrate --noinput && python manage.py setup_transcription_groups"]
+  target:
+    kind: Job
+    name: migrate
+- patch: |-
+    - op: replace
+      path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+      value: 10Gi
+  target:
+    kind: StatefulSet
+    name: postgres
+- patch: |-
+    - op: replace
+      path: /spec/schedule
+      value: "15 3 * * *"
+  target:
+    kind: CronJob
+    name: postgres-backup
 
 # Copy the pinned digest into IMAGE_DIGEST. Must live here: replacements in
 # components run before `images:` below.
 replacements:
-  - source:
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].image
+    kind: Deployment
+    name: app
+    options:
+      delimiter: '@'
+      index: 1
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=app].env.[name=IMAGE_DIGEST].value
+    select:
       kind: Deployment
       name: app
-      fieldPath: spec.template.spec.containers.[name=app].image
-      options: { delimiter: "@", index: 1 }
-    targets:
-      - select: { kind: Deployment, name: app }
-        fieldPaths:
-          - spec.template.spec.containers.[name=app].env.[name=IMAGE_DIGEST].value
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
@@ -127,7 +148,7 @@ replacements:
 # image. Keep that the only `digest:` line; the first preview build replaces
 # the placeholder.
 images:
-  - name: app
-    newName: oci.rrchnm.internal/rrchnm/relec-django
-  - name: oci.rrchnm.internal/rrchnm/relec-django
-    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+- name: app
+  newName: oci.rrchnm.internal/rrchnm/relec-django
+- digest: sha256:f452488a6a8f83265ceff5db04d8487d6aedaa210ddbed507a5efdac9d1fa82f
+  name: oci.rrchnm.internal/rrchnm/relec-django
