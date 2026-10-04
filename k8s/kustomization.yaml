@@ -24,6 +24,9 @@ configMapGenerator:
       - OBJ_STORAGE_ENDPOINT_URL=http://obj.rrchnm.internal:3900
       - OBJ_STORAGE_REGION=rrchnm
       - OBJ_STORAGE_BUCKET_NAME=religiousecologies.org
+      # Both the web pod (launches runs) and the worker read this
+      # (docs/AI_TRANSCRIPTION.md); ANTHROPIC_API_KEY comes from kv/eso/relec-django.
+      - CLAUDE_TRANSCRIPTION_ENABLED=True
     options:
       annotations: { argocd.argoproj.io/sync-wave: "-2" }
   - name: media-caddy
