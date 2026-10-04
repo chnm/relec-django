@@ -25,11 +25,7 @@ services:
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
       - DB_PASS=password
-      - OBJ_STORAGE=True
-      - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
-      - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
-      - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
-      - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+      - OBJ_STORAGE=False
       - MEMCACHED_URL=memcached:11211
       - APPLICATION_REVISION=${APPLICATION_REVISION:-}
       - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
@@ -37,8 +33,18 @@ services:
       - CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=${CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS:-10000}
       - CLAUDE_TRANSCRIPTION_PRICING
     command: >
-      sh -c "uv run manage.py migrate &&
-             uv run manage.py runserver 0.0.0.0:8000"
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/', timeout=4).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
@@ -65,16 +71,12 @@ services:
       - DB_NAME=religious_ecologies
       - DB_USER=religious_ecologies
       - DB_PASS=password
-      - OBJ_STORAGE=True
-      - OBJ_STORAGE_ACCESS_KEY_ID=PLACEHOLDER
-      - OBJ_STORAGE_SECRET_ACCESS_KEY=PLACEHOLDER
-      - OBJ_STORAGE_BUCKET_NAME=PLACEHOLDER
-      - OBJ_STORAGE_ENDPOINT_URL=https://dev.obj.rrchnm.org
+      - OBJ_STORAGE=False
       - MEMCACHED_URL=memcached:11211
       - APPLICATION_REVISION=${APPLICATION_REVISION:-}
       - CLAUDE_TRANSCRIPTION_ENABLED=${CLAUDE_TRANSCRIPTION_ENABLED:-False}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    command: uv run manage.py run_transcription_worker --idle-when-disabled
+    command: python manage.py run_transcription_worker --idle-when-disabled
     healthcheck:
       test:
         - CMD

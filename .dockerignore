@@ -20,3 +20,8 @@ compose.yml.j2
 compose.yaml.j2
 
 census/fixtures/
+
+node_modules/
+.venv/
+staticfiles/
+mediafiles/

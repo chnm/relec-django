@@ -1,32 +1,29 @@
-name: "Build and Publish, Deploy Docker Image"
+name: Django CI and k0s deployment
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - "main"
-      - "preview"
-    paths:
-      - "**"
-      - "!.github/**"
+    branches: [main, preview]
+    paths-ignore: [k8s/kustomization.yaml]
+  pull_request:
+    branches: [main, preview]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-publish:
-    uses: chnm/.github/.github/workflows/django--build-publish.yml@main
-    secrets: inherit
+  deployment:
+    permissions:
+      contents: write   # the reusable pins the digest back to this repository
+    uses: chnm/.github/.github/workflows/django--k0s.yml@6e731b92c14048272c279f929cf86306240510c8 # pinned; bump deliberately
     with:
-      container-registry: "ghcr.io"
-      container-image-name: "religious-ecologies"
-
-      django-context-root: "."
-
-      website-devl-fqdn: "dev.religiousecologies.org"
-      website-prod-fqdn: "religiousecologies.org"
-
-  deploy:
-    uses: chnm/.github/.github/workflows/django--deploy.yml@main
-    needs: [build-publish]
-    secrets: inherit
-    with:
-      website-devl-fqdn: "dev.religiousecologies.org"
-      website-prod-fqdn: "religiousecologies.org"
+      image: rrchnm/relec-django
+      # Argo CD tracks preview until cutover, then main. Any other branch only
+      # builds; the reusable publishes and pins only when the push is on `ref`.
+      ref: ${{ github.ref_name == 'main' && 'main' || 'preview' }}
+    secrets:
+      ZOT_TOKEN: ${{ secrets.ZOT_TOKEN }}

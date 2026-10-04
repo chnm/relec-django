@@ -1,0 +1,66 @@
+---
+# Claude batch transcription worker. It idles until transcription is enabled
+# in the admin. Same pod contract and env as the k8s-django app Deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcription-worker
+  labels: { app: transcription-worker }
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: transcription-worker }
+  template:
+    metadata:
+      labels: { app: transcription-worker }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: app
+          command: ["python", "manage.py", "run_transcription_worker", "--idle-when-disabled"]
+          envFrom:
+            - configMapRef: { name: app-env, optional: true }
+            - secretRef: { name: app }
+          env:
+            - { name: DEBUG, value: "False" }
+            - name: APP_FQDN
+              valueFrom: { configMapKeyRef: { name: app-deploy, key: FQDN } }
+            - { name: DB_HOST, value: postgres }
+            - { name: DB_PORT, value: "5432" }
+            - name: DB_NAME
+              valueFrom: { configMapKeyRef: { name: app-deploy, key: DB_NAME } }
+            - name: DB_USER
+              valueFrom: { configMapKeyRef: { name: app-deploy, key: DB_USER } }
+            - { name: DJANGO_ALLOWED_HOSTS, value: "$(APP_FQDN)" }
+          # The worker touches this file on every loop.
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os,sys,time; p='/tmp/transcription-worker-alive'; sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 600 else 1)"
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          # Sized so an app rollout's surge pod still fits the namespace quota
+          # (k8s-django components/app/quota.yaml: 1Gi requests, 4Gi limits).
+          resources:
+            requests: { cpu: 25m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
