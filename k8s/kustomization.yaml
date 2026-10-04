@@ -12,10 +12,10 @@ resources:
 # Pinned by commit; bump every ref together. media-garage serves the Garage
 # bucket (app-deploy MEDIA_BUCKET) same-origin at /media/.
 components:
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/media-garage?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=33694f00607a0413ec9e60d665c5b445c875f4cb
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=33694f00607a0413ec9e60d665c5b445c875f4cb
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=33694f00607a0413ec9e60d665c5b445c875f4cb
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/media-garage?ref=33694f00607a0413ec9e60d665c5b445c875f4cb
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
 # CLAUDE_TRANSCRIPTION_ENABLED is read by both the web pod (launches runs) and
