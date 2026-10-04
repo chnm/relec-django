@@ -133,17 +133,20 @@ DB_PORT=5432
 DB_NAME=religious_ecologies
 DB_USER=religious_ecologies
 DB_PASS=yourpassword
-SECRET_KEY=your-django-secret-key
+DJANGO_SECRET_KEY=your-django-secret-key
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
 Optional environment variables:
 ```
-OBJ_STORAGE=s3              # Enable S3 media storage
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_STORAGE_BUCKET_NAME=...
+OBJ_STORAGE=True            # S3 (Garage) media storage; media URLs become https://$APP_FQDN/media/<key>
+OBJ_STORAGE_ACCESS_KEY_ID=...
+OBJ_STORAGE_SECRET_ACCESS_KEY=...
+OBJ_STORAGE_BUCKET_NAME=...
+OBJ_STORAGE_ENDPOINT_URL=...
+OBJ_STORAGE_REGION=...
+APP_FQDN=...
 ```
 
 ```bash
@@ -550,14 +553,14 @@ make preview
 - Served by Django's `runserver` from `STATICFILES_DIRS`
 - After changes to Tailwind, run: `uv run python manage.py tailwind build`
 
-**Production:**
-```bash
-uv run python manage.py collectstatic
-# Deploy via Daphne or gunicorn with a reverse proxy (nginx)
-```
-- Static files served by WhiteNoise
-- Media files: local filesystem or S3 (set `OBJ_STORAGE=s3`)
-- Configure `ALLOWED_HOSTS`, `DEBUG=False`, and a strong `SECRET_KEY`
+**Production:** k0s via Argo CD, using the `k8s/` overlay built on the
+`rrchnm-systems/k8s-django` components. CI (`.github/workflows/cicd.yml`)
+publishes the image to `oci.rrchnm.internal/rrchnm/relec-django` and pins its
+digest in `k8s/kustomization.yaml`.
+- Daphne serves the app; static files are served by WhiteNoise
+- Media live in the Garage bucket `religiousecologies.org`; a Caddy sidecar
+  serves them same-origin at `/media/` (`k8s/Caddyfile`)
+- Secrets come from OpenBao (`kv/eso/relec-django`) through ExternalSecrets
 
 **Docker:**
 ```bash

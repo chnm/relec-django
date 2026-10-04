@@ -1,0 +1,27 @@
+---
+# The app's own outbound services. DNS + same-namespace isolation and the
+# backup egress come from the k8s-django components.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: external-services
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  endpointSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [app, transcription-worker] }
+  egress:
+    # Garage nodes (obj./garage.rrchnm.internal): S3 API for Django, web
+    # endpoint for the media sidecar; plaintext on the internal LAN.
+    - toCIDRSet:
+        - cidr: 10.112.113.223/32   # brahma
+        - cidr: 10.112.12.225/32    # vishnu
+        - cidr: 10.112.12.224/32    # shiva
+      toPorts:
+        - ports:
+            - { port: "3900", protocol: TCP }
+            - { port: "3902", protocol: TCP }
+    - toFQDNs:
+        - { matchName: api.anthropic.com }
+      toPorts:
+        - ports: [{ port: "443", protocol: TCP }]
