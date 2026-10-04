@@ -16,7 +16,10 @@ spec:
   hostnames:
     - www.religiousecologies.org
   rules:
-    - filters:
+    # Explicit match (the API-server default) so Argo doesn't perma-diff.
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      filters:
         - type: RequestRedirect
           requestRedirect:
             # Explicit scheme (and so its default port), or the Location header
