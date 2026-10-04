@@ -9,16 +9,18 @@ resources:
 - transcription-worker.yaml
 
 # Shared Django deployment: https://forge.rrchnm.internal/rrchnm-systems/k8s-django
-# Pinned by commit; bump every ref together. Media lives in Garage, so no
-# media component.
+# Pinned by commit; bump every ref together. media-garage serves the Garage
+# bucket (app-deploy MEDIA_BUCKET) same-origin at /media/.
 components:
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=2c95a94d48b568d33430da42aad066fc65b9831d
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=2c95a94d48b568d33430da42aad066fc65b9831d
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=2c95a94d48b568d33430da42aad066fc65b9831d
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/media-garage?ref=8ebdd43272c19d55d4cf618a155bb5ac5e78b099
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
-      # Both the web pod (launches runs) and the worker read this
-      # (docs/AI_TRANSCRIPTION.md); ANTHROPIC_API_KEY comes from kv/eso/relec-django.
+# CLAUDE_TRANSCRIPTION_ENABLED is read by both the web pod (launches runs) and
+# the worker (docs/AI_TRANSCRIPTION.md); ANTHROPIC_API_KEY comes from
+# kv/eso/relec-django.
 configMapGenerator:
 - literals:
   - OBJ_STORAGE=True
@@ -30,20 +32,9 @@ configMapGenerator:
   options:
     annotations:
       argocd.argoproj.io/sync-wave: "-2"
-- files:
-  - Caddyfile
-  name: media-caddy
-  options:
-    annotations:
-      argocd.argoproj.io/sync-wave: "-2"
 
-  # Media sidecar: same-origin /media/ proxied to the Garage bucket (Caddyfile).
-                  # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
-                  # exec fails under no_new_privs unless the cap is grantable
-                  # (infra k0s/vibes/irc/relay-client.yaml).
-                # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
-                # exec fails under no_new_privs unless the cap is grantable
-                # (infra k0s/vibes/irc/relay-client.yaml).
+# App resources, the migrate command, Postgres size (immutable after the first
+# sync) and a backup slot clear of the other apps.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -57,54 +48,8 @@ patches:
               resources:
                 requests: { cpu: 100m, memory: 256Mi }
                 limits: { cpu: "1", memory: 1Gi }
-            - name: media
-              image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
-              args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
-              ports:
-                - { name: media, containerPort: 8081 }
-              env:
-                - { name: XDG_CONFIG_HOME, value: /tmp/config }
-                - { name: XDG_DATA_HOME, value: /tmp/data }
-              readinessProbe:
-                tcpSocket: { port: media }
-                periodSeconds: 10
-              securityContext:
-                allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
-                # The image sets cap_net_bind_service=+ep on /usr/bin/caddy;
-                # exec fails under no_new_privs unless the cap is grantable
-                # (infra k0s/vibes/irc/relay-client.yaml).
-                capabilities: { drop: [ALL], add: [NET_BIND_SERVICE] }
-              resources:
-                requests: { cpu: 10m, memory: 32Mi }
-                limits: { cpu: 500m, memory: 128Mi }
-              volumeMounts:
-                - { name: media-tmp, mountPath: /tmp }
-                - { name: media-caddy, mountPath: /etc/caddy, readOnly: true }
-          volumes:
-            - { name: media-tmp, emptyDir: {} }
-            - name: media-caddy
-              configMap: { name: media-caddy }
   target:
     kind: Deployment
-    name: app
-- patch: |-
-    - op: add
-      path: /spec/ports/-
-      value: { name: media, port: 8081, targetPort: media, protocol: TCP }
-  target:
-    kind: Service
-    name: app
-- patch: |-
-    - op: add
-      path: /spec/rules/-
-      value:
-        matches:
-          - path: { type: PathPrefix, value: /media/ }
-        backendRefs:
-          - { group: "", kind: Service, name: app, port: 8081, weight: 1 }
-  target:
-    kind: HTTPRoute
     name: app
 - patch: |-
     - op: replace
@@ -148,8 +93,7 @@ replacements:
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
 # `kustomize edit set image` and only updates an entry named after the real
-# image. Keep that the only `digest:` line; the first preview build replaces
-# the placeholder.
+# image. Keep that the only `digest:` line.
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/relec-django
