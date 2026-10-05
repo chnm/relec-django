@@ -139,7 +139,7 @@ SCHEDULE_FIELD_GROUPS = (
     (
         "Schedule",
         (
-            ("populated_place_id", "Matched populated place ID"),
+            ("populated_place_id", "City, town, village, etc."),
             ("num_assistant_pastors", "Number of assistant pastors"),
         ),
     ),

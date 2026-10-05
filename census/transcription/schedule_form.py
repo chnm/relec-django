@@ -9,14 +9,14 @@ from copy import deepcopy
 # (kind, field) -> (block, printed question number). Order here is form order.
 _PLACEMENT = {}
 for _block, _kind, _fields in (
-    ("schedule", "schedule", (("populated_place_id", ""),)),
+    ("schedule", "schedule", (("populated_place_id", "d"),)),
     (
         "header",
         "body",
         (
             ("division", "b"),
             ("name", "c"),
-            ("address", "d"),
+            ("address", ""),
             ("census_code", ""),
             ("urban_rural_code", ""),
         ),

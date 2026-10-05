@@ -1331,6 +1331,6 @@ def test_agent_verbatim_place_replaces_body_address(reviewer):
         s for s in preview["comparison"]["sections"]
         if s["title"].startswith("Religious body")
     )
-    row = next(r for r in body_section["rows"] if r["label"].startswith("City, town"))
-    assert row["label"] == "City, town, village, etc."
+    row = next(r for r in body_section["rows"] if r["field"] == "address")
+    assert row["label"] == "City, town, village (as written)"
     assert row["right"]["text"] == "Providence"
