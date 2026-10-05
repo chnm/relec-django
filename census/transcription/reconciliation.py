@@ -1106,6 +1106,13 @@ def _mixed_matched_entity(
     rows = []
     for field in fields:
         key = f"{token}.{field}"
+        if kind == "body" and field == "address" and key not in decisions:
+            # Line d as written is not shown on the review form; it follows
+            # the source the reviewer chose for line d's matched place.
+            place = used_decisions.get("schedule.populated_place_id")
+            if place is not None:
+                source = place["base"] if isinstance(place, dict) else place
+                decisions = {**decisions, key: source}
         # An absent current row shows "Not captured" but proposes None.
         current_value = current.get(field, MISSING)
         proposed[field] = _selected_value(

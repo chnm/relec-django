@@ -1197,7 +1197,7 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
 
 @pytest.mark.django_db
 def test_schedule_form_layout_places_every_decision_row_once():
-    from census.transcription.schedule_form import schedule_form_layout
+    from census.transcription.schedule_form import HIDDEN_ROWS, schedule_form_layout
 
     schedule = canonical_schedule()
     source = agent_source(schedule)
@@ -1228,6 +1228,7 @@ def test_schedule_form_layout_places_every_decision_row_once():
         if section["decision_scope"] != "automatic"
         for row in section["rows"]
         if row["decision_key"]
+        and (section["kind"], row["field"]) not in HIDDEN_ROWS
     ]
     assert form["other"] == []
     assert sorted(placed) == sorted(expected)
@@ -1332,5 +1333,29 @@ def test_agent_verbatim_place_replaces_body_address(reviewer):
         if s["title"].startswith("Religious body")
     )
     row = next(r for r in body_section["rows"] if r["field"] == "address")
-    assert row["label"] == "City, town, village (as written)"
     assert row["right"]["text"] == "Providence"
+
+
+@pytest.mark.django_db
+def test_hidden_address_follows_populated_place_decision():
+    schedule = canonical_schedule()
+    body = schedule.church_details.get()
+    source = agent_source(
+        schedule, agent_candidate(populated_place_verbatim="Providence")
+    )
+    key = f"body.{body.pk}.address"
+
+    for place_decision, source_used, expected in [
+        ("baseline", "baseline", "11 Old Street"),
+        ("comparison", "comparison", "Providence"),
+        ({"source": "edited", "base": "baseline", "value": ""}, "baseline", "11 Old Street"),
+    ]:
+        preview = build_reconciliation_preview(
+            schedule,
+            source,
+            decisions={"schedule.populated_place_id": place_decision},
+            mixed=True,
+            validate=False,
+        )
+        assert preview["proposed"]["religious_bodies"][0]["address"] == expected
+        assert preview["decisions"][key] == source_used
