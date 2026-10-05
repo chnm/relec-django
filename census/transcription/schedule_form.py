@@ -4,8 +4,9 @@ Decision keys and rows are untouched; this only decides where each row is
 drawn so the reviewer sees the same blocks and question numbers as the image.
 """
 
-import re
+import json
 from copy import deepcopy
+from pathlib import Path
 
 # (kind, field) -> (block, printed question number). Order here is form order.
 _PLACEMENT = {}
@@ -164,37 +165,13 @@ def _split(section):
     return panels
 
 
-# Gemini location keys embed the printed question: qc_church_name, q23a_...
-_LOCATION_NUMBER = re.compile(r"^q(\d+[ab]?|[a-f])_")
-_UNNUMBERED_LOCATIONS = {
-    "denomination_code": "census_code",
-    "urban_rural": "urban_rural_code",
+# Answer areas on the printed form, keyed like form rows; one template serves
+# every scan and source. ponytail: no per-scan alignment; add border
+# detection if a scan batch turns out cropped or scaled differently.
+FORM_TEMPLATE = {
+    key: box
+    for key, box in json.loads(
+        Path(__file__).with_name("form_template.json").read_text()
+    ).items()
+    if not key.startswith("_")
 }
-
-
-def field_boxes(*transcriptions):
-    """Map form-row keys (printed number, else field) to page boxes.
-
-    Boxes are ``[ymin, xmin, ymax, xmax]`` on a 0-1000 grid, taken from the
-    first transcription that carries ``_field_locations``.
-    """
-    locations = next(
-        (
-            t.data["_field_locations"]
-            for t in transcriptions
-            if t is not None and t.data.get("_field_locations")
-        ),
-        {},
-    )
-    boxes = {}
-    for path, box in locations.items():
-        # ponytail: assistant boxes (q30/q31) skipped; assistant clergy rows
-        # reuse numbers 28/29, so they highlight the principal pastor's box.
-        if path.startswith("assistant_pastors") or len(box) != 4:
-            continue
-        leaf = path.rsplit(".", 1)[-1]
-        match = _LOCATION_NUMBER.match(leaf)
-        key = match.group(1) if match else _UNNUMBERED_LOCATIONS.get(leaf)
-        if key:
-            boxes.setdefault(key, box)
-    return boxes

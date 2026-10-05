@@ -550,3 +550,12 @@ def test_post_with_invalid_selection_shows_validation_message(client, reviewer):
     assert b"Choose two distinct comparison sources." not in response.content
     assert b"name:" in response.content
     assert not schedule.reconciliations.exists()
+
+
+def test_form_template_keys_match_form_rows():
+    from census.transcription.schedule_form import _PLACEMENT, FORM_TEMPLATE
+
+    row_keys = {number or field for (_, field), (_, number, _) in _PLACEMENT.items()}
+    assert set(FORM_TEMPLATE) <= row_keys
+    for ymin, xmin, ymax, xmax in FORM_TEMPLATE.values():
+        assert 0 <= ymin < ymax <= 1000 and 0 <= xmin < xmax <= 1000

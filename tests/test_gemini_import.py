@@ -67,24 +67,3 @@ def test_import_maps_gemini_record_and_is_idempotent(tmp_path):
     assert "negative" in fields["ai_notes"] and "Flagged: membership.q4" in fields["ai_notes"]
     assert data["_field_locations"]["membership.q1_male_members"] == [320, 410, 348, 480]
 
-
-def test_field_boxes_key_gemini_locations_by_printed_question():
-    from types import SimpleNamespace
-
-    from census.transcription.schedule_form import field_boxes
-
-    gemini = SimpleNamespace(data={"_field_locations": {
-        "identification.qc_church_name": [1, 2, 3, 4],
-        "membership.q1_male_members": [5, 6, 7, 8],
-        "parochial_school.q23a_elementary_teachers": [9, 9, 9, 9],
-        "location.urban_rural": [0, 0, 1, 1],
-        "assistant_pastors.0.q30_college": [2, 2, 2, 2],
-        "location.qe_county": [3, 3],
-    }})
-
-    assert field_boxes(None, SimpleNamespace(data={}), gemini) == {
-        "c": [1, 2, 3, 4],
-        "1": [5, 6, 7, 8],
-        "23a": [9, 9, 9, 9],
-        "urban_rural_code": [0, 0, 1, 1],
-    }

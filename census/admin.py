@@ -55,7 +55,7 @@ from .transcription.reconciliation import (
     rollback_reconciliation,
     serialize_canonical,
 )
-from .transcription.schedule_form import field_boxes, schedule_form_layout
+from .transcription.schedule_form import FORM_TEMPLATE, schedule_form_layout
 from .transcription.services import (
     LaunchError,
     launch_transcription_run,
@@ -1667,7 +1667,7 @@ class CensusScheduleAdmin(ModelAdmin):
             ),
             "comparison": comparison,
             "form": schedule_form_layout(comparison["sections"]),
-            "field_boxes": field_boxes(comparison_source, baseline),
+            "field_boxes": FORM_TEMPLATE,
             "place_options": (
                 schedule.county.places.select_related("county__state")
                 .order_by("name")
