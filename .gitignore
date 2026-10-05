@@ -300,3 +300,6 @@ pyvenv.cfg
 pip-selfcheck.json
 relec-website/
 prompt.md
+
+# Collaborator Gemini package (5 GB of images; import with import_gemini_transcriptions)
+gemini/
