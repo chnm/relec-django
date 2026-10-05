@@ -84,8 +84,13 @@
               <div id="zoom-level" class="mt-1 text-xs text-gray-500 dark:text-gray-400 content-center">100%</div>
             </div>
             <div id="image-viewport" class="comparison-image-viewport">
-              <img id="schedule-image" src="{{ image_url }}"
-                   alt="Original image for {{ schedule }}">
+              <div id="image-frame" class="comparison-image-frame">
+                <img id="schedule-image" src="{{ image_url }}"
+                     alt="Original image for {{ schedule }}">
+                {% if field_boxes %}
+                  <svg id="field-boxes" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"></svg>
+                {% endif %}
+              </div>
             </div>
           {% else %}
             <div class="p-8 text-sm text-center text-gray-500 dark:text-gray-400">
@@ -385,14 +390,32 @@
       padding: 1rem;
     }
 
-    .comparison-image-viewport img {
-      display: block;
+    .comparison-image-frame {
       flex: none;
-      height: auto;
-      max-width: none;
+      position: relative;
       transition: width .12s ease;
       width: 100%;
     }
+
+    .comparison-image-viewport img {
+      display: block;
+      height: auto;
+      max-width: none;
+      width: 100%;
+    }
+
+    #field-boxes { height: 100%; inset: 0; position: absolute; width: 100%; }
+    #field-boxes rect {
+      cursor: pointer;
+      fill: transparent;
+      stroke: #0060b1;
+      stroke-opacity: .35;
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+    }
+    #field-boxes rect:hover { fill: rgba(0, 96, 177, .12); stroke-opacity: 1; }
+    #field-boxes rect.is-active { fill: rgba(245, 158, 11, .25); stroke: #f59e0b; stroke-opacity: 1; stroke-width: 3; }
+    [data-form-row].is-box-target { outline: 2px solid #f59e0b; outline-offset: 2px; }
 
     .comparison-source-headings {
       display: grid;
@@ -926,7 +949,7 @@
   {% if image_url %}
     <script>
       (() => {
-        const image = document.getElementById("schedule-image");
+        const image = document.getElementById("image-frame");
         const level = document.getElementById("zoom-level");
         let zoom = 1;
 
@@ -946,6 +969,49 @@
         document.getElementById("zoom-reset").addEventListener("click", () => {
           zoom = 1;
           render();
+        });
+      })();
+    </script>
+  {% endif %}
+
+  {% if image_url and field_boxes %}
+    {{ field_boxes|json_script:"field-boxes-data" }}
+    <script>
+      (() => {
+        const boxes = JSON.parse(document.getElementById("field-boxes-data").textContent);
+        const svg = document.getElementById("field-boxes");
+        const rows = document.querySelectorAll("[data-form-row][data-box-key]");
+        const rects = {};
+
+        for (const [key, [ymin, xmin, ymax, xmax]] of Object.entries(boxes)) {
+          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          Object.entries({ x: xmin, y: ymin, width: xmax - xmin, height: ymax - ymin })
+            .forEach(([name, value]) => rect.setAttribute(name, value));
+          rect.addEventListener("click", () => {
+            const row = document.querySelector(`[data-form-row][data-box-key="${key}"]`);
+            if (!row) return;
+            row.scrollIntoView({ behavior: "smooth", block: "center" });
+            row.classList.add("is-box-target");
+            setTimeout(() => row.classList.remove("is-box-target"), 1500);
+            activate(key);
+          });
+          svg.appendChild(rect);
+          rects[key] = rect;
+        }
+
+        const activate = (key, reveal = false) => {
+          svg.querySelectorAll(".is-active").forEach((rect) => rect.classList.remove("is-active"));
+          const rect = rects[key];
+          if (!rect) return;
+          rect.classList.add("is-active");
+          if (reveal) rect.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        };
+
+        rows.forEach((row) => {
+          const key = row.dataset.boxKey;
+          if (!rects[key]) return;
+          row.addEventListener("mouseenter", () => activate(key));
+          row.addEventListener("focusin", () => activate(key, true));
         });
       })();
     </script>
