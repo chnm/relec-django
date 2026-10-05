@@ -9,14 +9,13 @@ from copy import deepcopy
 # (kind, field) -> (block, printed question number). Order here is form order.
 _PLACEMENT = {}
 for _block, _kind, _fields in (
-    ("schedule", "schedule", (("populated_place_id", ""),)),
+    ("schedule", "schedule", (("populated_place_id", "d"),)),
     (
         "header",
         "body",
         (
             ("division", "b"),
             ("name", "c"),
-            ("address", "d"),
             ("census_code", ""),
             ("urban_rural_code", ""),
         ),
@@ -107,6 +106,9 @@ for _block, _kind, _fields in (
     for _order, (_field, _number) in enumerate(_fields):
         _PLACEMENT[(_kind, _field)] = (_block, _number, _order)
 
+# Decided implicitly (see reconciliation._mixed_matched_entity), not shown.
+HIDDEN_ROWS = {("body", "address")}
+
 BODY_BLOCKS = ("header", "membership", "schools", "buildings", "expenditures")
 
 
@@ -142,6 +144,8 @@ def _split(section):
     """Split one section into (block, panel) pairs in form order."""
     buckets = {}
     for row in section["rows"]:
+        if (section["kind"], row["field"]) in HIDDEN_ROWS:
+            continue
         block, number, order = _PLACEMENT.get(
             (section["kind"], row["field"]), ("other", "", 0)
         )

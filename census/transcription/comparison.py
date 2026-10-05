@@ -28,7 +28,7 @@ RELIGIOUS_BODY_FIELDS = [
     ("name", "Name"),
     ("census_code", "Census code"),
     ("division", "Division or conference"),
-    ("address", "City, town, village, etc."),
+    ("address", "City, town, village (as written)"),
     ("urban_rural_code", "Urban or rural"),
     ("num_edifices", "Number of edifices"),
     ("edifice_value", "Edifice value"),
