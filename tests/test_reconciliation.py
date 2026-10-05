@@ -1334,3 +1334,17 @@ def test_agent_verbatim_place_replaces_body_address(reviewer):
     row = next(r for r in body_section["rows"] if r["label"].startswith("City, town"))
     assert row["label"] == "City, town, village, etc."
     assert row["right"]["text"] == "Providence"
+
+
+@pytest.mark.django_db
+def test_underscore_evidence_keys_are_ignored_by_candidate_validation():
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["_field_locations"] = {"membership.q1_male_members": [1, 2, 3, 4]}
+    source = agent_source(schedule, candidate)
+
+    preview = build_reconciliation_preview(schedule, source)
+
+    assert infer_reconciliation_outcome(preview) == (
+        ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    )

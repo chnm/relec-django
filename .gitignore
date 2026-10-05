@@ -303,3 +303,6 @@ relec-website/
 # Data fixture dumps live in object storage, not the repo (LFS budget)
 census/fixtures/*.json
 prompt.md
+
+# Collaborator Gemini package (5 GB of images; import with import_gemini_transcriptions)
+gemini/
