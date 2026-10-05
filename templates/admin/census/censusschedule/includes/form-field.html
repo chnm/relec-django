@@ -1,5 +1,5 @@
 {# One printed-form field: label, then a radio per source value and one for a correction. #}
-<div class="form-field comparison-row comparison-row-{{ row.status }}{% if row.selected == 'edited' %} is-edited{% endif %}" data-form-row>
+<div class="form-field comparison-row comparison-row-{{ row.status }}{% if row.selected == 'edited' %} is-edited{% endif %}" data-form-row data-box-key="{{ row.number|default:row.field }}">
   <div class="form-field-label">
     {% if row.number %}<span class="form-field-number">{{ row.number }}.</span>{% endif %}
     <span>{{ row.label }}</span>
