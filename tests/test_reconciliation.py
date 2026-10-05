@@ -1359,3 +1359,17 @@ def test_hidden_address_follows_populated_place_decision():
         )
         assert preview["proposed"]["religious_bodies"][0]["address"] == expected
         assert preview["decisions"][key] == source_used
+
+
+@pytest.mark.django_db
+def test_underscore_evidence_keys_are_ignored_by_candidate_validation():
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["_field_locations"] = {"membership.q1_male_members": [1, 2, 3, 4]}
+    source = agent_source(schedule, candidate)
+
+    preview = build_reconciliation_preview(schedule, source)
+
+    assert infer_reconciliation_outcome(preview) == (
+        ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    )

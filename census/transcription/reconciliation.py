@@ -613,8 +613,9 @@ def _candidate_draft(schedule, transcription, before):
                 f"Unsupported candidate contract {version or 'unknown'!r}."
             )
         try:
+            # Underscore keys carry non-contract evidence (e.g. bounding boxes).
             validate_candidate(
-                data,
+                {k: v for k, v in data.items() if not k.startswith("_")},
                 schedule,
                 schema=transcription.run.metadata.get("schema"),
             )
