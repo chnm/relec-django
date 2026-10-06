@@ -4,7 +4,11 @@
 {% block object-tools-items %}
   {% if show_transcription_comparison %}
     {% url "admin:census_censusschedule_compare_transcriptions" original.pk as comparison_url %}
-    {% include "unfold/helpers/tab_action.html" with title="Reconcile & approve" link=comparison_url icon="difference" %}
+    {% if reviewer_mode %}
+      {% include "unfold/helpers/tab_action.html" with title="Reconcile & approve" link=comparison_url icon="difference" %}
+    {% else %}
+      {% include "unfold/helpers/tab_action.html" with title="Reconcile & submit" link=comparison_url icon="difference" %}
+    {% endif %}
   {% endif %}
   {{ block.super }}
 {% endblock %}

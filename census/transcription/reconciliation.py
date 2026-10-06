@@ -366,8 +366,14 @@ def apply_reconciliation(
     comparison_transcription_id=None,
     notes="",
     decisions=None,
+    approve=True,
+    allow_removals=True,
 ):
-    """Apply one fully reviewed decision and approve the schedule atomically."""
+    """Apply one fully reviewed decision atomically.
+
+    Reviewers approve the schedule. Transcribers (``approve=False``) submit it
+    as ``completed`` for review and may not remove existing rows.
+    """
     if transcription_id is not None and comparison_transcription_id is None:
         comparison_transcription_id = transcription_id
     if (
@@ -404,13 +410,31 @@ def apply_reconciliation(
         "baseline": _source_ref(baseline_transcription),
         "comparison": _source_ref(comparison_transcription),
     }
+    operations = preview["operations"]
+    if not allow_removals and any(
+        operations[group]["removed"]
+        for group in ("religious_bodies", "memberships", "clergy")
+    ):
+        raise ReconciliationValidationError(
+            "Transcribers cannot remove existing religious bodies, memberships, "
+            "or clergy. Keep those rows and describe the problem in the notes."
+        )
     outcome = infer_reconciliation_outcome(preview)
     if outcome in {
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE,
         ScheduleReconciliation.Outcome.MIXED,
     }:
         _apply_draft(schedule, preview["proposed"], reviewer)
-    _approve_schedule(schedule, reviewer)
+    if approve:
+        _approve_schedule(schedule, reviewer)
+    else:
+        # Query directly: schedule.church_details is prefetched and stale here.
+        if not ReligiousBody.objects.filter(census_record=schedule).exists():
+            raise ReconciliationValidationError(
+                "Add at least one religious body before submitting for review."
+            )
+        schedule.transcription_status = "completed"
+        _history_save(schedule, reviewer, "Submitted through schedule reconciliation")
 
     refreshed = schedule_graph_queryset().get(pk=schedule.pk)
     after = serialize_canonical(refreshed)

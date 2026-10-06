@@ -10,6 +10,7 @@ from census.admin import (
     CensusScheduleDenominationFilter,
     TranscriptionJobAdmin,
     TranscriptionRunAdmin,
+    TranscriptionWorkflowFilter,
     assign_to_me,
     mark_completed,
     mark_needs_review,
@@ -481,12 +482,32 @@ def test_dual_role_staff_assigns_self_as_reviewer(transcriber):
 @pytest.mark.django_db
 def test_transcriber_sees_only_assigned_schedules(transcriber):
     assigned = CensusScheduleFactory(assigned_transcriber=transcriber)
+    reviewing = CensusScheduleFactory(assigned_reviewer=transcriber)
     CensusScheduleFactory()
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
     queryset = model_admin.get_queryset(admin_request(transcriber))
 
-    assert list(queryset) == [assigned]
+    assert set(queryset) == {assigned, reviewing}
+
+
+@pytest.mark.django_db
+def test_assigned_to_me_filter_includes_reviewer_assignments(reviewer):
+    transcribing = CensusScheduleFactory(assigned_transcriber=reviewer)
+    reviewing = CensusScheduleFactory(assigned_reviewer=reviewer)
+    CensusScheduleFactory()
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = RequestFactory().get(
+        "/admin/census/censusschedule/", {"workflow_view": "assigned_to_me"}
+    )
+    request.user = reviewer
+    workflow_filter = TranscriptionWorkflowFilter(
+        request, request.GET.copy(), CensusSchedule, model_admin
+    )
+
+    queryset = workflow_filter.queryset(request, CensusSchedule.objects.all())
+
+    assert set(queryset) == {transcribing, reviewing}
 
 
 @pytest.mark.django_db
@@ -597,3 +618,70 @@ def test_transcriber_cannot_edit_submitted_schedule(transcriber):
     )
 
     assert not model_admin.has_change_permission(admin_request(transcriber), schedule)
+
+
+def grant_schedule_permissions(user):
+    from django.contrib.auth.models import Permission
+
+    user.user_permissions.add(
+        *Permission.objects.filter(
+            codename__in=["view_censusschedule", "change_censusschedule"]
+        )
+    )
+    return User.objects.get(pk=user.pk)  # reset the permission cache
+
+
+def compare_request(user, schedule):
+    request = admin_request(user)
+    request.path = f"/admin/census/censusschedule/{schedule.pk}/compare-transcriptions/"
+    return request
+
+
+@pytest.mark.django_db
+def test_transcriber_can_open_reconciliation_for_assigned_schedule(transcriber):
+    transcriber = grant_schedule_permissions(transcriber)
+    schedule = CensusScheduleFactory(
+        assigned_reviewer=transcriber, transcription_status="needs_review"
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    response = model_admin.compare_transcriptions_view(
+        compare_request(transcriber, schedule), str(schedule.pk)
+    )
+
+    assert response.status_code == 200
+    assert b"Apply and submit for review" in response.content
+    assert b"Apply and approve" not in response.content
+
+
+@pytest.mark.django_db
+def test_transcriber_cannot_reconcile_unassigned_or_submitted_schedules(transcriber):
+    transcriber = grant_schedule_permissions(transcriber)
+    from django.core.exceptions import PermissionDenied
+    from django.http import Http404
+
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    other = CensusScheduleFactory()
+    submitted = CensusScheduleFactory(
+        assigned_transcriber=transcriber, transcription_status="completed"
+    )
+
+    with pytest.raises(Http404):
+        model_admin.compare_transcriptions_view(
+            compare_request(transcriber, other), str(other.pk)
+        )
+    with pytest.raises(PermissionDenied):
+        model_admin.compare_transcriptions_view(
+            compare_request(transcriber, submitted), str(submitted.pk)
+        )
+
+
+@pytest.mark.django_db
+def test_transcriber_can_edit_needs_review_schedule(transcriber):
+    transcriber = grant_schedule_permissions(transcriber)
+    schedule = CensusScheduleFactory(
+        assigned_transcriber=transcriber, transcription_status="needs_review"
+    )
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+
+    assert model_admin.has_change_permission(admin_request(transcriber), schedule)

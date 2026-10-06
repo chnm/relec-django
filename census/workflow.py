@@ -1,5 +1,5 @@
 TRANSCRIBER_ACTIONS = {"mark_in_progress", "mark_completed"}
-LOCKED_FOR_TRANSCRIBERS = {"needs_review", "completed", "approved"}
+LOCKED_FOR_TRANSCRIBERS = {"completed", "approved"}
 
 
 def is_transcriber_only(user):

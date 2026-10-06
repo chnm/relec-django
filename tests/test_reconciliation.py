@@ -1373,3 +1373,55 @@ def test_underscore_evidence_keys_are_ignored_by_candidate_validation():
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
     )
+
+
+@pytest.mark.django_db
+def test_transcriber_reconciliation_submits_for_review_instead_of_approving(
+    reviewer,
+):
+    schedule = canonical_schedule()
+    schedule.transcription_status = "needs_review"
+    schedule.save()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        approve=False,
+        allow_removals=False,
+    )
+
+    schedule.refresh_from_db()
+    assert schedule.transcription_status == "completed"
+    assert schedule.respondent_name == "Agent Respondent"
+    assert event.canonical_after["schedule_fields"]["respondent_name"] == (
+        "Agent Respondent"
+    )
+
+
+@pytest.mark.django_db
+def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["clergy"] = []
+    source = agent_source(schedule, candidate)
+    before = serialize_canonical(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+    assert preview["operations"]["clergy"]["removed"] == 1
+
+    with pytest.raises(ReconciliationValidationError, match="cannot remove"):
+        apply_reconciliation(
+            schedule_id=schedule.pk,
+            reviewer=reviewer,
+            expected_fingerprint=preview["before_fingerprint"],
+            transcription_id=source.pk,
+            approve=False,
+            allow_removals=False,
+        )
+
+    schedule.refresh_from_db()
+    assert serialize_canonical(schedule) == before
+    assert not schedule.reconciliations.exists()

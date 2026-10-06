@@ -71,15 +71,17 @@ Full access to the system. Responsible for project oversight, data quality, and 
 Student workers (undergraduate or graduate) assigned specific records for data entry.
 
 **Can:**
-- View only their assigned census schedules
-- Enter transcription data: ReligiousBody details, Membership statistics, Clergy information
-- Mark records as needing review when finished
+- View only census schedules where they are the assigned transcriber or assigned reviewer
+- Enter and correct transcription data: ReligiousBody details, Membership statistics, Clergy information
+- Edit assigned records until they are submitted (`completed`) or `approved`
+- Reconcile assigned records in the transcription comparison; applying a transcriber reconciliation saves the data and moves the record to `completed` (Ready for Review) instead of approving it
+- Mark records as ready for review when finished
 - Add transcription notes
 
 **Cannot:**
 - See records assigned to other transcribers
 - Assign records to themselves or others
-- Delete records
+- Delete records, or remove existing religious bodies, memberships, or clergy (including through reconciliation)
 - Access data quality tools or export functions
 - Approve records
 
@@ -141,7 +143,7 @@ IT/infrastructure administrators with full Django admin access.
 - Both `needs_review` and `completed` appear in the PI/editor review queue
 - Status can be set backward by Reviewers (e.g., returning a record to `in_progress`)
 - A schedule is **automatically** moved from `unassigned` to `assigned` when a transcriber is assigned
-- Transcribers submit finished work as `completed`; only Reviewers can set `approved`, through the schedule-level reconciliation workflow
+- Transcribers submit finished work as `completed`, either with the bulk action or by applying a reconciliation; only Reviewers can set `approved`, through the schedule-level reconciliation workflow
 - Reconciliation compares any two distinct sources: live canonical data, immutable human snapshots, or immutable agent outputs. The baseline defaults to the newest human snapshot (or canonical when none exists), while the comparison defaults to the newest agent output.
 - Mixed reconciliations record both evidence sources plus every field and related-row source decision as append-only provenance; repeated entities are matched by stable identity or unique signatures, never silently by list order
 - Reviewers may bulk-promote selected schedules from the admin action menu. Each schedule uses the output belonging to its newest agent run, is validated independently, and receives its own reconciliation event; schedules without valid model evidence are skipped.
@@ -163,7 +165,7 @@ IT/infrastructure administrators with full Django admin access.
 
 ### Record Visibility
 
-- Transcribers see only records where `assigned_transcriber = current_user`
+- Transcribers see only records where they are `assigned_transcriber` or `assigned_reviewer`
 - Reviewers and superusers see all records
 - Public-facing views show only records with sufficient data (at least one linked `ReligiousBody`)
 

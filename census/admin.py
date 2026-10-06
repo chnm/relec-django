@@ -201,7 +201,10 @@ class TranscriptionWorkflowFilter(admin.SimpleListFilter):
         if self.value() == "unassigned":
             return queryset.filter(transcription_status="unassigned")
         elif self.value() == "assigned_to_me":
-            return queryset.filter(assigned_transcriber=request.user)
+            return queryset.filter(
+                models.Q(assigned_transcriber=request.user)
+                | models.Q(assigned_reviewer=request.user)
+            )
         elif self.value() == "review_queue":
             return queryset.filter(
                 transcription_status__in=["needs_review", "completed"]
@@ -1500,12 +1503,13 @@ class CensusScheduleAdmin(ModelAdmin):
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         extra_context = extra_context or {}
+        obj = self.get_object(request, object_id) if object_id else None
+        reviewer_mode = is_reviewer(request.user)
+        extra_context["reviewer_mode"] = reviewer_mode
         extra_context["show_transcription_comparison"] = bool(
-            object_id
-            and is_reviewer(request.user)
-            and ScheduleTranscription.objects.filter(
-                census_schedule_id=object_id
-            ).exists()
+            obj
+            and (reviewer_mode or self.has_change_permission(request, obj))
+            and ScheduleTranscription.objects.filter(census_schedule=obj).exists()
         )
         return super().changeform_view(
             request,
@@ -1515,18 +1519,21 @@ class CensusScheduleAdmin(ModelAdmin):
         )
 
     def compare_transcriptions_view(self, request, object_id):
-        """Preview and apply one reviewer-controlled reconciliation decision."""
-        if not is_reviewer(request.user):
-            raise PermissionDenied
+        """Preview and apply one reconciliation decision.
 
+        Reviewers approve; transcribers submit their assigned record for review.
+        """
+        reviewer_mode = is_reviewer(request.user)
         schedule = get_object_or_404(
-            CensusSchedule.objects.select_related(
+            self.get_queryset(request).select_related(
                 "county__state",
                 "populated_place__county__state",
                 "schedule_denomination",
             ),
             pk=object_id,
         )
+        if not reviewer_mode and not self.has_change_permission(request, schedule):
+            raise PermissionDenied
         transcriptions = list(
             schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
         )
@@ -1623,6 +1630,8 @@ class CensusScheduleAdmin(ModelAdmin):
                         ),
                         notes=request.POST.get("notes", ""),
                         decisions=posted_decisions,
+                        approve=reviewer_mode,
+                        allow_removals=reviewer_mode,
                     )
                 except ReconciliationError as exc:
                     reconciliation_error = str(exc)
@@ -1630,7 +1639,8 @@ class CensusScheduleAdmin(ModelAdmin):
                     self.message_user(
                         request,
                         f"Reconciliation #{reconciliation.pk} applied; "
-                        f"{schedule} is approved.",
+                        f"{schedule} is "
+                        f"{'approved' if reviewer_mode else 'ready for review'}.",
                         level=messages.SUCCESS,
                     )
                     return HttpResponseRedirect(
@@ -1646,7 +1656,12 @@ class CensusScheduleAdmin(ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Reconcile and approve: {schedule}",
+            "title": (
+                f"Reconcile and approve: {schedule}"
+                if reviewer_mode
+                else f"Reconcile and submit: {schedule}"
+            ),
+            "reviewer_mode": reviewer_mode,
             "opts": self.model._meta,
             "schedule": schedule,
             "image_url": image_url,
@@ -2309,7 +2324,10 @@ class CensusScheduleAdmin(ModelAdmin):
         # If user is ONLY in Transcribers group (student transcriber), only show their assigned records
         # Superusers and users in multiple groups (like admins) see all records
         if is_transcriber_only(request.user):
-            return qs.filter(assigned_transcriber=request.user)
+            return qs.filter(
+                models.Q(assigned_transcriber=request.user)
+                | models.Q(assigned_reviewer=request.user)
+            )
 
         return qs
 
