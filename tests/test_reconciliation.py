@@ -1181,7 +1181,7 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
 
     assert schedule.reconciliations.count() == 1
     assert any(
-        "already promoted" in message.message.lower()
+        "already reconciled" in message.message.lower()
         for message in request._messages
     )
 
@@ -1191,7 +1191,7 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
         queryset,
     )
     page = confirmation.content.decode()
-    assert "Already promoted from" in page
+    assert "Already reconciled against" in page
     assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)
 
 
@@ -1425,3 +1425,41 @@ def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
     schedule.refresh_from_db()
     assert serialize_canonical(schedule) == before
     assert not schedule.reconciliations.exists()
+
+
+@pytest.mark.django_db
+def test_bulk_promotion_keeps_a_persons_reconciliation_choices(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule)
+    # A person reviewed the agent output and kept the human data instead.
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        baseline_transcription_id=source.pk,
+        approve=False,
+        allow_removals=False,
+    )
+    assert schedule.reconciliations.get().sources.get(
+        transcription=source
+    ).disposition == ReconciliationSource.Disposition.REJECTED
+    before = serialize_canonical(schedule)
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = bulk_action_request(
+        reviewer,
+        action="promote_latest_model_transcription",
+        apply="1",
+        confirmed="yes",
+    )
+
+    promote_latest_model_transcription(
+        model_admin, request, CensusSchedule.objects.filter(pk=schedule.pk)
+    )
+
+    assert serialize_canonical(schedule) == before
+    assert schedule.reconciliations.count() == 1
+    assert any(
+        "already reconciled" in message.message.lower()
+        for message in request._messages
+    )

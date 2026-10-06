@@ -1108,16 +1108,21 @@ def _latest_agent_transcription(schedule):
     )
 
 
-def _already_promoted_from(schedule, source):
-    """True when the newest unreversed reconciliation accepted this run."""
+def _already_reconciled_against(schedule, source):
+    """True when a standing reconciliation already decided on this run.
+
+    That is the newest unreversed reconciliation, if it used this output in any
+    way (accepted, partially incorporated, or rejected) or came after it. A
+    person's choice there must not be overwritten by a bulk promotion.
+    """
     latest = schedule.reconciliations.filter(reverses__isnull=True).first()
     return bool(
         latest
         and not latest.reversals.exists()
-        and latest.sources.filter(
-            transcription=source,
-            disposition=ReconciliationSource.Disposition.ACCEPTED,
-        ).exists()
+        and (
+            latest.applied_at >= source.created_at
+            or latest.sources.filter(transcription=source).exists()
+        )
     )
 
 
@@ -1207,8 +1212,8 @@ def promote_latest_model_transcription(modeladmin, request, queryset):
             if source is None:
                 skipped["no model transcription"] += 1
                 continue
-            if _already_promoted_from(schedule, source):
-                skipped["already promoted from this run"] += 1
+            if _already_reconciled_against(schedule, source):
+                skipped["already reconciled against this run"] += 1
                 continue
             try:
                 preview = build_reconciliation_preview(schedule, source)
@@ -1246,11 +1251,11 @@ def promote_latest_model_transcription(modeladmin, request, queryset):
                 "detail": "No model transcription available",
             }
         model = source.run.metadata.get("model", "Unspecified model")
-        if _already_promoted_from(schedule, source):
+        if _already_reconciled_against(schedule, source):
             return {
                 "schedule": schedule,
                 "eligible": False,
-                "detail": f"Already promoted from {source.run.key} · {model}",
+                "detail": f"Already reconciled against {source.run.key} · {model}",
             }
         return {
             "schedule": schedule,
