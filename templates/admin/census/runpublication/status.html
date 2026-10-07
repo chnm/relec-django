@@ -1,0 +1,99 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {% if working %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <a href="{% url 'admin:census_runpublication_changelist' %}" class="text-sm font-medium text-primary-600 hover:underline">← All publications</a>
+      <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-gray-100">Publish {{ publication.run.key }}</h1>
+      <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+        {{ publication.get_state_display }} · {{ total }} schedule{{ total|pluralize }} ·
+        started by {{ publication.requested_by|default:"unknown" }} {{ publication.created_at|date:"Y-m-d H:i" }}
+        {% if publication.confirmed_by %} · confirmed by {{ publication.confirmed_by }} {{ publication.confirmed_at|date:"Y-m-d H:i" }}{% endif %}
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="p-4 mb-5 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {% if publication.state == "previewing" %}
+      <p class="mb-5 text-sm text-gray-700 dark:text-gray-200" role="status">Checking schedules in the background: {{ previewed }} of {{ total }}. This page refreshes on its own.</p>
+    {% elif publication.state == "publishing" %}
+      <p class="mb-5 text-sm text-gray-700 dark:text-gray-200" role="status">Publishing in the background: {{ processed }} of {{ total }}. This page refreshes on its own.</p>
+    {% endif %}
+
+    <h2 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Preview</h2>
+    <div class="grid grid-cols-2 gap-4 mb-5 lg:grid-cols-4">
+      {% for label, count in case_counts %}
+        <div class="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+          <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ count }}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">{{ label }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    {% if overwrite_warnings %}
+      <div class="p-4 mb-5 text-sm border border-amber-300 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+        {{ overwrite_warnings }} schedule{{ overwrite_warnings|pluralize }} {{ overwrite_warnings|pluralize:"has,have" }} been saved by a person since this run's output arrived and will be overwritten. Use Reconcile &amp; submit for corrections you want to keep.
+      </div>
+    {% endif %}
+
+    {% if publication.state != "previewing" and publication.state != "ready" %}
+      <h2 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Results</h2>
+      <div class="grid grid-cols-2 gap-4 mb-5 lg:grid-cols-5">
+        {% for label, count in outcome_counts %}
+          <div class="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+            <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ count }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ label }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if problems %}
+      <div class="mb-5 overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+        <div class="px-4 py-3 text-sm font-semibold text-gray-800 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100">Skipped or failed (first 50)</div>
+        <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+          {% for item in problems %}
+            <li class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:justify-between">
+              <a href="{% url 'admin:census_censusschedule_change' item.census_schedule_id %}" class="text-sm font-medium text-primary-600 hover:underline">{{ item.census_schedule }}</a>
+              <span class="text-xs text-amber-700 dark:text-amber-300">{{ item.get_outcome_display }}: {{ item.detail }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if can_confirm %}
+      <form method="post" class="p-5 mb-5 space-y-5 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+        {% csrf_token %}
+        <div class="p-4 text-sm border border-amber-300 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+          Edits made in the record form before any reconciliation are not protected and will be replaced. Every change remains reversible through the reconciliation history.
+        </div>
+        <div>
+          <label for="notes" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Reviewer notes <span class="font-normal">(optional)</span></label>
+          <textarea id="notes" name="notes" rows="3" class="w-full p-3 text-sm bg-white border border-gray-300 rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100"></textarea>
+        </div>
+        <label class="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-200">
+          <input type="checkbox" name="confirmed" value="yes" required class="mt-1">
+          <span>I reviewed these counts and confirm publishing this run.</span>
+        </label>
+        <button type="submit" name="publish" value="1" class="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary-600 hover:bg-primary-700">Publish and approve</button>
+      </form>
+    {% endif %}
+
+    {% if can_cancel %}
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="cancel" value="1" class="text-sm font-medium text-red-700 hover:underline dark:text-red-300">Cancel this publication</button>
+        <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">Schedules already published stay published; use Restore previous canonical data to undo them.</span>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

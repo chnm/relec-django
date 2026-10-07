@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from census.transcription.client import ClaudeAPIError
+from census.transcription.publishing import PublicationWorker
 from census.transcription.worker import ClaudeTranscriptionWorker
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,10 @@ DEFAULT_LIVENESS_FILE = "/tmp/transcription-worker-alive"
 
 
 class Command(BaseCommand):
-    help = "Submit and collect restart-safe Claude transcription batches."
+    help = (
+        "Submit and collect restart-safe Claude transcription batches, and "
+        "publish transcription runs in the background."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -48,40 +52,41 @@ class Command(BaseCommand):
         liveness = Path(options["liveness_file"]) if options["liveness_file"] else None
         self.mark_alive(liveness)
 
-        if not settings.CLAUDE_TRANSCRIPTION_ENABLED or not settings.ANTHROPIC_API_KEY:
-            if not options["idle_when_disabled"]:
-                raise CommandError(
-                    "Claude transcription is disabled or ANTHROPIC_API_KEY is absent."
-                )
-            self.stdout.write(
-                "Claude transcription is disabled; worker is idle until restarted "
-                "with provider configuration."
+        transcriber = None
+        if settings.CLAUDE_TRANSCRIPTION_ENABLED and settings.ANTHROPIC_API_KEY:
+            transcriber = ClaudeTranscriptionWorker()
+        elif not options["idle_when_disabled"]:
+            raise CommandError(
+                "Claude transcription is disabled or ANTHROPIC_API_KEY is absent."
             )
-            while True:
-                # A deliberately disabled worker is still a healthy worker. Keep
-                # the file fresh or the healthcheck will have it restarted in a
-                # loop for doing exactly what it was configured to do.
-                self.mark_alive(liveness)
-                time.sleep(min(max(options["poll_seconds"], 1), 60))
-
-        worker = ClaudeTranscriptionWorker()
-        if options["once"]:
-            worker.run_once()
-            self.mark_alive(liveness)
-            return
+        else:
+            # A deliberately disabled transcriber is still a healthy worker, and
+            # run publishing does not depend on the provider at all.
+            self.stdout.write(
+                "Claude transcription is disabled; worker only publishes runs until "
+                "restarted with provider configuration."
+            )
+        publisher = PublicationWorker()
 
         while True:
             self.mark_alive(liveness)
             try:
-                changed = worker.run_once()
-            except ClaudeAPIError:
-                logger.exception(
-                    "Claude batch API operation failed; will retry polling"
-                )
+                changed = publisher.run_once()
+            except Exception:
+                logger.exception("Run publishing failed; will retry")
                 changed = False
+            if transcriber is not None:
+                try:
+                    changed = transcriber.run_once() or changed
+                except ClaudeAPIError:
+                    logger.exception(
+                        "Claude batch API operation failed; will retry polling"
+                    )
             # Refreshed on both sides of the unit of work, so the file only goes
             # stale while run_once() is genuinely stuck rather than merely slow.
             self.mark_alive(liveness)
+            if options["once"]:
+                return
             if not changed:
                 time.sleep(max(options["poll_seconds"], 1))
 

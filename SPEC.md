@@ -146,7 +146,12 @@ IT/infrastructure administrators with full Django admin access.
 - Transcribers submit finished work as `completed`, either with the bulk action or by applying a reconciliation; only Reviewers can set `approved`, through the schedule-level reconciliation workflow
 - Reconciliation compares any two distinct sources: live canonical data, immutable human snapshots, or immutable agent outputs. The baseline defaults to the newest human snapshot (or canonical when none exists), while the comparison defaults to the newest agent output.
 - Mixed reconciliations record both evidence sources plus every field and related-row source decision as append-only provenance; repeated entities are matched by stable identity or unique signatures, never silently by list order
-- Reviewers may bulk-promote selected schedules from the admin action menu. Each schedule uses the output belonging to its newest agent run, is validated independently, and receives its own reconciliation event; schedules without valid model evidence are skipped, as are schedules whose standing reconciliation already used that run's output (in any way) or came after it, so a person's reconciliation choices are never overwritten.
+- Reviewers may publish one agent run for selected schedules from the admin action menu (**Publish a transcription run**, issue #168). The reviewer picks the run and starts a preview; the transcription worker classifies every schedule in the background, and the publication's status page (Run Publications) shows counts per case before the reviewer confirms. Publishing then also runs in the background, re-checking each schedule, so selections of 20,000+ schedules are supported. Agent output wins by default, including over earlier human transcription. Per schedule:
+  1. A standing reconciliation used this run's output (in any way) or came after it → keep the data; approve if Ready for Review
+  2. A person edited data that an earlier reconciliation applied from an agent → keep the data; approve if Ready for Review
+  3. Otherwise → promote the run's output, validated independently, with its own reconciliation event, and approve
+  4. The run has no output for the schedule → skip
+  Edits made in the record form before any reconciliation are not protected; the confirmation page counts them as a warning. Transcribers should correct records through Reconcile & submit.
 - Reviewers may restore selected schedules to the data state before their newest unreversed reconciliation. A restore never deletes history: it creates a new append-only reconciliation linked through `reverses`, marks prior evidence as superseded, and leaves the restored schedule approved.
 - A schedule must have at least one `ReligiousBody` record before it can be marked `completed` or `needs_review`
 
@@ -449,7 +454,7 @@ Record has `transcription_status = completed` and at least one complete `Religio
 7. If neither is correct: Returns the record to `in_progress` and adds a note in `transcription_notes`
    - Transcriber will see the record reappear in their list with the reviewer's note
 
-For trusted model runs, a Reviewer may instead select schedules in the admin list and choose **Promote latest model transcription**. After an explicit confirmation, each schedule independently promotes its newest agent run and becomes approved. **Restore previous canonical data** steps eligible schedules backward through unreversed reconciliation states while preserving every promotion and restore in the audit trail.
+For trusted model runs, a Reviewer may instead select schedules in the admin list and choose **Publish a transcription run** (the Transcription run filter selects every schedule a run covers), then pick the run. After a background preview and an explicit confirmation on the status page, each schedule independently promotes that run's output and becomes approved, except schedules where a person already reconciled the run or edited an agent's version, which keep that work. **Restore previous canonical data** steps eligible schedules backward through unreversed reconciliation states while preserving every promotion and restore in the audit trail.
 
 **Success Outcome:**
 Record has `transcription_status = approved`; all data has been verified against the source image and the decision is preserved as append-only reconciliation evidence.
