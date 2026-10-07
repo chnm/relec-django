@@ -1181,7 +1181,7 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
 
     assert schedule.reconciliations.count() == 1
     assert any(
-        "already promoted" in message.message.lower()
+        "already reconciled" in message.message.lower()
         for message in request._messages
     )
 
@@ -1191,7 +1191,7 @@ def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer)
         queryset,
     )
     page = confirmation.content.decode()
-    assert "Already promoted from" in page
+    assert "Already reconciled against" in page
     assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)
 
 
@@ -1372,4 +1372,94 @@ def test_underscore_evidence_keys_are_ignored_by_candidate_validation():
 
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
+    )
+
+
+@pytest.mark.django_db
+def test_transcriber_reconciliation_submits_for_review_instead_of_approving(
+    reviewer,
+):
+    schedule = canonical_schedule()
+    schedule.transcription_status = "needs_review"
+    schedule.save()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_id=source.pk,
+        approve=False,
+        allow_removals=False,
+    )
+
+    schedule.refresh_from_db()
+    assert schedule.transcription_status == "completed"
+    assert schedule.respondent_name == "Agent Respondent"
+    assert event.canonical_after["schedule_fields"]["respondent_name"] == (
+        "Agent Respondent"
+    )
+
+
+@pytest.mark.django_db
+def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    candidate["clergy"] = []
+    source = agent_source(schedule, candidate)
+    before = serialize_canonical(schedule)
+    preview = build_reconciliation_preview(schedule, source)
+    assert preview["operations"]["clergy"]["removed"] == 1
+
+    with pytest.raises(ReconciliationValidationError, match="cannot remove"):
+        apply_reconciliation(
+            schedule_id=schedule.pk,
+            reviewer=reviewer,
+            expected_fingerprint=preview["before_fingerprint"],
+            transcription_id=source.pk,
+            approve=False,
+            allow_removals=False,
+        )
+
+    schedule.refresh_from_db()
+    assert serialize_canonical(schedule) == before
+    assert not schedule.reconciliations.exists()
+
+
+@pytest.mark.django_db
+def test_bulk_promotion_keeps_a_persons_reconciliation_choices(reviewer):
+    schedule = canonical_schedule()
+    source = agent_source(schedule)
+    preview = build_reconciliation_preview(schedule)
+    # A person reviewed the agent output and kept the human data instead.
+    apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        baseline_transcription_id=source.pk,
+        approve=False,
+        allow_removals=False,
+    )
+    assert schedule.reconciliations.get().sources.get(
+        transcription=source
+    ).disposition == ReconciliationSource.Disposition.REJECTED
+    before = serialize_canonical(schedule)
+    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
+    request = bulk_action_request(
+        reviewer,
+        action="promote_latest_model_transcription",
+        apply="1",
+        confirmed="yes",
+    )
+
+    promote_latest_model_transcription(
+        model_admin, request, CensusSchedule.objects.filter(pk=schedule.pk)
+    )
+
+    assert serialize_canonical(schedule) == before
+    assert schedule.reconciliations.count() == 1
+    assert any(
+        "already reconciled" in message.message.lower()
+        for message in request._messages
     )

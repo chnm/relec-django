@@ -11,7 +11,7 @@
           ← Back to {{ schedule }}
         </a>
         <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-gray-100">
-          Reconcile and approve
+          {% if reviewer_mode %}Reconcile and approve{% else %}Reconcile and submit for review{% endif %}
         </h1>
         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {{ schedule.schedule_title }} · Record {{ schedule.resource_id }} ·
@@ -217,8 +217,8 @@
 
         <section class="comparison-card overflow-hidden" aria-labelledby="approval-heading">
           <div class="px-5 py-4 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <h2 id="approval-heading" class="font-semibold text-gray-800 dark:text-gray-100">Approve reconciliation</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The highlighted cells and reviewer edits above will become canonical. The outcome is inferred and preserved as append-only provenance.</p>
+            <h2 id="approval-heading" class="font-semibold text-gray-800 dark:text-gray-100">{% if reviewer_mode %}Approve reconciliation{% else %}Submit reconciliation for review{% endif %}</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The highlighted cells and edits above will become canonical. The outcome is inferred and preserved as append-only provenance.{% if not reviewer_mode %} The record then moves to Ready for Review and is locked for editing. Existing rows cannot be removed; keep them and explain in the notes.{% endif %}</p>
           </div>
           <div class="p-5">
             <form id="reconciliation-form" method="post" class="space-y-5">
@@ -228,7 +228,7 @@
               <input type="hidden" name="expected_fingerprint" value="{{ preview.before_fingerprint }}">
 
               <div>
-                <label for="notes" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Reviewer notes <span class="font-normal">(optional)</span></label>
+                <label for="notes" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">{% if reviewer_mode %}Reviewer notes{% else %}Notes{% endif %} <span class="font-normal">(optional)</span></label>
                 <textarea id="notes" name="notes" rows="3" class="comparison-select" placeholder="Record corrections, ambiguities, or the reason for this decision.">{{ request.POST.notes }}</textarea>
               </div>
 
@@ -238,7 +238,7 @@
               </label>
 
               <button type="submit" class="comparison-button comparison-button-primary" {% if not can_apply %}disabled{% endif %}>
-                Apply and approve
+                {% if reviewer_mode %}Apply and approve{% else %}Apply and submit for review{% endif %}
               </button>
             </form>
           </div>
