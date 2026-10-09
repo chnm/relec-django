@@ -509,6 +509,12 @@ UNFOLD = {
                         "permission": can_view_ai_transcription,
                     },
                     {
+                        "title": "Run Publications",
+                        "icon": "publish",
+                        "link": lambda request: "/admin/census/runpublication/",
+                        "permission": can_view_ai_transcription,
+                    },
+                    {
                         "title": "Batches",
                         "icon": "stacks",
                         "link": lambda request: "/admin/census/transcriptionbatch/",

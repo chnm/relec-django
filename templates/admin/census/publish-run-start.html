@@ -1,0 +1,47 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        The chosen run's output replaces each schedule's data, including earlier human transcription. Schedules where a person reconciled this run, or edited an agent's version, keep that work and are approved if they are ready for review.
+      </p>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        <strong>{{ total_count }}</strong> schedule{{ total_count|pluralize }} selected{% if select_across == "1" %} (all matching schedules){% endif %}.
+        Starting a preview changes nothing: each schedule is checked in the background, and you confirm the counts before anything is published.
+      </p>
+    </div>
+
+    <form method="post" class="p-5 space-y-5 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="publish_transcription_run">
+      <input type="hidden" name="select_across" value="{{ select_across }}">
+      {% for object_id in selected %}
+        <input type="hidden" name="_selected_action" value="{{ object_id }}">
+      {% endfor %}
+
+      {% if runs %}
+        <div>
+          <label for="run" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Run to publish</label>
+          <select id="run" name="run" class="w-full p-2 text-sm bg-white border border-gray-300 rounded-md sm:w-auto dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100">
+            {% for run in runs %}
+              <option value="{{ run.pk }}">{{ run.key }} · {{ run.metadata.model|default:"Unspecified model" }} · {{ run.created_at|date:"Y-m-d" }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% else %}
+        <p class="text-sm text-amber-800 dark:text-amber-200">No agent run has output for the selected schedules.</p>
+      {% endif %}
+
+      <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+        <a href="{% url 'admin:census_censusschedule_changelist' %}" class="text-sm font-medium text-gray-600 hover:underline dark:text-gray-300">← Cancel</a>
+        <button type="submit" name="start" value="1" class="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary-600 hover:bg-primary-700" {% if not runs %}disabled{% endif %}>
+          Start preview
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

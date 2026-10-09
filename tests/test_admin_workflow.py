@@ -14,7 +14,7 @@ from census.admin import (
     assign_to_me,
     mark_completed,
     mark_needs_review,
-    promote_latest_model_transcription,
+    publish_transcription_run,
     queue_claude_transcription,
 )
 from census.models import CensusSchedule, TranscriptionJob, TranscriptionRun
@@ -205,25 +205,24 @@ def test_reviewer_has_guarded_bulk_reconciliation_actions(reviewer):
         reviewer,
         {
             "_selected_action": [schedule.pk],
-            "action": "promote_latest_model_transcription",
+            "action": "publish_transcription_run",
             "select_across": "1",
         },
     )
 
     actions = model_admin.get_actions(request)
-    response = promote_latest_model_transcription(
+    response = publish_transcription_run(
         model_admin,
         request,
         CensusSchedule.objects.filter(pk=schedule.pk),
     )
 
-    assert "promote_latest_model_transcription" in actions
+    assert "publish_transcription_run" in actions
     assert "restore_previous_canonical_data" in actions
     assert response.status_code == 200
-    assert b"Trust the newest model run" in response.content
+    assert b"Publish a transcription run" in response.content
     assert b'name="select_across" value="1"' in response.content
-    assert b'name="confirmed" value="yes" required' in response.content
-    assert b"Promote and approve" in response.content
+    assert b"Start preview" in response.content
 
 
 @pytest.mark.django_db

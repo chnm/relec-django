@@ -236,10 +236,18 @@ linger in the AI review queue; a candidate newer than the one just reviewed stil
 returns to the queue for its own review.
 
 For a run that has already received sufficient quality review, the Census Schedule
-admin action menu provides **Promote latest model transcription**. The action uses
-each schedule's newest agent run rather than asking for a model or run manually,
-shows a confirmation screen, skips schedules without valid model evidence, and
-records one ordinary reconciliation per schedule. **Restore previous canonical
+admin action menu provides **Publish a transcription run** (the **Transcription
+run** list filter selects every schedule a run covers). The reviewer picks the run
+and starts a preview; `run_transcription_worker` classifies every schedule in the
+background, even while Claude transcription is disabled, and the status page under
+**Run Publications** shows the counts before the reviewer confirms. Publishing runs
+in the background too, 200 schedules per worker iteration (about 80 ms per schedule
+locally, so roughly half an hour for 20,000).
+The run's output replaces each schedule's data, except where a person already
+reconciled that run or edited data an earlier agent reconciliation applied; those
+schedules keep that work and are approved if Ready for Review. Schedules without
+output from the run are skipped, and each promotion is one ordinary
+reconciliation. **Restore previous canonical
 data** reverses the newest unreversed data-changing reconciliation for each selected
 schedule. Restores are themselves immutable reconciliation events; they do not
 delete either the promoted data or its evidence from history.

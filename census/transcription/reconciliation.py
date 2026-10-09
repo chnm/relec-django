@@ -268,6 +268,32 @@ def _decimal_text(value):
         return value
 
 
+def canonical_unchanged_since(schedule, reconciliation):
+    """Whether ``schedule`` still holds the data ``reconciliation`` produced.
+
+    ``schedule`` must come from ``schedule_graph_queryset``. Only fields present
+    in both snapshots are compared and ``schema_version`` is ignored, so a
+    serializer change alone never reads as a human edit.
+    """
+    return _same_shared_fields(
+        serialize_canonical(schedule), reconciliation.canonical_after
+    )
+
+
+def _same_shared_fields(current, stored):
+    if isinstance(current, dict) and isinstance(stored, dict):
+        return all(
+            _same_shared_fields(current[key], stored[key])
+            for key in current.keys() & stored.keys()
+            if key != "schema_version"
+        )
+    if isinstance(current, list) and isinstance(stored, list):
+        return len(current) == len(stored) and all(
+            map(_same_shared_fields, current, stored)
+        )
+    return current == stored
+
+
 def canonical_fingerprint(snapshot):
     payload = json.dumps(
         snapshot,
@@ -426,7 +452,7 @@ def apply_reconciliation(
     }:
         _apply_draft(schedule, preview["proposed"], reviewer)
     if approve:
-        _approve_schedule(schedule, reviewer)
+        approve_schedule(schedule, reviewer)
     else:
         # Query directly: schedule.church_details is prefetched and stale here.
         if not ReligiousBody.objects.filter(census_record=schedule).exists():
@@ -564,7 +590,7 @@ def rollback_reconciliation(
     _validate_draft(schedule, restored)
     operations = _operation_summary(before, restored)
     _apply_draft(schedule, restored, reviewer)
-    _approve_schedule(schedule, reviewer)
+    approve_schedule(schedule, reviewer)
 
     refreshed = schedule_graph_queryset().get(pk=schedule.pk)
     after = serialize_canonical(refreshed)
@@ -1484,7 +1510,7 @@ def _apply_memberships(schedule, body, proposed, reviewer):
         _history_save(membership, reviewer, "Applied schedule reconciliation")
 
 
-def _approve_schedule(schedule, reviewer):
+def approve_schedule(schedule, reviewer):
     if schedule.transcription_status != "approved":
         schedule.transcription_status = "approved"
         _history_save(schedule, reviewer, "Approved through schedule reconciliation")

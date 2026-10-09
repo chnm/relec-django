@@ -10,7 +10,6 @@ from django.test import RequestFactory
 
 from census.admin import (
     CensusScheduleAdmin,
-    promote_latest_model_transcription,
     restore_previous_canonical_data,
 )
 from census.models import (
@@ -26,9 +25,11 @@ from census.transcription.reconciliation import (
     apply_reconciliation,
     build_reconciliation_preview,
     canonical_fingerprint,
+    canonical_unchanged_since,
     infer_reconciliation_outcome,
     latest_reversible_reconciliation,
     rollback_reconciliation,
+    schedule_graph_queryset,
     serialize_canonical,
 )
 from census.transcription.status import with_ai_status
@@ -896,59 +897,6 @@ def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
 
 
 @pytest.mark.django_db
-def test_bulk_promotion_uses_most_recent_agent_run(reviewer):
-    schedule = canonical_schedule()
-    contract = load_contract()
-    run_metadata = {
-        "model": "test-model",
-        "contract_version": contract["version"],
-        "schema": contract["schema"],
-    }
-    older_run = TranscriptionRunFactory(kind="agent", metadata=run_metadata)
-    latest_run = TranscriptionRunFactory(kind="agent", metadata=run_metadata)
-    latest_data = agent_candidate(
-        respondent={
-            "name": "Newest model reading",
-            "title": "Pastor",
-            "po_address": "Newest PO",
-            "date_signed": "1926-05-05",
-        }
-    )
-    latest = ScheduleTranscriptionFactory(
-        census_schedule=schedule,
-        run=latest_run,
-        data=latest_data,
-    )
-    older = ScheduleTranscriptionFactory(
-        census_schedule=schedule,
-        run=older_run,
-        data=agent_candidate(),
-    )
-    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
-    request = bulk_action_request(
-        reviewer,
-        action="promote_latest_model_transcription",
-        apply="1",
-        confirmed="yes",
-        notes="Trusted bulk review.",
-    )
-
-    response = promote_latest_model_transcription(
-        model_admin,
-        request,
-        CensusSchedule.objects.filter(pk=schedule.pk),
-    )
-
-    schedule.refresh_from_db()
-    assert response.status_code == 302
-    assert schedule.respondent_name == "Newest model reading"
-    event = schedule.reconciliations.get()
-    assert event.sources.get().transcription == latest
-    assert event.sources.get().transcription != older
-    assert "Trusted bulk review." in event.notes
-
-
-@pytest.mark.django_db
 def test_bulk_restore_records_a_reversal(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
@@ -1161,38 +1109,6 @@ def test_validation_errors_name_the_offending_field(reviewer):
 
     with pytest.raises(ReconciliationValidationError, match=r"^name: "):
         build_reconciliation_preview(schedule, source)
-
-
-@pytest.mark.django_db
-def test_bulk_promotion_skips_schedules_already_promoted_from_that_run(reviewer):
-    schedule = canonical_schedule()
-    agent_source(schedule)
-    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
-    queryset = CensusSchedule.objects.filter(pk=schedule.pk)
-
-    for _ in range(2):
-        request = bulk_action_request(
-            reviewer,
-            action="promote_latest_model_transcription",
-            apply="1",
-            confirmed="yes",
-        )
-        promote_latest_model_transcription(model_admin, request, queryset)
-
-    assert schedule.reconciliations.count() == 1
-    assert any(
-        "already reconciled" in message.message.lower()
-        for message in request._messages
-    )
-
-    confirmation = promote_latest_model_transcription(
-        model_admin,
-        bulk_action_request(reviewer, action="promote_latest_model_transcription"),
-        queryset,
-    )
-    page = confirmation.content.decode()
-    assert "Already reconciled against" in page
-    assert re.search(r">0</div>\s*<div[^>]*>Eligible<", page)
 
 
 @pytest.mark.django_db
@@ -1427,39 +1343,26 @@ def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
     assert not schedule.reconciliations.exists()
 
 
-@pytest.mark.django_db
-def test_bulk_promotion_keeps_a_persons_reconciliation_choices(reviewer):
-    schedule = canonical_schedule()
-    source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule)
-    # A person reviewed the agent output and kept the human data instead.
-    apply_reconciliation(
+def promote(reviewer, schedule, source):
+    preview = build_reconciliation_preview(schedule, source)
+    return apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
-        approve=False,
-        allow_removals=False,
-    )
-    assert schedule.reconciliations.get().sources.get(
-        transcription=source
-    ).disposition == ReconciliationSource.Disposition.REJECTED
-    before = serialize_canonical(schedule)
-    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
-    request = bulk_action_request(
-        reviewer,
-        action="promote_latest_model_transcription",
-        apply="1",
-        confirmed="yes",
+        comparison_transcription_id=source.pk,
     )
 
-    promote_latest_model_transcription(
-        model_admin, request, CensusSchedule.objects.filter(pk=schedule.pk)
-    )
 
-    assert serialize_canonical(schedule) == before
-    assert schedule.reconciliations.count() == 1
-    assert any(
-        "already reconciled" in message.message.lower()
-        for message in request._messages
-    )
+@pytest.mark.django_db
+def test_schema_version_change_alone_is_not_a_human_edit(reviewer):
+    schedule = canonical_schedule()
+    event = promote(reviewer, schedule, agent_source(schedule))
+    event.canonical_after = {**event.canonical_after, "schema_version": "old"}
+    graph = schedule_graph_queryset().get(pk=schedule.pk)
+
+    assert canonical_unchanged_since(graph, event)
+
+    schedule.respondent_name = "Changed"
+    schedule.save()
+    graph = schedule_graph_queryset().get(pk=schedule.pk)
+    assert not canonical_unchanged_since(graph, event)

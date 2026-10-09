@@ -37,6 +37,8 @@ from .models import (
     Membership,
     ReconciliationSource,
     ReligiousBody,
+    RunPublication,
+    RunPublicationItem,
     ScheduleReconciliation,
     ScheduleTranscription,
     TranscriptionBatch,
@@ -46,6 +48,11 @@ from .models import (
 from .resources import CensusScheduleResource, DenominationResource
 from .transcription.comparison import source_raw_json
 from .transcription.contracts import CONTRACT_VERSION
+from .transcription.publishing import (
+    cancel_publication,
+    confirm_publication,
+    start_publication,
+)
 from .transcription.reconciliation import (
     ReconciliationError,
     apply_reconciliation,
@@ -177,6 +184,30 @@ class AITranscriptionFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value() in AI_STATUS_LABELS:
             return with_ai_status(queryset).filter(_ai_status=self.value())
+        return queryset
+
+
+class TranscriptionRunFilter(admin.SimpleListFilter):
+    """Schedules with output from one agent run, for selecting what to publish."""
+
+    title = "Transcription run"
+    parameter_name = "transcription_run"
+
+    def lookups(self, request, model_admin):
+        return [
+            (run.pk, run.key)
+            for run in TranscriptionRun.objects.filter(kind="agent").order_by(
+                "-created_at", "-pk"
+            )
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(
+                pk__in=ScheduleTranscription.objects.filter(
+                    run_id=self.value()
+                ).values("census_schedule_id")
+            )
         return queryset
 
 
@@ -389,6 +420,83 @@ class ReviewerReadOnlyModelAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(RunPublication)
+class RunPublicationAdmin(ReviewerReadOnlyModelAdmin):
+    list_display = ["__str__", "state", "requested_by", "created_at", "finished_at"]
+    list_filter = ["state"]
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        """Status page: progress, counts, and the confirm/cancel controls."""
+        if not is_reviewer(request.user):
+            raise PermissionDenied
+        publication = get_object_or_404(
+            RunPublication.objects.select_related("run"), pk=object_id
+        )
+        error = ""
+        if request.method == "POST":
+            if request.POST.get("cancel"):
+                if cancel_publication(publication):
+                    self.message_user(request, "Publication canceled.")
+            elif request.POST.get("confirmed") != "yes":
+                error = "Check the confirmation box before publishing."
+            elif confirm_publication(
+                publication, user=request.user, notes=request.POST.get("notes", "")
+            ):
+                self.message_user(request, "Publishing started.")
+            if not error:
+                return HttpResponseRedirect(request.path)
+
+        State = RunPublication.State
+        Item = RunPublicationItem
+        items = publication.items
+        total = items.count()
+        case_counts = dict(
+            items.exclude(case="").values_list("case").annotate(n=models.Count("pk"))
+        )
+        outcome_counts = dict(
+            items.exclude(outcome="")
+            .values_list("outcome")
+            .annotate(n=models.Count("pk"))
+        )
+        previewed = sum(case_counts.values()) + items.filter(
+            case="", outcome=Item.Outcome.FAILED
+        ).count()
+        return render(
+            request,
+            "admin/census/runpublication/status.html",
+            {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": str(publication),
+                "publication": publication,
+                "total": total,
+                "previewed": previewed,
+                "processed": sum(outcome_counts.values()),
+                "case_counts": [
+                    (label, case_counts.get(value, 0))
+                    for value, label in Item.Case.choices
+                ],
+                "outcome_counts": [
+                    (label, outcome_counts.get(value, 0))
+                    for value, label in Item.Outcome.choices
+                ],
+                "overwrite_warnings": items.filter(
+                    case=Item.Case.PROMOTE, overwrite_warning=True
+                ).count(),
+                "problems": items.filter(
+                    outcome__in=[Item.Outcome.FAILED, Item.Outcome.SKIPPED]
+                )
+                .exclude(case=Item.Case.NO_OUTPUT)
+                .select_related("census_schedule")[:50],
+                "working": publication.state in (State.PREVIEWING, State.PUBLISHING),
+                "can_confirm": publication.state == State.READY,
+                "can_cancel": publication.state
+                in (State.PREVIEWING, State.READY, State.PUBLISHING),
+                "error": error,
+            },
+        )
 
 
 @admin.register(TranscriptionRun)
@@ -1094,38 +1202,6 @@ def queue_claude_transcription(modeladmin, request, queryset):
     )
 
 
-def _latest_agent_transcription(schedule):
-    return (
-        schedule.transcriptions.filter(run__kind="agent")
-        .select_related("run")
-        .order_by(
-            "-run__created_at",
-            "-run__pk",
-            "-created_at",
-            "-pk",
-        )
-        .first()
-    )
-
-
-def _already_reconciled_against(schedule, source):
-    """True when a standing reconciliation already decided on this run.
-
-    That is the newest unreversed reconciliation, if it used this output in any
-    way (accepted, partially incorporated, or rejected) or came after it. A
-    person's choice there must not be overwritten by a bulk promotion.
-    """
-    latest = schedule.reconciliations.filter(reverses__isnull=True).first()
-    return bool(
-        latest
-        and not latest.reversals.exists()
-        and (
-            latest.applied_at >= source.created_at
-            or latest.sources.filter(transcription=source).exists()
-        )
-    )
-
-
 def _bulk_reconciliation_context(
     modeladmin,
     request,
@@ -1190,102 +1266,50 @@ def _bulk_action_messages(modeladmin, request, completed, skipped, action_label)
         )
 
 
-@admin.action(description="Promote latest model transcription")
-def promote_latest_model_transcription(modeladmin, request, queryset):
-    """Apply each schedule's newest agent run as trusted canonical data."""
+@admin.action(description="Publish a transcription run")
+def publish_transcription_run(modeladmin, request, queryset):
+    """Start a background publication of one agent run over the selection."""
     if not is_reviewer(request.user):
         modeladmin.message_user(
             request,
-            "Only reviewers can promote model transcriptions.",
+            "Only reviewers can publish transcription runs.",
             level=messages.ERROR,
         )
         return HttpResponseRedirect(
             reverse("admin:census_censusschedule_changelist")
         )
 
-    if request.POST.get("apply") and request.POST.get("confirmed") == "yes":
-        completed = 0
-        skipped = defaultdict(int)
-        reviewer_notes = request.POST.get("notes", "").strip()
-        for schedule in queryset.order_by("pk").iterator(chunk_size=100):
-            source = _latest_agent_transcription(schedule)
-            if source is None:
-                skipped["no model transcription"] += 1
-                continue
-            if _already_reconciled_against(schedule, source):
-                skipped["already reconciled against this run"] += 1
-                continue
-            try:
-                preview = build_reconciliation_preview(schedule, source)
-                notes = f"Bulk-promoted latest model run {source.run.key}."
-                if reviewer_notes:
-                    notes = f"{notes}\n{reviewer_notes}"
-                apply_reconciliation(
-                    schedule_id=schedule.pk,
-                    reviewer=request.user,
-                    expected_fingerprint=preview["before_fingerprint"],
-                    comparison_transcription_id=source.pk,
-                    notes=notes,
-                )
-            except ReconciliationError as exc:
-                skipped[str(exc)] += 1
-            else:
-                completed += 1
-        _bulk_action_messages(
-            modeladmin,
-            request,
-            completed,
-            skipped,
-            "Promoted the latest model transcription",
+    runs = list(
+        TranscriptionRun.objects.filter(
+            kind="agent", schedule_transcriptions__census_schedule__in=queryset
+        )
+        .distinct()
+        .order_by("-created_at", "-pk")
+    )
+    run = next((run for run in runs if str(run.pk) == request.POST.get("run")), None)
+    if run is not None and request.POST.get("start"):
+        publication = start_publication(
+            run=run,
+            schedule_ids=queryset.order_by("pk").values_list("pk", flat=True),
+            user=request.user,
         )
         return HttpResponseRedirect(
-            reverse("admin:census_censusschedule_changelist")
+            reverse("admin:census_runpublication_change", args=[publication.pk])
         )
 
-    def promotion_item(schedule):
-        source = _latest_agent_transcription(schedule)
-        if source is None:
-            return {
-                "schedule": schedule,
-                "eligible": False,
-                "detail": "No model transcription available",
-            }
-        model = source.run.metadata.get("model", "Unspecified model")
-        if _already_reconciled_against(schedule, source):
-            return {
-                "schedule": schedule,
-                "eligible": False,
-                "detail": f"Already reconciled against {source.run.key} · {model}",
-            }
-        return {
-            "schedule": schedule,
-            "eligible": True,
-            "detail": f"{source.run.key} · {model}",
-        }
-
-    context = _bulk_reconciliation_context(
-        modeladmin,
+    return render(
         request,
-        queryset,
-        action_name="promote_latest_model_transcription",
-        title="Promote latest model transcription",
-        heading="Trust the newest model run for each schedule",
-        explanation=(
-            "Each eligible schedule will use the output from its most recently "
-            "created agent run. No model is selected manually."
-        ),
-        warning=(
-            "This assumes the newest model transcription is correct and replaces "
-            "canonical schedule data. Every change remains reversible through the "
-            "reconciliation history."
-        ),
-        button_label="Promote and approve",
-        item_builder=promotion_item,
-        eligible_count=queryset.filter(
-            transcriptions__run__kind="agent"
-        ).distinct().count(),
+        "admin/census/publish-run-start.html",
+        {
+            **modeladmin.admin_site.each_context(request),
+            "opts": modeladmin.model._meta,
+            "title": "Publish a transcription run",
+            "runs": runs,
+            "total_count": queryset.count(),
+            "selected": request.POST.getlist(helpers.ACTION_CHECKBOX_NAME),
+            "select_across": request.POST.get("select_across", "0"),
+        },
     )
-    return render(request, "admin/census/bulk-reconciliation.html", context)
 
 
 @admin.action(description="Restore previous canonical data")
@@ -1424,6 +1448,7 @@ class CensusScheduleAdmin(ModelAdmin):
     list_filter = [
         TranscriptionWorkflowFilter,
         AITranscriptionFilter,
+        TranscriptionRunFilter,
         "transcription_status",
         AssignmentStatusFilter,
         "assigned_transcriber",
@@ -1445,7 +1470,7 @@ class CensusScheduleAdmin(ModelAdmin):
         unassign_reviewer,
         bulk_assign_users,
         queue_claude_transcription,
-        promote_latest_model_transcription,
+        publish_transcription_run,
         restore_previous_canonical_data,
     ]
     ordering = ["title_sort_key", "pk"]

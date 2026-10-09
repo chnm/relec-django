@@ -633,6 +633,86 @@ class ReconciliationSource(models.Model):
         return f"{self.transcription} / {self.get_disposition_display()}"
 
 
+class RunPublication(models.Model):
+    """One reviewer request to publish an agent run over selected schedules.
+
+    The worker previews (classifies) every item, the reviewer confirms, then the
+    worker applies. See docs/superpowers/specs/2026-10-07-background-run-publishing-design.md.
+    """
+
+    class State(models.TextChoices):
+        PREVIEWING = "previewing", "Previewing"
+        READY = "ready", "Ready to publish"
+        PUBLISHING = "publishing", "Publishing"
+        COMPLETED = "completed", "Completed"
+        CANCELED = "canceled", "Canceled"
+
+    run = models.ForeignKey(
+        TranscriptionRun, on_delete=models.PROTECT, related_name="publications"
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    confirmed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    notes = models.TextField(blank=True)
+    state = models.CharField(
+        max_length=20, choices=State.choices, default=State.PREVIEWING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [models.Index(fields=["state", "created_at"])]
+
+    def __str__(self):
+        return f"Publish {self.run.key} (#{self.pk})"
+
+
+class RunPublicationItem(models.Model):
+    """One schedule's case (from the preview) and outcome (from publishing)."""
+
+    class Case(models.TextChoices):
+        PROMOTE = "promote", "Publish run output"
+        RECONCILED = "reconciled", "Keep: reconciled by a person"
+        EDITED = "edited", "Keep: agent version edited"
+        NO_OUTPUT = "no_output", "Skip: no output"
+
+    class Outcome(models.TextChoices):
+        PUBLISHED = "published", "Published"
+        APPROVED = "approved", "Kept and approved"
+        KEPT = "kept", "Kept unchanged"
+        SKIPPED = "skipped", "Skipped"
+        FAILED = "failed", "Failed"
+
+    publication = models.ForeignKey(
+        RunPublication, on_delete=models.CASCADE, related_name="items"
+    )
+    census_schedule = models.ForeignKey(
+        CensusSchedule, on_delete=models.CASCADE, related_name="+"
+    )
+    case = models.CharField(max_length=20, choices=Case.choices, blank=True)
+    overwrite_warning = models.BooleanField(default=False)
+    outcome = models.CharField(max_length=20, choices=Outcome.choices, blank=True)
+    detail = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["publication", "census_schedule"],
+                name="unique_publication_schedule",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["publication", "case"]),
+            models.Index(fields=["publication", "outcome"]),
+        ]
+
+
 class TranscriptionBatch(models.Model):
     """A durable submission to a provider's asynchronous batch API."""
 
