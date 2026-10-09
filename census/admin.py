@@ -2140,6 +2140,32 @@ class CensusScheduleAdmin(ModelAdmin):
             },
         ),
         (
+            "Respondent",
+            {
+                "fields": [
+                    "respondent_name",
+                    "respondent_title",
+                    "respondent_po_address",
+                    "respondent_date_signed",
+                ],
+                "description": "Person who signed and furnished the information on the form.",
+            },
+        ),
+        (
+            "Form Details",
+            {
+                "fields": [
+                    "num_assistant_pastors",
+                    "date_received",
+                    "district_stamp",
+                    "denomination_code_stamp",
+                    "marginalia",
+                    "ai_notes",
+                ],
+                "description": "Census Bureau stamps, marginalia, and transcriber notes.",
+            },
+        ),
+        (
             "Project Management",
             {
                 "fields": [
