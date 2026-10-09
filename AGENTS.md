@@ -51,7 +51,7 @@ Key users:
 
 ## Tech Stack
 
-Python 3.12+ Django application with PostgreSQL, served via Daphne ASGI server. Admin interface customized with Django Unfold. Public frontend uses Foundation CSS, Leaflet.js maps, and Observable Plot for interactive visualizations.
+Python 3.12+ Django application with PostgreSQL, served by Gunicorn over WSGI. Admin interface customized with Django Unfold. Public frontend uses Foundation CSS, Leaflet.js maps, and Observable Plot for interactive visualizations.
 
 ### Package Management
 
@@ -65,7 +65,7 @@ Python 3.12+ Django application with PostgreSQL, served via Daphne ASGI server. 
 ### Backend
 
 - **Runtime**: Python 3.12+
-- **Framework**: Django 6.0.5 (async via Daphne 4.1.2+)
+- **Framework**: Django 6.0.5 (WSGI via Gunicorn; no async code)
 - **Key libraries**:
   - `djangorestframework` — REST API
   - `django-filter` — Queryset filtering
@@ -174,7 +174,6 @@ uv run python manage.py runserver
 Access at `http://localhost:8000`. Admin at `http://localhost:8000/admin/`.
 
 ### Common Setup Issues
-- **`SynchronousOnlyOperation`**: The debug toolbar's template panel is disabled under Daphne/ASGI because it can evaluate querysets synchronously
 - **Missing static files**: Run `uv run python manage.py collectstatic`
 - **Thumbnail errors**: Ensure `mediafiles/` directory exists and is writable
 
@@ -187,8 +186,8 @@ relec-django/
 ├── config/                    # Django project configuration
 │   ├── settings.py            # Main settings (Unfold config, DB, auth, storage)
 │   ├── urls.py                # Root URL routing
-│   ├── asgi.py                # ASGI application (Daphne)
-│   └── wsgi.py                # WSGI application (fallback)
+│   ├── asgi.py                # ASGI application (unused)
+│   └── wsgi.py                # WSGI application (Gunicorn)
 │
 ├── census/                    # Core transcription app
 │   ├── models.py              # Denomination, CensusSchedule, ReligiousBody, Membership, Clergy
@@ -533,7 +532,7 @@ Best practices:
 
 ### Debugging & Logging
 
-- **django-debug-toolbar**: Enabled when `DEBUG=True`; the template panel is disabled for ASGI compatibility.
+- **django-debug-toolbar**: Enabled when `DEBUG=True`.
 - **Django shell**: `uv run python manage.py shell` or `make shell`
 - **Logging**: Django's default logging to console; check `LOGGING` in `settings.py`
 - **Log levels**: `DEBUG` in development, `INFO`/`WARNING` in production
@@ -547,7 +546,6 @@ uv run python manage.py runserver
 make preview
 ```
 - Runs at `http://localhost:8000`
-- Uses Daphne ASGI server via `manage.py runserver`
 
 **Static files in development:**
 - Served by Django's `runserver` from `STATICFILES_DIRS`
@@ -557,7 +555,7 @@ make preview
 `rrchnm-systems/k8s-django` components. CI (`.github/workflows/cicd.yml`)
 publishes the image to `oci.rrchnm.internal/rrchnm/relec-django` and pins its
 digest in `k8s/kustomization.yaml`.
-- Daphne serves the app; static files are served by WhiteNoise
+- Gunicorn serves the app (3 workers × 4 threads, `Dockerfile` `CMD`), so each pod holds at most 12 persistent DB connections; static files are served by WhiteNoise
 - Media live in the Garage bucket `religiousecologies.org`; a Caddy sidecar
   serves them same-origin at `/media/` (`k8s/Caddyfile`)
 - Secrets come from OpenBao (`kv/eso/relec-django`) through ExternalSecrets
@@ -653,7 +651,6 @@ docker-compose up
 
 **Critical Context:**
 - `ReligiousBody.location` FK **does not exist** — it was removed in migration 0016. Never add it back.
-- The debug toolbar template panel is disabled intentionally for ASGI compatibility
 - The `Location` model in `location/models.py` is deprecated — use `State`, `County`, `PopulatedPlace`
 - Observable Plot visualizations use wrapper scripts with hardcoded div IDs; do not reintroduce the `@params` import system
 
@@ -671,10 +668,10 @@ docker-compose up
 **What to Avoid:**
 - Do not use synchronous ORM operations in async views (use `sync_to_async` or `aaync` ORM methods)
 - Do not add `ReligiousBody.location` or any reference to the deprecated flat `Location` model
-- Do not re-enable the debug toolbar template panel without verifying ASGI compatibility
+- Do not serve the app under ASGI while `CONN_MAX_AGE > 0`: persistent connections leak one per thread and exhaust Postgres (#205)
 - Do not create new standalone JavaScript frameworks/bundlers — the project intentionally avoids bundlers
 - Do not add rate limiting without first checking if it affects the public-read API requirements
-- Do not bypass `robots.txt` AI crawler blocks — they are intentional to prevent ASGI timeouts from aggressive crawlers
+- Do not bypass `robots.txt` AI crawler blocks — they are intentional to prevent timeouts from aggressive crawlers
 
 **File Modification Guidelines:**
 - `census/models.py`: Contains the main workflow state machine; update `TRANSCRIPTION_STATUS_CHOICES` and `save()` auto-transition logic together
