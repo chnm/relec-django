@@ -24,3 +24,9 @@ def test_deployment_entry_point_uses_default_settings(module_name):
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_database_connections_close_after_each_request():
+    from django.conf import settings
+
+    assert settings.DATABASES["default"]["CONN_MAX_AGE"] == 0

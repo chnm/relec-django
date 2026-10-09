@@ -248,8 +248,11 @@ DATABASES = {
         "NAME": env("DB_NAME", default="religious_ecologies"),
         "USER": env("DB_USER", default="religious_ecologies"),
         "PASSWORD": env("DB_PASS", default="password"),
-        "CONN_MAX_AGE": 60,
-        "CONN_HEALTH_CHECK": True,
+        # Daphne runs sync ORM code on per-request threads, and a persistent
+        # connection stays open on each thread that used it until Postgres's
+        # max_connections is exhausted. Django's ASGI guidance is to disable
+        # persistent connections.
+        "CONN_MAX_AGE": 0,
     }
 }
 # The migrate Job sets this so a migration blocked behind the nightly pg_dump
