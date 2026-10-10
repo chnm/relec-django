@@ -5,7 +5,9 @@ namespace: relec
 
 resources:
 - app-deploy.yaml
+- https-redirect.yaml
 - netpol.yaml
+- post-sync-health-check.yaml
 - transcription-worker.yaml
 - www-redirect.yaml
 

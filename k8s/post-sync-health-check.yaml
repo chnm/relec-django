@@ -1,0 +1,66 @@
+---
+# Argo PostSync probe through the public edge (F5 -> HAProxy -> Gateway), not
+# just the pod readinessProbe. A failure fails the sync, so the rollout
+# notification waits for it. Retries cover the 503 /health/ returns while the
+# new pods settle. Mirrors infra k0s/gitops/components/post-sync-http-check,
+# plus a body check.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: post-sync-health-check
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 0
+  template:
+    metadata:
+      labels: { app: post-sync-health-check }
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: check
+          image: curlimages/curl@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777 # 8.22.0
+          command: [sh, -euc]
+          args:
+            - |
+              body=$(curl --fail --show-error --silent \
+                --proto '=https' \
+                --connect-timeout 5 --max-time 15 \
+                --retry 12 --retry-all-errors --retry-delay 5 \
+                "$HEALTHCHECK_URL")
+              echo "healthcheck $HEALTHCHECK_URL: $body"
+              case "$body" in
+                *'"status": "ok"'*) ;;
+                *) echo 'expected "status": "ok"' >&2; exit 1 ;;
+              esac
+          env:
+            - { name: HEALTHCHECK_URL, value: "https://religiousecologies.org/health/" }
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits: { cpu: 50m, memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+# k8s-django's isolation policy allows only DNS + same-namespace egress.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: post-sync-health-check
+  annotations: { argocd.argoproj.io/sync-wave: "-2" }
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app: post-sync-health-check
+  egress:
+    - toFQDNs:
+        - { matchName: religiousecologies.org }
+      toPorts:
+        - ports: [{ port: "443", protocol: TCP }]
