@@ -1,0 +1,31 @@
+---
+# http:// -> https://religiousecologies.org, at the Gateway's :80 listener. With
+# no route on that listener, plain HTTP gets Envoy's 404. www goes straight to
+# the apex here instead of a second hop through www-redirect.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io   # explicit (API-server default) so Argo doesn't perma-diff
+      kind: Gateway
+      name: public
+      namespace: platform
+      sectionName: http
+  hostnames:
+    - religiousecologies.org
+    - www.religiousecologies.org
+  rules:
+    # Explicit match (the API-server default) so Argo doesn't perma-diff.
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            # Explicit scheme (and so its default port), or the Location header
+            # carries :80.
+            scheme: https
+            hostname: religiousecologies.org
+            statusCode: 301
