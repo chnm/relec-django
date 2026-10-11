@@ -22,6 +22,10 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+        # The image's USER is the name curl_user; the kubelet needs a number to
+        # verify non-root.
+        runAsUser: 100
+        runAsGroup: 101
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: check
