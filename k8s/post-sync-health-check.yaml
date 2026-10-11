@@ -42,7 +42,7 @@ spec:
           env:
             - { name: HEALTHCHECK_URL, value: "https://religiousecologies.org/health/" }
           resources:
-            requests: { cpu: 5m, memory: 8Mi }
+            requests: { cpu: 10m, memory: 16Mi }   # k8s-django LimitRange minimums
             limits: { cpu: 50m, memory: 32Mi }
           securityContext:
             allowPrivilegeEscalation: false
