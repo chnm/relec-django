@@ -131,7 +131,6 @@ APPLICATION_REVISION = env("APPLICATION_REVISION", default="").strip()
 # Application definition
 
 INSTALLED_APPS = [
-    "daphne",
     # django-unfold
     "unfold",
     "unfold.contrib.forms",
@@ -207,9 +206,10 @@ if DEBUG_TOOLBAR:
 DEBUG_TOOLBAR_CONFIG = {
     "DISABLE_PANELS": [
         "debug_toolbar.panels.redirects.RedirectsPanel",
-        # Templates panel triggers SynchronousOnlyOperation under Daphne/ASGI
-        # when it tries to repr() querysets in template context
-        "debug_toolbar.panels.templates.TemplatesPanel",
+        # The toolbar's default. cProfile allows one active profiler per
+        # process, so threaded runserver requests collide; toggle it on in
+        # the toolbar for a single request instead.
+        "debug_toolbar.panels.profiling.ProfilingPanel",
     ],
     "SHOW_TEMPLATE_CONTEXT": True,
 }
@@ -235,7 +235,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
-ASGI_APPLICATION = "config.asgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -248,8 +247,11 @@ DATABASES = {
         "NAME": env("DB_NAME", default="religious_ecologies"),
         "USER": env("DB_USER", default="religious_ecologies"),
         "PASSWORD": env("DB_PASS", default="password"),
+        # Safe because Gunicorn's threads are long-lived: at most
+        # workers x threads connections per pod (Dockerfile CMD). Under ASGI
+        # these leaked one per thread and exhausted Postgres (#205).
         "CONN_MAX_AGE": 60,
-        "CONN_HEALTH_CHECK": True,
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 # The migrate Job sets this so a migration blocked behind the nightly pg_dump

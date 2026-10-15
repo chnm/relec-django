@@ -8,8 +8,8 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     image: "rrchnm/relec-django"
-    labels:
-      - autoheal=true
+    # StageX base images are amd64-only; Apple Silicon builds and runs this under emulation.
+    platform: linux/amd64
     ports:
       - 8000:8000
     volumes:
@@ -56,9 +56,9 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     image: "rrchnm/relec-django"
+    # StageX base images are amd64-only; Apple Silicon builds and runs this under emulation.
+    platform: linux/amd64
     restart: unless-stopped
-    labels:
-      - autoheal=true
     profiles: ["transcription"]
     volumes:
       - dj-data:/app
@@ -90,11 +90,40 @@ services:
     depends_on:
       app:
         condition: service_healthy
+  # Backend tests against the local db (no browser tests: Playwright has no
+  # wheels for the StageX base):  docker compose --profile test run --rm test
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    image: "rrchnm/relec-django:test"
+    platform: linux/amd64
+    profiles: ["test"]
+    environment:
+      - DJANGO_SECRET_KEY=thisisnotasecretkey
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=religious_ecologies
+      - DB_USER=religious_ecologies
+      - DB_PASS=password
+      - OBJ_STORAGE=False
+    # The base stage keeps StageX's `python` ENTRYPOINT; only runtime clears it.
+    entrypoint: [sh, -c]
+    command:
+      - >-
+        uv sync --frozen --group dev --no-install-project
+        --no-install-package playwright --no-install-package pytest-playwright &&
+        python -m pytest -m 'not e2e'
+    depends_on:
+      db:
+        condition: service_healthy
   memcached:
     image: memcached:1-alpine
     restart: unless-stopped
   db:
-    image: postgres:17
+    # The production Postgres image (rrchnm-systems/k8s-django components/postgres).
+    image: docker.io/pgautoupgrade/pgautoupgrade@sha256:9892fd41b60f12d8a3d0272ce40f4d8f745184e82b03e7fe310ef98d8a29080c
     volumes:
       - pg-data:/var/lib/postgresql/data
     environment:
@@ -107,14 +136,6 @@ services:
       interval: 2s
       timeout: 5s
       retries: 3
-
-  autoheal:
-    image: willfarrell/autoheal:1.2.0
-    restart: unless-stopped
-    environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal
-    volumes:
-      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
 
 volumes:
   dj-data:

@@ -1,0 +1,67 @@
+# Run against your copy in the shared developer Postgres instead of the local
+# db service, served by the image's own Gunicorn CMD rather than runserver.
+# https://docs.rrchnm.org/guides/developer-databases/
+#
+#   kubectl -n developer port-forward pod/postgres-0 15432:5432
+#   docker compose -f docker-compose.yml -f docker-compose.developer-db.yml up --build
+#
+# devdb creates relec_$USER from relec_pristine on first run and leaves it
+# alone after; drop it (or wait for the nightly refresh) to start over.
+# The copy is migrated to production's schema; for a branch with migrations,
+# `docker compose ... run --rm app python manage.py migrate` first.
+# On Linux, the tunnel must listen where containers can reach it:
+# add `--address 0.0.0.0` to the port-forward.
+x-developer-db: &developer-db
+  DB_HOST: host.docker.internal
+  DB_PORT: "15432"
+  DB_NAME: relec_${USER}
+  DB_USER: developer_relec
+  DB_PASS: "PLACEHOLDER"   # the port-forward lands on the pod's localhost, which needs none
+
+services:
+  devdb:
+    # The developer and production Postgres image, so the client matches the
+    # server. Its entrypoint runs an upgrade check first; bypass it.
+    image: docker.io/pgautoupgrade/pgautoupgrade@sha256:9892fd41b60f12d8a3d0272ce40f4d8f745184e82b03e7fe310ef98d8a29080c
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment: *developer-db
+    entrypoint: [sh, -c]
+    command:
+      - |
+        export PGHOST="$$DB_HOST" PGPORT="$$DB_PORT" PGUSER="$$DB_USER"
+        pg_isready -q -d postgres || { echo "no developer Postgres at $$PGHOST:$$PGPORT; is the port-forward running?" >&2; exit 1; }
+        psql -X -v ON_ERROR_STOP=1 -qtA -d postgres -v db="$$DB_NAME" <<'SQL'
+        SELECT format('CREATE DATABASE %I TEMPLATE relec_pristine', :'db')
+         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db') \gexec
+        SQL
+        echo "$$DB_NAME ready"
+  app:
+    # The base file's dj-data volume keeps the first build's /app, masking rebuilds.
+    volumes: !reset []
+    depends_on: !override
+      devdb:
+        condition: service_completed_successfully
+      memcached:
+        condition: service_started
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      <<: *developer-db
+      # Media URLs point at production's public /media/. The dummy endpoint
+      # and keys make any upload fail instead of writing to the live bucket.
+      OBJ_STORAGE: "True"
+      APP_FQDN: religiousecologies.org
+      OBJ_STORAGE_BUCKET_NAME: religiousecologies.org
+      OBJ_STORAGE_ENDPOINT_URL: http://127.0.0.1:9
+      OBJ_STORAGE_ACCESS_KEY_ID: local-read-only
+      OBJ_STORAGE_SECRET_ACCESS_KEY: local-read-only
+    command: !reset null
+  transcription-worker:
+    volumes: !reset []
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment: *developer-db
+  # Not started: the app uses the developer copy.
+  db:
+    profiles: [local-db]
