@@ -16,3 +16,4 @@ data:
   RESTIC_REPO: religiousecologies.org
   RESTIC_SECRET: eso/restic-relec
   MEDIA_BUCKET: religiousecologies.org
+  DEVELOPER_APP: relec

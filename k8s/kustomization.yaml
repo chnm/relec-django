@@ -15,10 +15,11 @@ resources:
 # Pinned by commit; bump every ref together. media-garage serves the Garage
 # bucket (app-deploy MEDIA_BUCKET) same-origin at /media/.
 components:
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=4d6ca2e4c09b0ecea04262a77d41d22518de840b
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=4d6ca2e4c09b0ecea04262a77d41d22518de840b
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=4d6ca2e4c09b0ecea04262a77d41d22518de840b
-- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/media-garage?ref=4d6ca2e4c09b0ecea04262a77d41d22518de840b
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/app?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/postgres?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/backup?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/media-garage?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
+- https://forge.rrchnm.internal/rrchnm-systems/k8s-django//components/developer-refresh?ref=c3efe70804ed626b87b1bdfd4e59826357d82864
 
 # This app's own Django settings (the components set DB_*, hosts and DEBUG).
 # CLAUDE_TRANSCRIPTION_ENABLED is read by both the web pod (launches runs) and
@@ -76,8 +77,8 @@ patches:
     kind: CronJob
     name: postgres-backup
 
-# Copy the pinned digest into IMAGE_DIGEST. Must live here: replacements in
-# components run before `images:` below.
+# Copy the pinned image into IMAGE_DIGEST and the developer copy's record.
+# Must live here: replacements in components run before `images:` below.
 replacements:
 - source:
     fieldPath: spec.template.spec.containers.[name=app].image
@@ -92,6 +93,16 @@ replacements:
     select:
       kind: Deployment
       name: app
+- source:
+    fieldPath: spec.template.spec.containers.[name=app].image
+    kind: Deployment
+    name: app
+  targets:
+  - fieldPaths:
+    - spec.jobTemplate.spec.template.spec.containers.[name=swap].env.[name=APP_IMAGE].value
+    select:
+      kind: CronJob
+      name: developer-refresh
 
 # Two entries on purpose: `app` -> the real name, then the real name -> its
 # digest. CI (chnm/.github update-deploy-digests) pins with
