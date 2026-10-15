@@ -51,4 +51,5 @@ USER 10001:10001
 EXPOSE 8000
 # The StageX base sets ENTRYPOINT to python, which would wrap the CMD below.
 ENTRYPOINT []
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", "--access-logfile", "-"]
+# No control socket: it needs a writable $HOME, and nothing here uses gunicornc.
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", "--access-logfile", "-", "--no-control-socket"]
