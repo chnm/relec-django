@@ -46,7 +46,16 @@ services:
         condition: service_started
     extra_hosts:
       - host.docker.internal:host-gateway
-    environment: *developer-db
+    environment:
+      <<: *developer-db
+      # Media URLs point at production's public /media/. The dummy endpoint
+      # and keys make any upload fail instead of writing to the live bucket.
+      OBJ_STORAGE: "True"
+      APP_FQDN: religiousecologies.org
+      OBJ_STORAGE_BUCKET_NAME: religiousecologies.org
+      OBJ_STORAGE_ENDPOINT_URL: http://127.0.0.1:9
+      OBJ_STORAGE_ACCESS_KEY_ID: local-read-only
+      OBJ_STORAGE_SECRET_ACCESS_KEY: local-read-only
     command: !reset null
   transcription-worker:
     volumes: !reset []
