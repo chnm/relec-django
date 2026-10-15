@@ -111,5 +111,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/relec-django
-- digest: sha256:0f4323f18da08f7b3fe35f97f35ccb86cfa5b8563bc9f7dc3a2f1111a87e4c2d
+- digest: sha256:07105911178d6840e5145819cad009128664c9d196702a5b031643403545b731
   name: oci.rrchnm.internal/rrchnm/relec-django
