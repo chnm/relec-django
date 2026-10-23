@@ -1,5 +1,6 @@
 # census/api_views.py
 from django.db.models import Count, Prefetch
+from django.utils.cache import patch_cache_control
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
@@ -223,6 +224,22 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         if self.request.query_params.get("view") == "map":
             return ReligiousBodyMapSerializer
         return super().get_serializer_class()
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        # cache_page stores into the per-worker LocMemCache, so a 5000-record
+        # page (~19 MB) would sit in every worker that served one for an hour.
+        # Private keeps it out of the page cache and of shared caches.
+        if self._requests_bulk_page(request):
+            patch_cache_control(response, private=True)
+        return response
+
+    def _requests_bulk_page(self, request):
+        try:
+            requested = int(request.query_params.get("page_size", ""))
+        except ValueError:
+            return False
+        return requested > self.paginator.page_size
 
     @action(detail=False, methods=["get"])
     def denomination_families(self, request):
