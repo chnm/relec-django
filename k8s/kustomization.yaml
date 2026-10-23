@@ -40,6 +40,12 @@ configMapGenerator:
 # App resources, the namespace memory budget, the migrate command, Postgres
 # size (immutable after the first sync) and a backup slot clear of the other
 # apps.
+              # 2Gi: serializing a 5000-record religious-bodies API page costs
+              # ~300Mi, three Gunicorn workers can do that at once, and the
+              # in-process page cache keeps each response for an hour.
+# The shared 4Gi limits budget fits the steady state (app 2Gi + media 128Mi,
+# postgres 1Gi, worker 512Mi) but not the rolling-update surge pod, which
+# needs another 2.1Gi while the old pod drains.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -59,9 +65,6 @@ patches:
   target:
     kind: Deployment
     name: app
-# The shared 4Gi limits budget fits the steady state (app 2Gi + media 128Mi,
-# postgres 1Gi, worker 512Mi) but not the rolling-update surge pod, which
-# needs another 2.1Gi while the old pod drains.
 - patch: |-
     apiVersion: v1
     kind: ResourceQuota
@@ -128,5 +131,5 @@ replacements:
 images:
 - name: app
   newName: oci.rrchnm.internal/rrchnm/relec-django
-- digest: sha256:07105911178d6840e5145819cad009128664c9d196702a5b031643403545b731
+- digest: sha256:a3d73e0e5f3ecf2b7a430e560ccb4e353dbb4d8533fa0f2e6ea85806f502de35
   name: oci.rrchnm.internal/rrchnm/relec-django
