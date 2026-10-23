@@ -37,18 +37,19 @@ configMapGenerator:
     annotations:
       argocd.argoproj.io/sync-wave: "-2"
 
+# Comments go here, never inside a `patch: |-` body or above a `- patch:`
+# item: CI's `kustomize edit set image` copies `#` lines out of block scalars
+# as new comments on every digest pin, and hoists item comments above
+# `patches:`.
+#
 # App resources, the namespace memory budget, the migrate command, Postgres
 # size (immutable after the first sync) and a backup slot clear of the other
-# apps.
-              # 2Gi: serializing a 5000-record religious-bodies API page costs
-              # ~300Mi, three Gunicorn workers can do that at once, and the
-              # in-process page cache keeps each response for an hour.
-# The shared 4Gi limits budget fits the steady state (app 2Gi + media 128Mi,
+# apps. The app's 2Gi limit: serializing a 5000-record religious-bodies API
+# page costs ~300Mi, three Gunicorn workers can do that at once, and the
+# in-process page cache keeps each response for an hour. The 6Gi quota: the
+# shared 4Gi limits budget fits the steady state (app 2Gi + media 128Mi,
 # postgres 1Gi, worker 512Mi) but not the rolling-update surge pod, which
 # needs another 2.1Gi while the old pod drains.
-              # 2Gi: serializing a 5000-record religious-bodies API page costs
-              # ~300Mi, three Gunicorn workers can do that at once, and the
-              # in-process page cache keeps each response for an hour.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -59,9 +60,6 @@ patches:
         spec:
           containers:
             - name: app
-              # 2Gi: serializing a 5000-record religious-bodies API page costs
-              # ~300Mi, three Gunicorn workers can do that at once, and the
-              # in-process page cache keeps each response for an hour.
               resources:
                 requests: { cpu: 100m, memory: 256Mi }
                 limits: { cpu: "1", memory: 2Gi }
