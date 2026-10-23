@@ -52,4 +52,6 @@ EXPOSE 8000
 # The StageX base sets ENTRYPOINT to python, which would wrap the CMD below.
 ENTRYPOINT []
 # No control socket: it needs a writable $HOME, and nothing here uses gunicornc.
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", "--access-logfile", "-", "--no-control-socket"]
+# Recycle workers: a 5000-record religious-bodies API page leaves a worker's
+# heap and in-process page cache large until the worker exits.
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", "--max-requests", "300", "--max-requests-jitter", "50", "--access-logfile", "-", "--no-control-socket"]

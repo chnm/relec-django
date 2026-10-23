@@ -37,8 +37,9 @@ configMapGenerator:
     annotations:
       argocd.argoproj.io/sync-wave: "-2"
 
-# App resources, the migrate command, Postgres size (immutable after the first
-# sync) and a backup slot clear of the other apps.
+# App resources, the namespace memory budget, the migrate command, Postgres
+# size (immutable after the first sync) and a backup slot clear of the other
+# apps.
 patches:
 - patch: |-
     apiVersion: apps/v1
@@ -49,12 +50,28 @@ patches:
         spec:
           containers:
             - name: app
+              # 2Gi: serializing a 5000-record religious-bodies API page costs
+              # ~300Mi, three Gunicorn workers can do that at once, and the
+              # in-process page cache keeps each response for an hour.
               resources:
                 requests: { cpu: 100m, memory: 256Mi }
-                limits: { cpu: "1", memory: 1Gi }
+                limits: { cpu: "1", memory: 2Gi }
   target:
     kind: Deployment
     name: app
+# The shared 4Gi limits budget fits the steady state (app 2Gi + media 128Mi,
+# postgres 1Gi, worker 512Mi) but not the rolling-update surge pod, which
+# needs another 2.1Gi while the old pod drains.
+- patch: |-
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata: { name: quota }
+    spec:
+      hard:
+        limits.memory: 6Gi
+  target:
+    kind: ResourceQuota
+    name: quota
 - patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/command
