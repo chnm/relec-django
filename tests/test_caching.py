@@ -1,6 +1,7 @@
 import pytest
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils.cache import get_cache_key
 
 
 @pytest.mark.django_db
@@ -80,3 +81,38 @@ class TestFilterDataCaching:
 
         cache.clear()
         assert cache.get("census_browser_filter_data") is None
+
+
+@pytest.mark.django_db
+class TestBulkApiPagesStayOutOfPageCache:
+    """The page cache is in-process, so bulk API pages must not be stored."""
+
+    @pytest.mark.parametrize("page_size", [None, 100])
+    def test_default_sized_page_is_cached(self, sample_dataset, client, page_size):
+        params = {} if page_size is None else {"page_size": page_size}
+        response = client.get(reverse("religiousbody-list"), params)
+
+        assert response.status_code == 200
+        assert "private" not in response.get("Cache-Control", "")
+        assert get_cache_key(response.wsgi_request) is not None
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"page_size": 101},
+            {"page_size": 5000, "view": "map"},
+            {"page_size": 5000, "format": "api"},
+        ],
+    )
+    def test_bulk_page_is_private_and_not_cached(self, sample_dataset, client, params):
+        response = client.get(reverse("religiousbody-list"), params)
+
+        assert response.status_code == 200
+        assert "private" in response["Cache-Control"]
+        assert get_cache_key(response.wsgi_request) is None
+
+    def test_malformed_page_size_is_still_cached(self, sample_dataset, client):
+        response = client.get(reverse("religiousbody-list"), {"page_size": "lots"})
+
+        assert response.status_code == 200
+        assert "private" not in response.get("Cache-Control", "")
