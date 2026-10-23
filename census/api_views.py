@@ -106,6 +106,13 @@ class ReligiousBodyPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 5000
 
+    def get_page_size(self, request):
+        page_size = super().get_page_size(request)
+        # HTML previews expand large payloads; JSON map batches stay unchanged.
+        if request.accepted_renderer.format == "api":
+            return min(page_size, self.page_size)
+        return page_size
+
     def paginate_queryset(self, queryset, request, view=None):
         # Extract distinct denomination names from the full filtered queryset
         # before pagination slices it
@@ -152,7 +159,7 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         - has_location: Filter by the presence of a populated place
         - search: Search by name, address, or census code
         - page: Page number (default page size 100)
-        - page_size: Number of records per page (maximum 5000)
+        - page_size: Number of records per page (maximum 5000 JSON, 100 HTML)
         - ordering: Order by name or census_record__schedule_id
         - view: Use "map" for a reduced high-volume response
     """
@@ -164,6 +171,10 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
             "census_record",
             "census_record__county__state",
             "census_record__populated_place",
+        )
+        .defer(
+            "census_record__ai_transcription",
+            "census_record__human_transcription",
         )
         .order_by("census_record__schedule_id")
     )
