@@ -10,5 +10,9 @@
       {% include "unfold/helpers/tab_action.html" with title="Reconcile & submit" link=comparison_url icon="difference" %}
     {% endif %}
   {% endif %}
+  {% if next_schedule %}
+    {% url "admin:census_censusschedule_compare_transcriptions" next_schedule.pk as next_url %}
+    {% include "unfold/helpers/tab_action.html" with title="Next assigned record" link=next_url icon="arrow_forward" %}
+  {% endif %}
   {{ block.super }}
 {% endblock %}

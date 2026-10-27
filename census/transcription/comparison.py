@@ -65,7 +65,6 @@ CLERGY_FIELDS = [
     ("college", "College"),
     ("theological_seminary", "Theological seminary"),
     ("num_other_churches_served", "Other churches served"),
-    ("serving_congregation", "Serving this congregation"),
 ]
 
 

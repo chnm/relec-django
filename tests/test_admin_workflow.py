@@ -684,3 +684,22 @@ def test_transcriber_can_edit_needs_review_schedule(transcriber):
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
     assert model_admin.has_change_permission(admin_request(transcriber), schedule)
+
+
+@pytest.mark.django_db
+def test_next_assigned_schedule_skips_current_and_unready_records(transcriber, reviewer):
+    def schedule(**fields):
+        record = CensusScheduleFactory(**fields)
+        ScheduleTranscriptionFactory(census_schedule=record)
+        return record
+
+    current = schedule(assigned_transcriber=transcriber, transcription_status="assigned")
+    schedule(assigned_transcriber=transcriber, transcription_status="needs_review")
+    CensusScheduleFactory(assigned_transcriber=transcriber, transcription_status="assigned")
+    upcoming = schedule(assigned_transcriber=transcriber, transcription_status="in_progress")
+    to_review = schedule(assigned_reviewer=reviewer, transcription_status="needs_review")
+
+    next_for = CensusScheduleAdmin._next_assigned_schedule
+    assert next_for(admin_request(transcriber), current, False) == upcoming
+    assert next_for(admin_request(transcriber), upcoming, False) == current
+    assert next_for(admin_request(reviewer), current, True) == to_review
