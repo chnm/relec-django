@@ -1541,6 +1541,10 @@ class CensusScheduleAdmin(ModelAdmin):
             and (reviewer_mode or self.has_change_permission(request, obj))
             and ScheduleTranscription.objects.filter(census_schedule=obj).exists()
         )
+        if obj:
+            extra_context["next_schedule"] = self._next_assigned_schedule(
+                request, obj, reviewer_mode
+            )
         return super().changeform_view(
             request,
             object_id=object_id,
@@ -1721,6 +1725,9 @@ class CensusScheduleAdmin(ModelAdmin):
             "preview": preview,
             "reconciliation_error": reconciliation_error,
             "can_apply": can_apply,
+            "next_schedule": self._next_assigned_schedule(
+                request, schedule, reviewer_mode
+            ),
             "recent_reconciliations": schedule.reconciliations.select_related(
                 "reviewer"
             )[:5],
@@ -1729,6 +1736,24 @@ class CensusScheduleAdmin(ModelAdmin):
             request,
             "admin/census/censusschedule/compare-transcriptions.html",
             context,
+        )
+
+    @staticmethod
+    def _next_assigned_schedule(request, current, reviewer_mode):
+        """The user's next record waiting on them that has sources to reconcile."""
+        if reviewer_mode:
+            waiting = {"assigned_reviewer": request.user, "transcription_status": "needs_review"}
+        else:
+            waiting = {
+                "assigned_transcriber": request.user,
+                "transcription_status__in": ("assigned", "in_progress"),
+            }
+        return (
+            CensusSchedule.objects.filter(transcriptions__isnull=False, **waiting)
+            .exclude(pk=current.pk)
+            .distinct()
+            .order_by("pk")
+            .first()
         )
 
     @staticmethod

@@ -9,7 +9,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
 
 from census.models import (
     CensusSchedule,
@@ -95,8 +94,7 @@ CLERGY_FIELDS = (
     "college",
     "theological_seminary",
     "num_other_churches_served",
-    "serving_congregation",
-)
+)  # serving_congregation is not on the 1926 form; reconciliation leaves it alone.
 NONNEGATIVE_FIELDS = {
     "num_assistant_pastors",
     "num_edifices",
@@ -122,7 +120,6 @@ DECIMAL_FIELDS = {
 BOOLEAN_FIELDS = {
     "has_pastors_residence",
     "is_assistant",
-    "serving_congregation",
 }
 INTEGER_FIELDS = (NONNEGATIVE_FIELDS - DECIMAL_FIELDS) | {"populated_place_id"}
 DATE_FIELDS = {"date_received"}
@@ -505,25 +502,20 @@ def apply_reconciliation(
             disposition=disposition,
         )
 
-    used_transcriptions = [
-        t for t in (baseline_transcription, comparison_transcription) if t is not None
-    ]
-    if used_transcriptions:
-        newest = max(used_transcriptions, key=lambda t: (t.created_at, t.pk))
-        pending_candidates = ScheduleTranscription.objects.filter(
-            census_schedule=schedule,
-            run__kind="agent",
-            reconciliation_sources__isnull=True,
-        ).filter(
-            Q(created_at__lt=newest.created_at)
-            | Q(created_at=newest.created_at, pk__lt=newest.pk)
+    # Every run on offer when the reviewer submitted counts as reviewed,
+    # whether or not it was one of the two compared; only runs that arrive
+    # later stay pending.
+    pending_candidates = ScheduleTranscription.objects.filter(
+        census_schedule=schedule,
+        run__kind="agent",
+        reconciliation_sources__isnull=True,
+    )
+    for candidate in pending_candidates:
+        ReconciliationSource.objects.create(
+            reconciliation=reconciliation,
+            transcription=candidate,
+            disposition=ReconciliationSource.Disposition.SUPERSEDED,
         )
-        for candidate in pending_candidates:
-            ReconciliationSource.objects.create(
-                reconciliation=reconciliation,
-                transcription=candidate,
-                disposition=ReconciliationSource.Disposition.SUPERSEDED,
-            )
     return reconciliation
 
 

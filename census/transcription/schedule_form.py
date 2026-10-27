@@ -80,7 +80,6 @@ for _block, _kind, _fields in (
             ("num_other_churches_served", "27"),
             ("college", "28"),
             ("theological_seminary", "29"),
-            ("serving_congregation", ""),
         ),
     ),
     (
