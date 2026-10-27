@@ -1568,24 +1568,19 @@ class CensusScheduleAdmin(ModelAdmin):
         )
         if not reviewer_mode and not self.has_change_permission(request, schedule):
             raise PermissionDenied
-        transcriptions = list(
-            schedule.transcriptions.select_related("run").order_by("-created_at", "-pk")
+        # Newest AI run first: it is the primary source fields default to.
+        transcriptions = sorted(
+            schedule.transcriptions.select_related("run"),
+            key=lambda source: (
+                source.run.kind != "agent",
+                -source.created_at.timestamp(),
+                -source.pk,
+            ),
         )
-        requested_baseline = request.POST.get("baseline") or request.GET.get(
-            "baseline"
-        )
-        requested_comparison = request.POST.get(
-            "comparison"
-        ) or request.GET.get("comparison")
-        baseline_ref, comparison_ref = self._comparison_source_refs(
-            transcriptions,
-            requested_baseline,
-            requested_comparison,
-        )
-        baseline = self._source_transcription(transcriptions, baseline_ref)
-        comparison_source = self._source_transcription(
-            transcriptions, comparison_ref
-        )
+        if request.method == "POST":
+            # Reconcile exactly the sources the reviewer was shown.
+            shown = set(request.POST.get("sources", "").split(","))
+            transcriptions = [t for t in transcriptions if str(t.pk) in shown]
 
         jobs = {
             job.run_id: job
@@ -1594,12 +1589,7 @@ class CensusScheduleAdmin(ModelAdmin):
             ).select_related("run")
         }
         reconciliation_error = ""
-        can_apply = bool(
-            baseline_ref
-            and comparison_ref
-            and baseline_ref != comparison_ref
-            and (baseline is not None or comparison_source is not None)
-        )
+        can_apply = bool(transcriptions)
         posted_decisions = self._reconciliation_decisions(request)
         try:
             # Draft-level field problems (validate=False) must not block the
@@ -1607,10 +1597,7 @@ class CensusScheduleAdmin(ModelAdmin):
             # is what gets validated below, on POST. Only candidate-level
             # errors (unsupported contract/kind) should still disable it.
             preview = build_reconciliation_preview(
-                schedule,
-                comparison_source,
-                baseline_transcription=baseline,
-                validate=False,
+                schedule, transcriptions, validate=False
             )
         except ReconciliationError as exc:
             preview = build_reconciliation_preview(schedule, validate=False)
@@ -1621,15 +1608,12 @@ class CensusScheduleAdmin(ModelAdmin):
         if request.method == "POST":
             if not can_apply:
                 if not reconciliation_error:
-                    reconciliation_error = (
-                        "Choose two distinct comparison sources."
-                    )
+                    reconciliation_error = "There is no transcription to reconcile."
             else:
                 try:
                     preview = build_reconciliation_preview(
                         schedule,
-                        comparison_source,
-                        baseline_transcription=baseline,
+                        transcriptions,
                         decisions=posted_decisions,
                         mixed=True,
                     )
@@ -1654,14 +1638,7 @@ class CensusScheduleAdmin(ModelAdmin):
                         expected_fingerprint=request.POST.get(
                             "expected_fingerprint", ""
                         ),
-                        baseline_transcription_id=(
-                            baseline.pk if baseline is not None else None
-                        ),
-                        comparison_transcription_id=(
-                            comparison_source.pk
-                            if comparison_source is not None
-                            else None
-                        ),
+                        transcription_ids=[t.pk for t in transcriptions],
                         notes=request.POST.get("notes", ""),
                         decisions=posted_decisions,
                         approve=reviewer_mode,
@@ -1683,6 +1660,22 @@ class CensusScheduleAdmin(ModelAdmin):
                             args=[schedule.pk],
                         )
                     )
+
+        sources = {"canonical": self._comparison_source_details(schedule, "canonical", None, None)}
+        for transcription in transcriptions:
+            details = self._comparison_source_details(
+                schedule,
+                str(transcription.pk),
+                transcription,
+                jobs.get(transcription.run_id),
+            )
+            details["error"] = preview["source_errors"].get(details["ref"], "")
+            details["primary"] = details["ref"] == next(iter(preview["sources"]))
+            sources[details["ref"]] = details
+        for section in comparison["sections"]:
+            for row in section["rows"]:
+                for option in row.get("options", ()):
+                    option["sources"] = [sources[ref] for ref in option["refs"]]
         try:
             image_url = schedule.original_image.url if schedule.original_image else ""
         except ValueError:
@@ -1699,21 +1692,8 @@ class CensusScheduleAdmin(ModelAdmin):
             "opts": self.model._meta,
             "schedule": schedule,
             "image_url": image_url,
-            "source_options": self._comparison_source_options(transcriptions),
-            "baseline_ref": baseline_ref,
-            "comparison_ref": comparison_ref,
-            "baseline_source": self._comparison_source_details(
-                schedule,
-                baseline_ref,
-                baseline,
-                jobs.get(baseline.run_id) if baseline else None,
-            ),
-            "comparison_source": self._comparison_source_details(
-                schedule,
-                comparison_ref,
-                comparison_source,
-                jobs.get(comparison_source.run_id) if comparison_source else None,
-            ),
+            "sources": list(sources.values()),
+            "source_ids": ",".join(str(t.pk) for t in transcriptions),
             "comparison": comparison,
             "form": schedule_form_layout(comparison["sections"]),
             "place_options": (
@@ -1757,80 +1737,6 @@ class CensusScheduleAdmin(ModelAdmin):
         )
 
     @staticmethod
-    def _comparison_source_refs(
-        sources, requested_baseline, requested_comparison
-    ):
-        valid_refs = {"canonical", *(str(source.pk) for source in sources)}
-        human_sources = [
-            source for source in sources if source.run.kind == "human_snapshot"
-        ]
-        baseline_default = (
-            str(human_sources[0].pk) if human_sources else "canonical"
-        )
-        baseline_ref = (
-            requested_baseline
-            if requested_baseline in valid_refs
-            else baseline_default
-        )
-
-        comparison_order = [
-            str(source.pk) for source in sources if source.run.kind == "agent"
-        ]
-        comparison_order.extend(str(source.pk) for source in sources)
-        comparison_order.append("canonical")
-        comparison_default = next(
-            (ref for ref in comparison_order if ref != baseline_ref), ""
-        )
-        comparison_ref = (
-            requested_comparison
-            if requested_comparison in valid_refs
-            and requested_comparison != baseline_ref
-            else comparison_default
-        )
-        return baseline_ref, comparison_ref
-
-    @staticmethod
-    def _source_transcription(sources, source_ref):
-        if not source_ref or source_ref == "canonical":
-            return None
-        return next(
-            (source for source in sources if str(source.pk) == source_ref),
-            None,
-        )
-
-    @staticmethod
-    def _comparison_source_options(sources):
-        options = [
-            {
-                "value": "canonical",
-                "label": "Current canonical · live structured data",
-            }
-        ]
-        ordered_sources = sorted(
-            sources,
-            key=lambda source: (
-                source.run.kind != "human_snapshot",
-                -source.created_at.timestamp(),
-                -source.pk,
-            ),
-        )
-        for source in ordered_sources:
-            metadata = source.run.metadata
-            kind = source.run.get_kind_display()
-            model = metadata.get("model", "")
-            detail = f" · {model}" if model else ""
-            options.append(
-                {
-                    "value": str(source.pk),
-                    "label": (
-                        f"{kind} · {source.run.key}{detail} · "
-                        f"{source.created_at:%b %d, %Y %H:%M}"
-                    ),
-                }
-            )
-        return options
-
-    @staticmethod
     def _reconciliation_decisions(request):
         prefix = "choice__"
         decisions = {}
@@ -1857,7 +1763,7 @@ class CensusScheduleAdmin(ModelAdmin):
         if source_ref == "canonical":
             return {
                 "ref": "canonical",
-                "heading": "Current canonical",
+                "heading": "Current record",
                 "subtitle": (
                     f"Live structured data · "
                     f"{schedule.get_transcription_status_display()}"
@@ -1865,7 +1771,10 @@ class CensusScheduleAdmin(ModelAdmin):
                 "detail": "Approval target",
                 "icon": "human",
                 "vendor": "human",
-                "tooltip": "Current canonical data",
+                "tooltip": (
+                    "Current record · "
+                    f"{schedule.get_transcription_status_display()}"
+                ),
                 "job": None,
                 "raw_json": json.dumps(
                     serialize_canonical(schedule),
@@ -1902,7 +1811,12 @@ class CensusScheduleAdmin(ModelAdmin):
             ),
             "tooltip": " · ".join(
                 value
-                for value in (source.run.get_kind_display(), metadata.get("model", ""), source.run.key)
+                for value in (
+                    source.run.get_kind_display(),
+                    metadata.get("model", ""),
+                    source.run.key,
+                    f"{source.created_at:%b %d, %Y %H:%M}",
+                )
                 if value
             ),
             "job": job,

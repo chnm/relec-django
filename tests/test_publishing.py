@@ -24,6 +24,7 @@ from tests.test_reconciliation import (  # noqa: F401 (reviewer is a fixture)
     agent_source,
     bulk_action_request,
     canonical_schedule,
+    current_choices,
     promote,
     reviewer,
 )
@@ -106,7 +107,8 @@ def test_publish_keeps_a_persons_reconciliation_choices(reviewer):
         expected_fingerprint=build_reconciliation_preview(schedule)[
             "before_fingerprint"
         ],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
+        decisions=current_choices(schedule, [source]),
         approve=False,
         allow_removals=False,
     )

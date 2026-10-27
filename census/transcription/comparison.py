@@ -67,6 +67,15 @@ CLERGY_FIELDS = [
     ("num_other_churches_served", "Other churches served"),
 ]
 
+STATUS_LABELS = {
+    "same": "Same",
+    "equivalent": "Equivalent format",
+    "different": "Different",
+    "one_missing": "Not in every source",
+    "blank_zero": "Blank vs zero",
+}
+STATUS_SEVERITY = ("same", "equivalent", "one_missing", "blank_zero", "different")
+
 
 def normalize_transcription(data):
     """Map human snapshots and agent candidates into one display-only shape."""
@@ -208,35 +217,58 @@ def source_raw_json(source):
     return json.dumps(source.data, indent=2, sort_keys=True, default=str)
 
 
-def comparison_row(
+def choice_row(
     label,
-    left,
-    right,
+    values,
     *,
-    decision_key="",
-    selected="comparison",
+    decision_key,
+    selected,
+    complete=True,
     edited_base="",
     edited_value="",
     edit_type="text",
     field="",
 ):
-    """Build one display row with optional mixed-source decision metadata."""
-    row = _row(label, left, right)
+    """Build one reviewable field from ``{source_ref: value}``.
+
+    Each distinct value is offered once, carrying every source that gave it.
+    ``complete`` is False when some sources lack the row this field belongs to.
+    """
+    options = []
+    for ref, value in values.items():
+        option = next((o for o in options if _same(o["value"], value)), None)
+        if option is None:
+            options.append(
+                {"refs": [ref], "value": value, "display": _display_value(value)}
+            )
+        else:
+            option["refs"].append(ref)
+    status = _combined_status(list(values.values()), complete)
     edited_display = _display_value(edited_value)
-    row.update(
-        {
-            "field": field,
-            "decision_key": decision_key,
-            "selected": selected,
-            "can_choose": bool(decision_key),
-            "edited_base": edited_base,
-            "edited_value": edited_value,
-            "edited_display": edited_display["text"],
-            "edited_input": edited_display["input"],
-            "edit_type": edit_type,
-        }
-    )
-    return row
+    return {
+        "label": label,
+        "field": field,
+        "status": status,
+        "status_label": STATUS_LABELS[status],
+        "options": options,
+        "decision_key": decision_key,
+        "selected": selected,
+        "can_choose": True,
+        "can_edit": True,
+        "edited_base": edited_base,
+        "edited_value": edited_value,
+        "edited_display": edited_display["text"],
+        "edited_input": edited_display["input"],
+        "edit_type": edit_type,
+    }
+
+
+def _combined_status(values, complete):
+    first, *rest = values
+    statuses = [_status(first, value) for value in rest] or ["same"]
+    if not complete:
+        statuses.append("one_missing")
+    return max(statuses, key=STATUS_SEVERITY.index)
 
 
 def _section(title, fields, left, right, note=""):
@@ -257,13 +289,7 @@ def _row(label, left, right):
         "left": _display_value(left),
         "right": _display_value(right),
         "status": status,
-        "status_label": {
-            "same": "Same",
-            "equivalent": "Equivalent format",
-            "different": "Different",
-            "one_missing": "One source only",
-            "blank_zero": "Blank vs zero",
-        }[status],
+        "status_label": STATUS_LABELS[status],
     }
 
 

@@ -170,6 +170,22 @@ def canonical_schedule():
     return schedule
 
 
+def current_choices(schedule, sources):
+    """Decisions keeping the current record wherever it has a value."""
+    preview = build_reconciliation_preview(schedule, sources, validate=False)
+    choices = {}
+    for section in preview["review_sections"]:
+        for row in section["rows"]:
+            if any("canonical" in option["refs"] for option in row.get("options", ())):
+                choices[row["decision_key"]] = "canonical"
+        decision = section.get("entity_decision")
+        if decision:
+            choices[decision["key"]] = (
+                "keep" if "canonical" in decision["refs"] else "skip"
+            )
+    return choices
+
+
 def bulk_action_request(user, **data):
     request = RequestFactory().post("/admin/census/censusschedule/", data=data)
     request.user = user
@@ -199,7 +215,8 @@ def test_reviewer_can_keep_current_data_and_approve(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
+        decisions=current_choices(schedule, [source]),
         notes="Human data matches the image.",
     )
 
@@ -216,7 +233,7 @@ def test_reviewer_can_keep_current_data_and_approve(reviewer):
 def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
     )
@@ -225,7 +242,7 @@ def test_reviewer_can_promote_one_agent_candidate_atomically(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     schedule.refresh_from_db()
@@ -251,13 +268,13 @@ def test_promotion_preserves_geocoding_when_address_is_unchanged(reviewer):
     candidate = agent_candidate()
     candidate["schedule_fields"]["populated_place_verbatim"] = "11 Old Street"
     source = agent_source(schedule, candidate)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
 
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     body = schedule.church_details.get()
@@ -288,13 +305,13 @@ def test_promotion_ignores_operational_fields_in_human_snapshot(reviewer):
         run=TranscriptionRunFactory(kind="human_snapshot"),
         data=snapshot,
     )
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
 
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     schedule.refresh_from_db()
@@ -324,24 +341,24 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         ),
     )
     decisions = {
-        "schedule.respondent_name": "baseline",
-        f"body.{body.pk}.name": "baseline",
-        f"membership.{membership.pk}.male_members": "baseline",
-        f"clergy.{current_clergy.pk}.name": "baseline",
+        "schedule.respondent_name": "canonical",
+        f"body.{body.pk}.name": "canonical",
+        f"membership.{membership.pk}.male_members": "canonical",
+        f"clergy.{current_clergy.pk}.name": "canonical",
     }
     preview = build_reconciliation_preview(
         schedule,
-        source,
+        [source],
         decisions=decisions,
         mixed=True,
     )
-    assert "schedule.marginalia" not in preview["decisions"]
-    assert "schedule.ai_notes" not in preview["decisions"]
+    assert preview["decisions"]["schedule.marginalia"] == str(source.pk)
+    assert preview["decisions"]["schedule.ai_notes"] == str(source.pk)
     context_sections = {
         section["title"]: section for section in preview["review_sections"]
     }
-    assert context_sections["Marginalia"]["decision_scope"] == "automatic"
-    assert context_sections["Agent notes"]["decision_scope"] == "automatic"
+    assert context_sections["Marginalia"]["decision_scope"] == "context"
+    assert context_sections["Agent notes"]["decision_scope"] == "context"
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.MIXED
     )
@@ -350,7 +367,7 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
         decisions=decisions,
     )
 
@@ -378,18 +395,18 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
     )
     assert event.decisions["field_source_decisions"][
         "schedule.respondent_name"
-    ] == "baseline"
+    ] == "canonical"
 
 
 @pytest.mark.django_db
 def test_context_sections_render_last():
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     titles = [section["title"] for section in preview["review_sections"]]
     assert titles[-2:] == ["Marginalia", "Agent notes"]
     assert all(
-        section["decision_scope"] != "automatic"
+        section["decision_scope"] != "context"
         for section in preview["review_sections"][:-2]
     )
 
@@ -398,7 +415,7 @@ def test_context_sections_render_last():
 def test_review_section_order_follows_schedule_form():
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     titles = [section["title"] for section in preview["review_sections"]]
     assert titles[0] == "Schedule"
     assert titles[1].startswith("Religious body:")
@@ -417,28 +434,29 @@ def test_reviewer_can_mix_clergy_fields_when_names_differ(reviewer):
     schedule = canonical_schedule()
     current_clergy = schedule.clergy.get()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     clergy_sections = [
         section
         for section in preview["review_sections"]
         if section["title"].startswith("Clergy:")
-        or section["title"].startswith("Comparison clergy:")
     ]
     assert len(clergy_sections) == 1
     section = clergy_sections[0]
     assert section["title"].startswith("Clergy:")
     assert section["decision_scope"] == "field"
     name_row = next(row for row in section["rows"] if row["label"] == "Name")
-    assert name_row["left"]["text"] == "Rev. Human"
-    assert name_row["right"]["text"] == "Rev. Agent"
+    assert [option["display"]["text"] for option in name_row["options"]] == [
+        "Rev. Human",
+        "Rev. Agent",
+    ]
 
     original_pk = current_clergy.pk
-    decisions = {f"clergy.{original_pk}.name": "comparison"}
+    decisions = {f"clergy.{original_pk}.name": str(source.pk)}
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
         decisions=decisions,
     )
     current_clergy.refresh_from_db()
@@ -455,19 +473,19 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
     decisions = {
         "schedule.respondent_name": {
             "source": "edited",
-            "base": "comparison",
+            "base": str(source.pk),
             "value": "Reviewer Corrected",
         },
         f"body.{body.pk}.expenses": {
             "source": "edited",
-            "base": "baseline",
+            "base": "canonical",
             "value": "1234.50",
         },
     }
 
     preview = build_reconciliation_preview(
         schedule,
-        source,
+        [source],
         decisions=decisions,
         mixed=True,
     )
@@ -485,7 +503,7 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
         decisions=decisions,
     )
 
@@ -497,13 +515,13 @@ def test_reviewer_can_apply_typed_inline_edits_with_provenance(reviewer):
         {
             "field": f"body.{body.pk}.expenses",
             "source": "edited",
-            "base": "baseline",
+            "base": "canonical",
             "value": "1234.50",
         },
         {
             "field": "schedule.respondent_name",
             "source": "edited",
-            "base": "comparison",
+            "base": str(source.pk),
             "value": "Reviewer Corrected",
         },
     ]
@@ -517,11 +535,11 @@ def test_inline_edit_rejects_invalid_typed_values(reviewer):
     with pytest.raises(ReconciliationValidationError, match="whole number"):
         build_reconciliation_preview(
             schedule,
-            source,
+            [source],
             decisions={
                 "schedule.num_assistant_pastors": {
                     "source": "edited",
-                    "base": "comparison",
+                    "base": str(source.pk),
                     "value": "several",
                 }
             },
@@ -554,16 +572,16 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
     candidate["religious_bodies"].append(second_candidate)
     source = agent_source(schedule, candidate)
     decisions = {
-        f"entity.body.{first_current.pk}": "baseline",
-        f"entity.body.{second_current.pk}": "comparison",
-        "entity.body.new.0": "comparison",
-        "entity.body.new.1": "baseline",
-        f"clergy.{schedule.clergy.get().pk}.name": "baseline",
+        f"entity.body.{first_current.pk}": "keep",
+        f"entity.body.{second_current.pk}": "skip",
+        f"entity.body.new.{source.pk}.0": "keep",
+        f"entity.body.new.{source.pk}.1": "skip",
+        f"clergy.{schedule.clergy.get().pk}.name": "canonical",
     }
 
     preview = build_reconciliation_preview(
         schedule,
-        source,
+        [source],
         decisions=decisions,
         mixed=True,
     )
@@ -581,7 +599,7 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
         decisions=decisions,
     )
 
@@ -595,7 +613,7 @@ def test_mixed_review_requires_explicit_choices_for_unmatched_repeated_bodies(
 def test_stale_preview_cannot_overwrite_newer_canonical_edits(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     schedule.respondent_name = "Edited after preview"
     schedule.save()
 
@@ -604,7 +622,7 @@ def test_stale_preview_cannot_overwrite_newer_canonical_edits(reviewer):
             schedule_id=schedule.pk,
             reviewer=reviewer,
             expected_fingerprint=preview["before_fingerprint"],
-            transcription_id=source.pk,
+            transcription_ids=[source.pk],
         )
 
     schedule.refresh_from_db()
@@ -622,7 +640,7 @@ def test_invalid_candidate_fails_without_canonical_writes(reviewer):
     before = serialize_canonical(schedule)
 
     with pytest.raises(ReconciliationValidationError):
-        build_reconciliation_preview(schedule, source)
+        build_reconciliation_preview(schedule, [source])
 
     schedule.refresh_from_db()
     assert serialize_canonical(schedule) == before
@@ -633,7 +651,7 @@ def test_invalid_candidate_fails_without_canonical_writes(reviewer):
 def test_failed_write_rolls_back_the_complete_canonical_graph(reviewer, monkeypatch):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     before = serialize_canonical(schedule)
     original_history_save = reconciliation_service._history_save
     calls = 0
@@ -656,7 +674,7 @@ def test_failed_write_rolls_back_the_complete_canonical_graph(reviewer, monkeypa
             schedule_id=schedule.pk,
             reviewer=reviewer,
             expected_fingerprint=preview["before_fingerprint"],
-            transcription_id=source.pk,
+            transcription_ids=[source.pk],
         )
 
     schedule.refresh_from_db()
@@ -674,7 +692,7 @@ def test_reconciliation_evidence_and_dispositions_are_immutable(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     event.notes = "rewrite history"
@@ -698,7 +716,7 @@ def test_reviewed_agent_candidate_leaves_pending_ai_queue(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     annotated = with_ai_status(type(schedule).objects.all()).get(pk=schedule.pk)
@@ -719,13 +737,13 @@ def test_promotion_supersedes_older_pending_agent_candidates(reviewer):
     schedule = canonical_schedule()
     older = agent_source(schedule)
     newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="newer")))
-    preview = build_reconciliation_preview(schedule, newer)
+    preview = build_reconciliation_preview(schedule, [newer])
 
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=newer.pk,
+        transcription_ids=[newer.pk],
     )
 
     older_source = older.reconciliation_sources.get()
@@ -749,13 +767,13 @@ def test_review_supersedes_uncompared_newer_agent_candidates(reviewer):
     schedule = canonical_schedule()
     compared = agent_source(schedule)
     uncompared = agent_source(schedule, deepcopy(agent_candidate(ai_notes="newer")))
-    preview = build_reconciliation_preview(schedule, compared)
+    preview = build_reconciliation_preview(schedule, [compared])
 
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=compared.pk,
+        transcription_ids=[compared.pk],
     )
 
     assert uncompared.reconciliation_sources.get().disposition == (
@@ -783,14 +801,13 @@ def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
     baseline = agent_source(schedule, baseline_data)
     comparison = agent_source(schedule, comparison_data)
     decisions = {
-        "schedule.respondent_name": "baseline",
-        "schedule.respondent_title": "comparison",
+        "schedule.respondent_name": str(baseline.pk),
+        "schedule.respondent_title": str(comparison.pk),
     }
 
     preview = build_reconciliation_preview(
         schedule,
-        comparison,
-        baseline_transcription=baseline,
+        [comparison, baseline],
         decisions=decisions,
         mixed=True,
     )
@@ -807,18 +824,17 @@ def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=baseline.pk,
-        comparison_transcription_id=comparison.pk,
+        transcription_ids=[comparison.pk, baseline.pk],
         decisions=decisions,
     )
 
     schedule.refresh_from_db()
     assert schedule.respondent_name == "Claude reading"
     assert schedule.respondent_title == "Gemini title"
-    assert event.decisions["source_refs"] == {
-        "baseline": f"transcription:{baseline.pk}",
-        "comparison": f"transcription:{comparison.pk}",
-    }
+    assert event.decisions["source_refs"] == [
+        f"transcription:{comparison.pk}",
+        f"transcription:{baseline.pk}",
+    ]
     assert set(
         event.sources.values_list("transcription_id", "disposition")
     ) == {
@@ -831,12 +847,12 @@ def test_reviewer_can_reconcile_two_id_free_agent_sources(reviewer):
 def test_reviewer_can_restore_previous_canonical_state(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     promoted = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
     schedule.refresh_from_db()
     promoted_snapshot = serialize_canonical(schedule)
@@ -867,12 +883,12 @@ def test_reviewer_can_restore_previous_canonical_state(reviewer):
 def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
     schedule = canonical_schedule()
     first_source = agent_source(schedule)
-    first_preview = build_reconciliation_preview(schedule, first_source)
+    first_preview = build_reconciliation_preview(schedule, [first_source])
     first = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=first_preview["before_fingerprint"],
-        comparison_transcription_id=first_source.pk,
+        transcription_ids=[first_source.pk],
     )
     schedule.refresh_from_db()
     second_source = agent_source(
@@ -886,12 +902,12 @@ def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
             }
         ),
     )
-    second_preview = build_reconciliation_preview(schedule, second_source)
+    second_preview = build_reconciliation_preview(schedule, [second_source])
     second = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=second_preview["before_fingerprint"],
-        comparison_transcription_id=second_source.pk,
+        transcription_ids=[second_source.pk],
     )
 
     schedule.refresh_from_db()
@@ -921,12 +937,12 @@ def test_reviewer_can_step_backward_through_multiple_reconciliations(reviewer):
 def test_bulk_restore_records_a_reversal(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     promoted = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
     model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
     request = bulk_action_request(
@@ -954,13 +970,14 @@ def test_outcome_is_derived_from_the_applied_result(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
     before = serialize_canonical(schedule)
-    preview = build_reconciliation_preview(schedule, baseline_transcription=source)
+    preview = build_reconciliation_preview(schedule)
 
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
+        decisions=current_choices(schedule, [source]),
     )
 
     schedule.refresh_from_db()
@@ -981,16 +998,16 @@ def test_repromoting_an_identical_candidate_records_no_changes(reviewer):
     candidate = agent_candidate()
     candidate["schedule_fields"]["respondent"]["title"] = None
     source = agent_source(schedule, candidate)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     schedule.refresh_from_db()
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     assert preview["has_changes"] is False
     assert preview["operations"]["schedule_fields_changed"] == []
     assert preview["operations"]["religious_bodies"]["updated"] == 0
@@ -1002,7 +1019,7 @@ def test_repromoting_an_identical_candidate_records_no_changes(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
     assert event.outcome == ScheduleReconciliation.Outcome.RETAINED_CURRENT
     assert event.sources.get().disposition == ReconciliationSource.Disposition.ACCEPTED
@@ -1030,8 +1047,9 @@ def test_canonical_comparison_source_updates_existing_rows_in_place(reviewer):
     candidate["religious_bodies"].append(second_candidate)
     source = agent_source(schedule, candidate)
 
+    decisions = current_choices(schedule, [source])
     preview = build_reconciliation_preview(
-        schedule, baseline_transcription=source, mixed=True
+        schedule, [source], decisions=decisions, mixed=True
     )
     assert preview["operations"]["religious_bodies"] == {
         "updated": 0,
@@ -1043,7 +1061,8 @@ def test_canonical_comparison_source_updates_existing_rows_in_place(reviewer):
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        baseline_transcription_id=source.pk,
+        transcription_ids=[source.pk],
+        decisions=decisions,
     )
 
     assert set(schedule.church_details.values_list("pk", flat=True)) == {
@@ -1057,12 +1076,12 @@ def test_canonical_comparison_source_updates_existing_rows_in_place(reviewer):
 def test_candidate_can_be_promoted_again_after_a_restore(reviewer):
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
     schedule.refresh_from_db()
     rollback_reconciliation(
@@ -1073,12 +1092,12 @@ def test_candidate_can_be_promoted_again_after_a_restore(reviewer):
     schedule.refresh_from_db()
     assert schedule.respondent_name == "Human Respondent"
 
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     schedule.refresh_from_db()
@@ -1095,7 +1114,7 @@ def test_ambiguous_populated_place_fails_closed(reviewer):
     source = agent_source(schedule, agent_candidate(populated_place_id=777))
 
     with pytest.raises(ReconciliationValidationError, match="populated place"):
-        build_reconciliation_preview(schedule, source)
+        build_reconciliation_preview(schedule, [source])
 
 
 @pytest.mark.django_db
@@ -1107,13 +1126,13 @@ def test_promotion_preserves_unvalidated_operational_fields_on_existing_rows(
     body.denomination = None
     body.save()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
 
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
     body.refresh_from_db()
@@ -1129,7 +1148,7 @@ def test_validation_errors_name_the_offending_field(reviewer):
     source = agent_source(schedule, candidate)
 
     with pytest.raises(ReconciliationValidationError, match=r"^name: "):
-        build_reconciliation_preview(schedule, source)
+        build_reconciliation_preview(schedule, [source])
 
 
 @pytest.mark.django_db
@@ -1138,7 +1157,7 @@ def test_schedule_form_layout_places_every_decision_row_once():
 
     schedule = canonical_schedule()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     sections = preview["review_sections"]
     form = schedule_form_layout(sections)
 
@@ -1162,7 +1181,7 @@ def test_schedule_form_layout_places_every_decision_row_once():
     expected = [
         row["decision_key"]
         for section in sections
-        if section["decision_scope"] != "automatic"
+        if section["decision_scope"] != "context"
         for row in section["rows"]
         if row["decision_key"]
         and (section["kind"], row["field"]) not in HIDDEN_ROWS
@@ -1188,13 +1207,14 @@ def test_populated_place_row_shows_place_name_and_state():
     place.county = schedule.county
     place.save()
     source = agent_source(schedule, agent_candidate(populated_place_id=4242))
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     row = preview["review_sections"][0]["rows"][0]
     assert row["field"] == "populated_place_id"
     state = place.county.state.code
-    assert row["left"]["text"] == f"4242 (Mount Liberty, {state})"
-    assert row["right"]["text"] == f"4242 (Mount Liberty, {state})"
-    assert row["left"]["input"] == "4242"
+    [option] = row["options"]
+    assert option["refs"] == ["canonical", str(source.pk)]
+    assert option["display"]["text"] == f"4242 (Mount Liberty, {state})"
+    assert option["display"]["input"] == "4242"
 
 
 def _clergy_sections(preview):
@@ -1215,31 +1235,32 @@ def test_clergy_rows_pair_by_position_and_extra_rows_are_new(reviewer):
         {**candidate["clergy"][0], "name": "Rev. Junior", "is_assistant": True},
     ]
     source = agent_source(schedule, candidate)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     sections = _clergy_sections(preview)
     assert [s["decision_scope"] for s in sections] == ["field", "field"]
 
     paired = sections[0]
     name_row = next(row for row in paired["rows"] if row["field"] == "name")
-    assert name_row["left"]["text"] == "Rev. Human"
-    assert name_row["right"]["text"] == "Rev. F.E. Banks"
-    assert "skip_decision" not in paired
+    assert [option["display"]["text"] for option in name_row["options"]] == [
+        "Rev. Human",
+        "Rev. F.E. Banks",
+    ]
+    assert "entity_decision" not in paired
 
     new = sections[1]
     name_row = next(row for row in new["rows"] if row["field"] == "name")
-    assert name_row["left"]["text"] == "Not captured"
-    assert name_row["right"]["text"] == "Rev. Junior"
-    assert new["skip_decision"] == {
-        "key": "entity.clergy.new.1",
-        "selected": "comparison",
-    }
+    assert [option["display"]["text"] for option in name_row["options"]] == [
+        "Rev. Junior"
+    ]
+    assert new["entity_decision"]["key"] == f"entity.clergy.new.{source.pk}.1"
+    assert new["entity_decision"]["selected"] == "keep"
 
     apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
-        decisions={f"clergy.{current_clergy.pk}.name": "baseline"},
+        transcription_ids=[source.pk],
+        decisions={f"clergy.{current_clergy.pk}.name": "canonical"},
     )
     names = list(schedule.clergy.order_by("is_assistant").values_list("name", flat=True))
     assert names == ["Rev. Human", "Rev. Junior"]
@@ -1253,7 +1274,7 @@ def test_nameless_comparison_clergy_rows_are_dropped():
         {**candidate["clergy"][0], "name": None, "is_assistant": True}
     )
     source = agent_source(schedule, candidate)
-    preview = build_reconciliation_preview(schedule, source, mixed=True)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
     assert len(_clergy_sections(preview)) == 1
     assert [row["name"] for row in preview["proposed"]["clergy"]] == ["Rev. Agent"]
 
@@ -1264,13 +1285,16 @@ def test_agent_verbatim_place_replaces_body_address(reviewer):
     source = agent_source(
         schedule, agent_candidate(populated_place_verbatim="Providence")
     )
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     body_section = next(
         s for s in preview["comparison"]["sections"]
         if s["title"].startswith("Religious body")
     )
     row = next(r for r in body_section["rows"] if r["field"] == "address")
-    assert row["right"]["text"] == "Providence"
+    assert [option["display"]["text"] for option in row["options"]] == [
+        "11 Old Street",
+        "Providence",
+    ]
 
 
 @pytest.mark.django_db
@@ -1283,13 +1307,13 @@ def test_hidden_address_follows_populated_place_decision():
     key = f"body.{body.pk}.address"
 
     for place_decision, source_used, expected in [
-        ("baseline", "baseline", "11 Old Street"),
-        ("comparison", "comparison", "Providence"),
-        ({"source": "edited", "base": "baseline", "value": ""}, "baseline", "11 Old Street"),
+        ("canonical", "canonical", "11 Old Street"),
+        (str(source.pk), str(source.pk), "Providence"),
+        ({"source": "edited", "base": "canonical", "value": ""}, "canonical", "11 Old Street"),
     ]:
         preview = build_reconciliation_preview(
             schedule,
-            source,
+            [source],
             decisions={"schedule.populated_place_id": place_decision},
             mixed=True,
             validate=False,
@@ -1305,7 +1329,7 @@ def test_underscore_evidence_keys_are_ignored_by_candidate_validation():
     candidate["_field_locations"] = {"membership.q1_male_members": [1, 2, 3, 4]}
     source = agent_source(schedule, candidate)
 
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
 
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
@@ -1320,13 +1344,13 @@ def test_transcriber_reconciliation_submits_for_review_instead_of_approving(
     schedule.transcription_status = "needs_review"
     schedule.save()
     source = agent_source(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
 
     event = apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        transcription_id=source.pk,
+        transcription_ids=[source.pk],
         approve=False,
         allow_removals=False,
     )
@@ -1346,7 +1370,7 @@ def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
     candidate["clergy"] = []
     source = agent_source(schedule, candidate)
     before = serialize_canonical(schedule)
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     assert preview["operations"]["clergy"]["removed"] == 1
 
     with pytest.raises(ReconciliationValidationError, match="cannot remove"):
@@ -1354,7 +1378,7 @@ def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
             schedule_id=schedule.pk,
             reviewer=reviewer,
             expected_fingerprint=preview["before_fingerprint"],
-            transcription_id=source.pk,
+            transcription_ids=[source.pk],
             approve=False,
             allow_removals=False,
         )
@@ -1365,12 +1389,12 @@ def test_transcriber_reconciliation_cannot_remove_rows(reviewer):
 
 
 def promote(reviewer, schedule, source):
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     return apply_reconciliation(
         schedule_id=schedule.pk,
         reviewer=reviewer,
         expected_fingerprint=preview["before_fingerprint"],
-        comparison_transcription_id=source.pk,
+        transcription_ids=[source.pk],
     )
 
 
@@ -1387,3 +1411,55 @@ def test_schema_version_change_alone_is_not_a_human_edit(reviewer):
     schedule.save()
     graph = schedule_graph_queryset().get(pk=schedule.pk)
     assert not canonical_unchanged_since(graph, event)
+
+
+@pytest.mark.django_db
+def test_review_shows_every_source_and_merges_rows_they_share(reviewer):
+    schedule = canonical_schedule()
+    older_data = agent_candidate()
+    older_data["clergy"].append(
+        {**older_data["clergy"][0], "name": "Rev. Assistant", "is_assistant": True}
+    )
+    newer_data = deepcopy(older_data)
+    newer_data["schedule_fields"]["respondent"]["name"] = "Newer Respondent"
+    older = agent_source(schedule, older_data)
+    newer = agent_source(schedule, newer_data)
+
+    preview = build_reconciliation_preview(schedule, [newer, older], mixed=True)
+
+    respondent = next(
+        row
+        for section in preview["review_sections"]
+        for row in section["rows"]
+        if row["decision_key"] == "schedule.respondent_name"
+    )
+    assert [(o["refs"], o["display"]["text"]) for o in respondent["options"]] == [
+        (["canonical"], "Human Respondent"),
+        ([str(newer.pk)], "Newer Respondent"),
+        ([str(older.pk)], "Agent Respondent"),
+    ]
+    assert respondent["selected"] == str(newer.pk)
+
+    # Both runs read the same assistant pastor: one row, not two.
+    clergy = [s for s in preview["review_sections"] if s["kind"] == "clergy"]
+    assert len(clergy) == 2
+    assert clergy[1]["entity_decision"]["refs"] == [str(newer.pk), str(older.pk)]
+    assert [p["name"] for p in preview["proposed"]["clergy"]] == [
+        "Rev. Agent",
+        "Rev. Assistant",
+    ]
+
+    event = apply_reconciliation(
+        schedule_id=schedule.pk,
+        reviewer=reviewer,
+        expected_fingerprint=preview["before_fingerprint"],
+        transcription_ids=[newer.pk, older.pk],
+        decisions={"schedule.respondent_name": str(older.pk)},
+    )
+    schedule.refresh_from_db()
+    assert schedule.respondent_name == "Agent Respondent"
+    assert schedule.clergy.count() == 2
+    assert dict(event.sources.values_list("transcription_id", "disposition")) == {
+        newer.pk: ReconciliationSource.Disposition.REJECTED,
+        older.pk: ReconciliationSource.Disposition.ACCEPTED,
+    }
