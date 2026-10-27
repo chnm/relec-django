@@ -144,9 +144,9 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b'aria-pressed="false"' in response.content
     assert b"source-mark-human" in response.content
     assert b"source-mark-model" in response.content
-    assert b'data-source-cell="canonical ' + str(human.pk).encode() in response.content
+    assert f'data-source-cell="{human.pk}"'.encode() in response.content
     assert b"Select all human-review" in response.content
-    assert b"Not usable: Unsupported candidate contract" in response.content
+    assert b"agent-review is left out:</strong> Unsupported candidate contract" in response.content
     assert b"updateSectionSelection" in response.content
     assert b'class="source-choice"' in response.content
     assert b"edited-choice" in response.content

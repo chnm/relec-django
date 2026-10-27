@@ -176,7 +176,7 @@ def current_choices(schedule, sources):
     choices = {}
     for section in preview["review_sections"]:
         for row in section["rows"]:
-            if any("canonical" in option["refs"] for option in row.get("options", ())):
+            if any(option["ref"] == "canonical" for option in row.get("options", ())):
                 choices[row["decision_key"]] = "canonical"
         decision = section.get("entity_decision")
         if decision:
@@ -1211,10 +1211,10 @@ def test_populated_place_row_shows_place_name_and_state():
     row = preview["review_sections"][0]["rows"][0]
     assert row["field"] == "populated_place_id"
     state = place.county.state.code
-    [option] = row["options"]
-    assert option["refs"] == ["canonical", str(source.pk)]
-    assert option["display"]["text"] == f"4242 (Mount Liberty, {state})"
-    assert option["display"]["input"] == "4242"
+    assert [o["ref"] for o in row["options"]] == ["canonical", str(source.pk)]
+    for option in row["options"]:
+        assert option["display"]["text"] == f"4242 (Mount Liberty, {state})"
+        assert option["display"]["input"] == "4242"
 
 
 def _clergy_sections(preview):
@@ -1414,7 +1414,7 @@ def test_schema_version_change_alone_is_not_a_human_edit(reviewer):
 
 
 @pytest.mark.django_db
-def test_review_shows_every_source_and_merges_rows_they_share(reviewer):
+def test_review_offers_every_source_and_merges_rows_they_share(reviewer):
     schedule = canonical_schedule()
     older_data = agent_candidate()
     older_data["clergy"].append(
@@ -1433,10 +1433,10 @@ def test_review_shows_every_source_and_merges_rows_they_share(reviewer):
         for row in section["rows"]
         if row["decision_key"] == "schedule.respondent_name"
     )
-    assert [(o["refs"], o["display"]["text"]) for o in respondent["options"]] == [
-        (["canonical"], "Human Respondent"),
-        ([str(newer.pk)], "Newer Respondent"),
-        ([str(older.pk)], "Agent Respondent"),
+    assert [(o["ref"], o["display"]["text"]) for o in respondent["options"]] == [
+        ("canonical", "Human Respondent"),
+        (str(newer.pk), "Newer Respondent"),
+        (str(older.pk), "Agent Respondent"),
     ]
     assert respondent["selected"] == str(newer.pk)
 

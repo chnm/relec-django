@@ -7,9 +7,9 @@
   </div>
   <div class="form-choices">
     {% for option in row.options %}
-      <label class="form-choice comparison-source-value" data-source-cell="{{ option.refs|join:' ' }}">
-        <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="{{ option.refs.0 }}" {% if row.selected in option.refs %}checked{% endif %} aria-label="Use {% for source in option.sources %}{{ source.tooltip }}{% if not forloop.last %}, {% endif %}{% endfor %} value for {{ row.label }}">
-        <span class="source-dots">{% for source in option.sources %}{% include "admin/census/censusschedule/includes/source-icon.html" %}{% endfor %}</span>
+      <label class="form-choice comparison-source-value" data-source-cell="{{ option.ref }}">
+        <input form="reconciliation-form" type="radio" class="source-choice" name="choice__{{ row.decision_key }}" value="{{ option.ref }}" {% if row.selected == option.ref %}checked{% endif %} aria-label="Use {{ option.source.tooltip }} value for {{ row.label }}">
+        <span class="source-dots">{% include "admin/census/censusschedule/includes/source-icon.html" with source=option.source %}</span>
         <span class="form-choice-value comparison-value-{{ option.display.kind }}">{{ option.display.text }}</span>
       </label>
     {% endfor %}

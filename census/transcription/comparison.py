@@ -229,20 +229,14 @@ def choice_row(
     edit_type="text",
     field="",
 ):
-    """Build one reviewable field from ``{source_ref: value}``.
+    """Build one reviewable field from ``{source_ref: value}``, one option per source.
 
-    Each distinct value is offered once, carrying every source that gave it.
     ``complete`` is False when some sources lack the row this field belongs to.
     """
-    options = []
-    for ref, value in values.items():
-        option = next((o for o in options if _same(o["value"], value)), None)
-        if option is None:
-            options.append(
-                {"refs": [ref], "value": value, "display": _display_value(value)}
-            )
-        else:
-            option["refs"].append(ref)
+    options = [
+        {"ref": ref, "value": value, "display": _display_value(value)}
+        for ref, value in values.items()
+    ]
     status = _combined_status(list(values.values()), complete)
     edited_display = _display_value(edited_value)
     return {

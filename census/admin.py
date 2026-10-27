@@ -1670,12 +1670,11 @@ class CensusScheduleAdmin(ModelAdmin):
                 jobs.get(transcription.run_id),
             )
             details["error"] = preview["source_errors"].get(details["ref"], "")
-            details["primary"] = details["ref"] == next(iter(preview["sources"]))
             sources[details["ref"]] = details
         for section in comparison["sections"]:
             for row in section["rows"]:
                 for option in row.get("options", ()):
-                    option["sources"] = [sources[ref] for ref in option["refs"]]
+                    option["source"] = sources[option["ref"]]
         try:
             image_url = schedule.original_image.url if schedule.original_image else ""
         except ValueError:

@@ -36,6 +36,14 @@
       </div>
     </div>
 
+    {% for source in sources %}
+      {% if source.error %}
+        <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200" role="status">
+          <strong>{{ source.heading }} is left out:</strong> {{ source.error }}
+        </div>
+      {% endif %}
+    {% endfor %}
+
     {% if reconciliation_error %}
       <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
         <strong>Review required:</strong> {{ reconciliation_error }}
@@ -77,12 +85,6 @@
       </aside>
 
       <main class="min-w-0 space-y-5">
-        <div class="comparison-source-headings">
-          {% for source in sources %}
-            {% include "admin/census/censusschedule/includes/source-heading.html" %}
-          {% endfor %}
-        </div>
-
         {% if form.bodies or form.schedule %}
         <div class="comparison-card schedule-form" id="schedule-form">
           <div class="schedule-form-toolbar">
@@ -91,7 +93,7 @@
                 <button type="button" class="comparison-button section-source" data-source="{{ source.ref }}" aria-pressed="false">{% include "admin/census/censusschedule/includes/source-icon.html" %} Select all {{ source.heading }}</button>
               {% endif %}
             {% endfor %}
-            <span class="schedule-form-hint">Each value shows the sources that gave it; hover an icon for its model and date. Pick one, or type a correction.</span>
+            <span class="schedule-form-hint">One choice per source; hover an icon for its model and date. Pick one, or type a correction.</span>
           </div>
           <datalist id="place-options">
             {% for place in place_options %}
@@ -366,20 +368,6 @@
       width: 100%;
     }
 
-    .comparison-source-headings {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      padding-bottom: 10px;
-    }
-
-    .comparison-source-heading {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: .5rem;
-      padding: .9rem;
-    }
-
     /* Printed-form layout */
     .schedule-form {
       font-size: .8rem;
@@ -439,7 +427,6 @@
       max-width: 15rem;
       z-index: 20;
     }
-    .source-mark.is-primary { outline: 2px solid currentColor; outline-offset: 1px; border-radius: 3px; }
 
     .source-mark-human { color: #374151; }
     .source-mark-model { color: #6b7280; }
@@ -735,8 +722,7 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      .comparison-card,
-      .comparison-source-heading { background: #111827; border-color: #374151; }
+      .comparison-card { background: #111827; border-color: #374151; }
       .comparison-select,
       .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
       .section-source.is-selected { background: #0875ce; border-color: #60a5fa; color: #fff; }
