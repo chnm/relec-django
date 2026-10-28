@@ -94,6 +94,7 @@
               {% endif %}
             {% endfor %}
             <span class="schedule-form-hint">One choice per source; hover an icon for its model and date. Pick one, or type a correction.</span>
+            <button type="button" class="comparison-button" id="layout-toggle" aria-pressed="false">Single column</button>
           </div>
           <datalist id="place-options">
             {% for place in place_options %}
@@ -716,6 +717,15 @@
       .comparison-image-viewport { height: 65vh; }
     }
 
+    /* Reviewer-chosen single column: the narrow-screen layout, on demand. */
+    .schedule-form.is-single-column .schedule-form-grid { grid-template-columns: 1fr; }
+    .schedule-form.is-single-column .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
+    .schedule-form.is-single-column .schedule-form-inline .form-panel { display: block; }
+    .schedule-form.is-single-column .schedule-form-inline .form-field {
+      border-bottom: 1px dotted #9ca3af;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    }
+
     @media (max-width: 900px) {
       .schedule-form-grid { grid-template-columns: 1fr; }
       .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
@@ -877,6 +887,26 @@
         input.addEventListener("change", () => refresh(input));
       });
 
+
+      // Schedule layout or single column, remembered per browser.
+      const layoutToggle = document.getElementById("layout-toggle");
+      if (layoutToggle) {
+        const setLayout = (single) => {
+          form.classList.toggle("is-single-column", single);
+          layoutToggle.setAttribute("aria-pressed", single ? "true" : "false");
+          layoutToggle.textContent = single ? "Schedule layout" : "Single column";
+        };
+        try {
+          setLayout(localStorage.getItem("reconcile-layout") === "single");
+        } catch (error) {}
+        layoutToggle.addEventListener("click", () => {
+          const single = !form.classList.contains("is-single-column");
+          setLayout(single);
+          try {
+            localStorage.setItem("reconcile-layout", single ? "single" : "schedule");
+          } catch (error) {}
+        });
+      }
 
       panels.forEach(updateSectionSelection);
       updateFormStatus();
