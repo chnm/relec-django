@@ -131,7 +131,6 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"baseline": human.pk, "comparison": agent.pk},
     )
 
     assert response.status_code == 200
@@ -145,8 +144,9 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b'aria-pressed="false"' in response.content
     assert b"source-mark-human" in response.content
     assert b"source-mark-model" in response.content
-    assert b"comparison-source-value-baseline" in response.content
-    assert b"comparison-source-value-comparison" in response.content
+    assert f'data-source-cell="{human.pk}"'.encode() in response.content
+    assert b"Select all human-review" in response.content
+    assert b"agent-review is left out:</strong> Unsupported candidate contract" in response.content
     assert b"updateSectionSelection" in response.content
     assert b'class="source-choice"' in response.content
     assert b"edited-choice" in response.content
@@ -155,8 +155,6 @@ def test_reviewer_can_render_reconciliation_preview_without_writes(client, revie
     assert b'<option value="7777">Datalist Town, ' in response.content
     assert b'class="schedule-form-block"' in response.content
     assert b"comparison-decision" not in response.content
-    assert b'data-automatic-source="comparison"' in response.content
-    assert b"carried from the comparison evidence automatically" in response.content
     assert list(
         ScheduleTranscription.objects.filter(census_schedule=schedule).values_list(
             "pk", "data"
@@ -206,21 +204,18 @@ def test_comparison_source_selection_is_scoped_to_schedule(client, reviewer):
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"baseline": other.pk},
     )
 
     assert response.status_code == 200
-    assert response.context["baseline_source"]["object"] == selected
+    assert [source["ref"] for source in response.context["sources"]] == [
+        "canonical",
+        str(selected.pk),
+    ]
     assert b"Wrong schedule" not in response.content
 
 
 @pytest.mark.django_db
-def test_comparison_defaults_to_latest_human_and_latest_agent():
-    from django.contrib import admin
-
-    from census.admin import CensusScheduleAdmin
-    from census.models import CensusSchedule
-
+def test_reconciliation_shows_every_source_newest_agent_first(client, reviewer):
     schedule = CensusScheduleFactory()
     older_human = ScheduleTranscriptionFactory(
         census_schedule=schedule,
@@ -238,21 +233,22 @@ def test_comparison_defaults_to_latest_human_and_latest_agent():
         census_schedule=schedule,
         run=TranscriptionRunFactory(kind="agent"),
     )
-    sources = list(
-        schedule.transcriptions.select_related("run").order_by(
-            "-created_at", "-pk"
+    client.force_login(reviewer)
+
+    response = client.get(
+        reverse(
+            "admin:census_censusschedule_compare_transcriptions",
+            args=[schedule.pk],
         )
     )
-    model_admin = CensusScheduleAdmin(CensusSchedule, admin.site)
 
-    baseline_ref, comparison_ref = model_admin._comparison_source_refs(
-        sources, None, None
-    )
-
-    assert baseline_ref == str(newest_human.pk)
-    assert baseline_ref != str(older_human.pk)
-    assert comparison_ref == str(newest_agent.pk)
-    assert comparison_ref != str(older_agent.pk)
+    assert [source["ref"] for source in response.context["sources"]] == [
+        "canonical",
+        str(newest_agent.pk),
+        str(older_agent.pk),
+        str(newest_human.pk),
+        str(older_human.pk),
+    ]
 
 
 def test_comparison_view_rejects_non_reviewer_directly(transcriber):
@@ -292,8 +288,7 @@ def test_reviewer_can_approve_selected_result_from_interface(client, reviewer):
             args=[schedule.pk],
         ),
         {
-            "baseline": "canonical",
-            "comparison": source.pk,
+            "sources": str(source.pk),
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
             "notes": "Checked against the image.",
@@ -320,7 +315,7 @@ def test_direct_approval_still_requires_reviewer_confirmation(client, reviewer):
         run=TranscriptionRunFactory(kind="human_snapshot"),
         data=serialize_canonical(schedule),
     )
-    preview = build_reconciliation_preview(schedule, source)
+    preview = build_reconciliation_preview(schedule, [source])
     client.force_login(reviewer)
 
     response = client.post(
@@ -329,8 +324,7 @@ def test_direct_approval_still_requires_reviewer_confirmation(client, reviewer):
             args=[schedule.pk],
         ),
         {
-            "baseline": "canonical",
-            "comparison": source.pk,
+            "sources": str(source.pk),
             "expected_fingerprint": preview["before_fingerprint"],
         },
     )
@@ -362,8 +356,7 @@ def test_reconciliation_post_is_csrf_protected(reviewer):
             args=[schedule.pk],
         ),
         {
-            "baseline": "canonical",
-            "comparison": source.pk,
+            "sources": str(source.pk),
             "expected_fingerprint": preview["before_fingerprint"],
             "confirmed": "yes",
         },
@@ -391,18 +384,17 @@ def test_interface_directly_applies_current_cell_selection(client, reviewer):
         run=TranscriptionRunFactory(kind="human_snapshot"),
         data=candidate,
     )
-    initial = build_reconciliation_preview(schedule, source)
+    initial = build_reconciliation_preview(schedule, [source])
     url = reverse(
         "admin:census_censusschedule_compare_transcriptions",
         args=[schedule.pk],
     )
     client.force_login(reviewer)
     base_data = {
-        "baseline": "canonical",
-        "comparison": source.pk,
+        "sources": str(source.pk),
         "expected_fingerprint": initial["before_fingerprint"],
         "confirmed": "yes",
-        "choice__schedule.respondent_name": "baseline",
+        "choice__schedule.respondent_name": "canonical",
     }
 
     applied = client.post(url, base_data)
@@ -431,18 +423,17 @@ def test_interface_directly_applies_inline_edit(client, reviewer):
         run=TranscriptionRunFactory(kind="human_snapshot"),
         data=candidate,
     )
-    initial = build_reconciliation_preview(schedule, source)
+    initial = build_reconciliation_preview(schedule, [source])
     url = reverse(
         "admin:census_censusschedule_compare_transcriptions",
         args=[schedule.pk],
     )
     client.force_login(reviewer)
     base_data = {
-        "baseline": "canonical",
-        "comparison": source.pk,
+        "sources": str(source.pk),
         "expected_fingerprint": initial["before_fingerprint"],
         "choice__schedule.respondent_name": "edited",
-        "edit_base__schedule.respondent_name": "comparison",
+        "edit_base__schedule.respondent_name": str(source.pk),
         "edit__schedule.respondent_name": "Reviewer Name",
         "confirmed": "yes",
     }
@@ -458,7 +449,7 @@ def test_interface_directly_applies_inline_edit(client, reviewer):
         {
             "field": "schedule.respondent_name",
             "source": "edited",
-            "base": "comparison",
+            "base": str(source.pk),
             "value": "Reviewer Name",
         }
     ]
@@ -488,7 +479,6 @@ def test_get_with_invalid_candidate_field_still_enables_apply(client, reviewer):
             "admin:census_censusschedule_compare_transcriptions",
             args=[schedule.pk],
         ),
-        {"baseline": "canonical", "comparison": source.pk},
     )
 
     assert response.status_code == 200
@@ -508,13 +498,12 @@ def test_post_selecting_baseline_value_for_invalid_field_approves(client, review
             args=[schedule.pk],
         ),
         {
-            "baseline": "canonical",
-            "comparison": source.pk,
+            "sources": str(source.pk),
             "expected_fingerprint": canonical_fingerprint(
                 serialize_canonical(schedule)
             ),
             "confirmed": "yes",
-            f"choice__clergy.{clergy.pk}.name": "baseline",
+            f"choice__clergy.{clergy.pk}.name": "canonical",
         },
     )
 
@@ -537,8 +526,7 @@ def test_post_with_invalid_selection_shows_validation_message(client, reviewer):
             args=[schedule.pk],
         ),
         {
-            "baseline": "canonical",
-            "comparison": source.pk,
+            "sources": str(source.pk),
             "expected_fingerprint": canonical_fingerprint(
                 serialize_canonical(schedule)
             ),
@@ -547,6 +535,5 @@ def test_post_with_invalid_selection_shows_validation_message(client, reviewer):
     )
 
     assert response.status_code == 200
-    assert b"Choose two distinct comparison sources." not in response.content
     assert b"name:" in response.content
     assert not schedule.reconciliations.exists()

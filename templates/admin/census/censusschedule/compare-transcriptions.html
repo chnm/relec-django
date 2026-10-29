@@ -26,40 +26,23 @@
       </div>
     </div>
 
-    <form method="get" class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
-      <div class="comparison-source-form">
-        <div>
-          <label for="baseline" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-            Baseline source
-          </label>
-          <select id="baseline" name="baseline" class="comparison-select">
-            {% for option in source_options %}
-              <option value="{{ option.value }}" {% if option.value == baseline_ref %}selected{% endif %}>{{ option.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label for="comparison" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-            Comparison source
-          </label>
-          <select id="comparison" name="comparison" class="comparison-select">
-            {% for option in source_options %}
-              <option value="{{ option.value }}" {% if option.value == comparison_ref %}selected{% endif %}>{{ option.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <button type="submit" class="comparison-button comparison-button-primary">
-          Compare sources
-        </button>
-      </div>
+    <div class="p-5 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-900 dark:border-gray-700">
       <div class="comparison-stats">
         <span class="comparison-stat comparison-stat-same"><b>{{ comparison.counts.same }}</b> same</span>
         <span class="comparison-stat comparison-stat-equivalent"><b>{{ comparison.counts.equivalent }}</b> equivalent format</span>
         <span class="comparison-stat comparison-stat-different"><b>{{ comparison.counts.different }}</b> different</span>
-        <span class="comparison-stat comparison-stat-missing"><b>{{ comparison.counts.one_missing }}</b> one source only</span>
+        <span class="comparison-stat comparison-stat-missing"><b>{{ comparison.counts.one_missing }}</b> not in every source</span>
         <span class="comparison-stat comparison-stat-blank-zero"><b>{{ comparison.counts.blank_zero }}</b> blank vs zero</span>
       </div>
-    </form>
+    </div>
+
+    {% for source in sources %}
+      {% if source.error %}
+        <div class="p-4 mb-6 text-sm text-amber-800 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200" role="status">
+          <strong>{{ source.heading }} is left out:</strong> {{ source.error }}
+        </div>
+      {% endif %}
+    {% endfor %}
 
     {% if reconciliation_error %}
       <div class="p-4 mb-6 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50 dark:bg-red-950 dark:border-red-800 dark:text-red-200" role="alert">
@@ -102,17 +85,16 @@
       </aside>
 
       <main class="min-w-0 space-y-5">
-        <div class="comparison-source-headings">
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=baseline_source side="baseline" fallback="No baseline selected" %}
-          {% include "admin/census/censusschedule/includes/source-heading.html" with source=comparison_source side="comparison" fallback="No comparison selected" %}
-        </div>
-
         {% if form.bodies or form.schedule %}
         <div class="comparison-card schedule-form" id="schedule-form">
           <div class="schedule-form-toolbar">
-            <button type="button" class="comparison-button section-source" data-source="baseline" aria-pressed="false">Select all baseline</button>
-            <button type="button" class="comparison-button section-source" data-source="comparison" aria-pressed="false">Select all comparison</button>
-            <span class="schedule-form-hint">Pick a source value for each field, or type a correction. Every field can be corrected.</span>
+            {% for source in sources %}
+              {% if not source.error %}
+                <button type="button" class="comparison-button section-source" data-source="{{ source.ref }}" aria-pressed="false">{% include "admin/census/censusschedule/includes/source-icon.html" %} Select all {{ source.heading }}</button>
+              {% endif %}
+            {% endfor %}
+            <span class="schedule-form-hint">One choice per source; hover an icon for its model and date. Pick one, or type a correction.</span>
+            <button type="button" class="comparison-button" id="layout-toggle" aria-pressed="false">Single column</button>
           </div>
           <datalist id="place-options">
             {% for place in place_options %}
@@ -195,30 +177,28 @@
         </div>
         {% else %}
           <div class="comparison-card p-8 text-sm text-center text-gray-500 dark:text-gray-400">
-            There are not yet two transcription sources to compare.
+            There is no transcription to reconcile yet.
           </div>
         {% endif %}
 
         {% for section in form.context %}
-          <section class="comparison-card overflow-hidden" data-decision-section data-automatic-source="{{ section.automatic_source|default:'' }}">
+          <section class="comparison-card overflow-hidden" data-decision-section>
             <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
               <h2 class="font-semibold text-gray-800 dark:text-gray-100">{{ section.title }}</h2>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ section.note }}</p>
             </div>
             <div class="p-4 space-y-3">
               {% for row in section.rows %}
-                <div class="form-field comparison-row comparison-row-{{ row.status }}">
-                  <div class="form-field-label"><span>{{ row.label }}</span></div>
-                  <div class="form-choice-value comparison-value-{{ row.right.kind }}">{{ row.right.text }}</div>
-                </div>
+                {% include "admin/census/censusschedule/includes/form-field.html" %}
               {% endfor %}
             </div>
           </section>
         {% endfor %}
 
         <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {% include "admin/census/censusschedule/includes/raw-source.html" with source=baseline_source title="Baseline raw JSON" %}
-          {% include "admin/census/censusschedule/includes/raw-source.html" with source=comparison_source title="Comparison raw JSON" %}
+          {% for source in sources %}
+            {% include "admin/census/censusschedule/includes/raw-source.html" with title=source.heading|add:" raw JSON" %}
+          {% endfor %}
         </section>
 
         <section class="comparison-card overflow-hidden" aria-labelledby="approval-heading">
@@ -229,8 +209,7 @@
           <div class="p-5">
             <form id="reconciliation-form" method="post" class="space-y-5">
               {% csrf_token %}
-              <input type="hidden" name="baseline" value="{{ baseline_ref }}">
-              <input type="hidden" name="comparison" value="{{ comparison_ref }}">
+              <input type="hidden" name="sources" value="{{ source_ids }}">
               <input type="hidden" name="expected_fingerprint" value="{{ preview.before_fingerprint }}">
 
               <div>
@@ -269,13 +248,6 @@
       display: grid;
       gap: 1.5rem;
       grid-template-columns: minmax(320px, 38%) minmax(0, 62%);
-    }
-
-    .comparison-source-form {
-      align-items: end;
-      display: grid;
-      gap: 1.25rem;
-      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
     }
 
     .comparison-image-column { min-width: 0; }
@@ -354,12 +326,9 @@
     .section-source.is-selected:hover { background: #00529a; }
 
     .comparison-stats {
-      border-top: 1px solid #e5e7eb;
       display: flex;
       flex-wrap: wrap;
       gap: .5rem;
-      margin-top: 1rem;
-      padding-top: 1rem;
     }
 
     .comparison-stat {
@@ -398,20 +367,6 @@
       max-width: none;
       transition: width .12s ease;
       width: 100%;
-    }
-
-    .comparison-source-headings {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: 1fr 1fr;
-      padding-bottom: 10px;
-    }
-
-    .comparison-source-heading {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: .5rem;
-      padding: .9rem;
     }
 
     /* Printed-form layout */
@@ -453,6 +408,26 @@
     }
 
     .source-mark svg { height: 100%; width: 100%; }
+
+    /* Which run an icon stands for, shown on hover. */
+    .source-mark[data-tip] { position: relative; }
+    .source-mark[data-tip]:hover::after {
+      background: #111827;
+      border-radius: .25rem;
+      color: #f9fafb;
+      content: attr(data-tip);
+      font-size: .7rem;
+      font-weight: 500;
+      left: 0;
+      line-height: 1.3;
+      padding: .3rem .5rem;
+      pointer-events: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      width: max-content;
+      max-width: 15rem;
+      z-index: 20;
+    }
 
     .source-mark-human { color: #374151; }
     .source-mark-model { color: #6b7280; }
@@ -557,15 +532,6 @@
       margin-bottom: .35rem;
     }
 
-    .form-skip {
-      align-items: center;
-      color: #9a3412;
-      display: inline-flex;
-      font-size: .72rem;
-      font-weight: 600;
-      gap: .4rem;
-      margin-bottom: .35rem;
-    }
 
     .form-panel.is-skipped .form-field {
       opacity: .45;
@@ -751,15 +717,22 @@
       .comparison-image-viewport { height: 65vh; }
     }
 
+    /* Reviewer-chosen single column: the narrow-screen layout, on demand. */
+    .schedule-form.is-single-column .schedule-form-grid { grid-template-columns: 1fr; }
+    .schedule-form.is-single-column .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
+    .schedule-form.is-single-column .schedule-form-inline .form-panel { display: block; }
+    .schedule-form.is-single-column .schedule-form-inline .form-field {
+      border-bottom: 1px dotted #9ca3af;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    }
+
     @media (max-width: 900px) {
-      .comparison-source-form,
       .schedule-form-grid { grid-template-columns: 1fr; }
       .schedule-form-col + .schedule-form-col { border-left: 0; border-top: 3px double #9ca3af; }
     }
 
     @media (prefers-color-scheme: dark) {
-      .comparison-card,
-      .comparison-source-heading { background: #111827; border-color: #374151; }
+      .comparison-card { background: #111827; border-color: #374151; }
       .comparison-select,
       .comparison-button { background: #111827; border-color: #4b5563; color: #e5e7eb; }
       .section-source.is-selected { background: #0875ce; border-color: #60a5fa; color: #fff; }
@@ -794,11 +767,15 @@
         if (panel.querySelector(".entity-decision")) {
           return panel.querySelector('input[name^="choice__"]:checked')?.value;
         }
-        return panel.dataset.automaticSource || undefined;
+        return undefined;
       };
 
       // Highlight the chosen row (source value or correction) in every field of one panel.
       const updateSectionSelection = (panel) => {
+        panel.classList.toggle(
+          "is-skipped",
+          Boolean(panel.querySelector('.entity-decision input[value="skip"]:checked'))
+        );
         panel.querySelectorAll(".comparison-row").forEach((row) => {
           const choice = rowChoiceFor(row, panel);
           row.classList.toggle("is-edited", choice === "edited");
@@ -811,26 +788,16 @@
         });
       };
 
-      // Form-level pill and "Use all" buttons summarise every decision on the page.
+      // A "Select all" button reads as pressed while every field uses its source.
       const updateFormStatus = () => {
         if (!form) return;
-        const inputs = Array.from(
-          form.querySelectorAll('input[type="radio"][name^="choice__"]')
+        const picks = Array.from(document.querySelectorAll("[data-form-row]")).map(
+          (row) => row.querySelector(".source-choice:checked")?.closest(".form-choice")
         );
-        const names = new Set(inputs.map((input) => input.name));
-        const checked = inputs.filter((input) => input.checked);
-        let state = "none";
-        if (names.size && checked.length === names.size) {
-          if (checked.some((input) => input.value === "edited")) {
-            state = "edited";
-          } else {
-            const sources = new Set(checked.map((input) => input.value));
-            state = sources.size === 1 ? checked[0].value : "mixed";
-          }
-        }
         form.querySelectorAll(".section-source").forEach((button) => {
-          const selected = button.dataset.source === state;
-          button.disabled = state === "none";
+          const selected = picks.length > 0 && picks.every(
+            (pick) => pick?.dataset.sourceCell.split(" ").includes(button.dataset.source)
+          );
           button.classList.toggle("is-selected", selected);
           button.setAttribute("aria-pressed", selected ? "true" : "false");
         });
@@ -843,7 +810,12 @@
 
       // The last source the reviewer picked is the base a correction starts from.
       const selectSource = (row, source) => {
-        row.querySelector(`.source-choice[value="${source}"]`).checked = true;
+        const radio = row.querySelector(
+          `.form-choice[data-source-cell~="${source}"] .source-choice`
+        );
+        if (!radio) return;  // This source does not have the row.
+        radio.checked = true;
+        if (!row.querySelector(".form-correction")) return;
         row.querySelector('input[name^="edit_base__"]').value = source;
         row.querySelector('input[name^="edit__"]').value = "";
         const correction = row.querySelector(".form-correction");
@@ -852,7 +824,7 @@
 
       const selectCorrection = (row) => {
         const base = row.querySelector('input[name^="edit_base__"]');
-        if (!base.value) base.value = "comparison";
+        if (!base.value) base.value = row.querySelector(".source-choice").value;
         row.querySelector(".edited-choice").checked = true;
         row.querySelector('input[name^="edit__"]').value = (
           row.querySelector(".form-correction").value
@@ -860,18 +832,18 @@
       };
 
       document.querySelectorAll("[data-form-row]").forEach((row) => {
-        const correction = row.querySelector(".form-correction");
-        if (!correction) return;
-        const base = row.querySelector('input[name^="edit_base__"]');
-        if (!base.value) {
-          base.value = row.querySelector(".source-choice:checked")?.value || "comparison";
-        }
         row.querySelectorAll(".source-choice").forEach((radio) => {
           radio.addEventListener("change", () => {
             selectSource(row, radio.value);
             refresh(row);
           });
         });
+        const correction = row.querySelector(".form-correction");
+        if (!correction) return;
+        const base = row.querySelector('input[name^="edit_base__"]');
+        if (!base.value) {
+          base.value = (row.querySelector(".source-choice:checked") || row.querySelector(".source-choice")).value;
+        }
         row.querySelector(".edited-choice").addEventListener("change", () => {
           selectCorrection(row);
           refresh(row);
@@ -901,11 +873,10 @@
       form?.querySelectorAll(".section-source").forEach((button) => {
         button.addEventListener("click", () => {
           const source = button.dataset.source;
-          form.querySelectorAll("[data-form-row]").forEach((row) => {
-            if (row.querySelector(".source-choice")) selectSource(row, source);
-          });
-          form.querySelectorAll(`.entity-decision input[value="${source}"]`).forEach((input) => {
-            input.checked = true;
+          document.querySelectorAll("[data-form-row]").forEach((row) => selectSource(row, source));
+          form.querySelectorAll(".entity-decision").forEach((fieldset) => {
+            const has = fieldset.dataset.refs.split(" ").includes(source);
+            fieldset.querySelector(`input[value="${has ? "keep" : "skip"}"]`).checked = true;
           });
           panels.forEach(updateSectionSelection);
           updateFormStatus();
@@ -916,12 +887,26 @@
         input.addEventListener("change", () => refresh(input));
       });
 
-      document.querySelectorAll(".skip-choice").forEach((box) => {
-        const panel = box.closest("[data-decision-section]");
-        const sync = () => panel.classList.toggle("is-skipped", box.checked);
-        box.addEventListener("change", sync);
-        sync();
-      });
+
+      // Schedule layout or single column, remembered per browser.
+      const layoutToggle = document.getElementById("layout-toggle");
+      if (layoutToggle) {
+        const setLayout = (single) => {
+          form.classList.toggle("is-single-column", single);
+          layoutToggle.setAttribute("aria-pressed", single ? "true" : "false");
+          layoutToggle.textContent = single ? "Schedule layout" : "Single column";
+        };
+        try {
+          setLayout(localStorage.getItem("reconcile-layout") === "single");
+        } catch (error) {}
+        layoutToggle.addEventListener("click", () => {
+          const single = !form.classList.contains("is-single-column");
+          setLayout(single);
+          try {
+            localStorage.setItem("reconcile-layout", single ? "single" : "schedule");
+          } catch (error) {}
+        });
+      }
 
       panels.forEach(updateSectionSelection);
       updateFormStatus();

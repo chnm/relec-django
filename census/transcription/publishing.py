@@ -227,12 +227,12 @@ class PublicationWorker:
             if publication.notes:
                 notes = f"{notes}\n{publication.notes}"
             try:
-                preview = build_reconciliation_preview(schedule, source)
+                preview = build_reconciliation_preview(schedule, [source])
                 apply_reconciliation(
                     schedule_id=schedule.pk,
                     reviewer=publication.confirmed_by,
                     expected_fingerprint=preview["before_fingerprint"],
-                    comparison_transcription_id=source.pk,
+                    transcription_ids=[source.pk],
                     notes=notes,
                 )
             except ReconciliationError as exc:

@@ -31,7 +31,7 @@ from census.transcription.comparison import (
 )
 from census.transcription.comparison import RELIGIOUS_BODY_FIELDS as DISPLAY_BODY_FIELDS
 from census.transcription.comparison import (
-    comparison_row,
+    choice_row,
 )
 from census.transcription.contracts import (
     CONTRACT_VERSION,
@@ -40,7 +40,8 @@ from census.transcription.contracts import (
 )
 from location.models import PopulatedPlace
 
-DECISION_VERSION = "schedule-reconciliation-v4"
+DECISION_VERSION = "schedule-reconciliation-v5"
+CANONICAL = "canonical"
 SCHEDULE_FIELDS = (
     "num_assistant_pastors",
     "respondent_name",
@@ -303,27 +304,35 @@ def canonical_fingerprint(snapshot):
 
 def build_reconciliation_preview(
     schedule,
-    comparison_transcription=None,
+    transcriptions=(),
     *,
-    baseline_transcription=None,
     decisions=None,
     mixed=False,
     validate=True,
 ):
-    """Return the live baseline, proposed draft, and explicit consequences."""
+    """Return the live record, every source's draft, the proposed draft, and
+    explicit consequences.
+
+    The current canonical record anchors the review and every transcription is
+    aligned against it. The first usable transcription is the primary source:
+    each field and row follows it unless the reviewer decides otherwise, so an
+    unmixed preview promotes it whole.
+    """
     before = serialize_canonical(schedule)
-    baseline = (
-        before
-        if baseline_transcription is None
-        else _candidate_draft(schedule, baseline_transcription, before)
-    )
-    comparison = (
-        before
-        if comparison_transcription is None
-        else _candidate_draft(schedule, comparison_transcription, before)
-    )
-    review = build_mixed_review(baseline, comparison, decisions or {})
-    proposed = review["proposed"] if mixed else comparison
+    sources = {}
+    source_errors = {}
+    for transcription in transcriptions:
+        try:
+            sources[str(transcription.pk)] = _candidate_draft(
+                schedule, transcription, before
+            )
+        except ReconciliationValidationError as exc:
+            source_errors[str(transcription.pk)] = str(exc)
+    if transcriptions and not sources:
+        raise ReconciliationValidationError(next(iter(source_errors.values())))
+    sources[CANONICAL] = before
+    review = build_mixed_review(sources, decisions or {})
+    proposed = review["proposed"] if mixed else next(iter(sources.values()))
     if validate:
         _validate_draft(schedule, proposed)
     operations = _operation_summary(before, proposed)
@@ -335,8 +344,8 @@ def build_reconciliation_preview(
     )
     return {
         "before": before,
-        "baseline": baseline,
-        "comparison_source": comparison,
+        "sources": sources,
+        "source_errors": source_errors,
         "proposed": proposed,
         "before_fingerprint": canonical_fingerprint(before),
         "operations": operations,
@@ -369,10 +378,7 @@ def infer_reconciliation_outcome(preview):
         return ScheduleReconciliation.Outcome.RETAINED_CURRENT
     if any(
         _source_content(preview["proposed"]) == _source_content(source)
-        for source in (
-            preview["baseline"],
-            preview["comparison_source"],
-        )
+        for source in preview["sources"].values()
     ):
         return ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
     return ScheduleReconciliation.Outcome.MIXED
@@ -384,9 +390,7 @@ def apply_reconciliation(
     schedule_id,
     reviewer,
     expected_fingerprint,
-    transcription_id=None,
-    baseline_transcription_id=None,
-    comparison_transcription_id=None,
+    transcription_ids=(),
     notes="",
     decisions=None,
     approve=True,
@@ -394,33 +398,18 @@ def apply_reconciliation(
 ):
     """Apply one fully reviewed decision atomically.
 
+    ``transcription_ids`` are the sources the reviewer saw, primary first.
     Reviewers approve the schedule. Transcribers (``approve=False``) submit it
     as ``completed`` for review and may not remove existing rows.
     """
-    if transcription_id is not None and comparison_transcription_id is None:
-        comparison_transcription_id = transcription_id
-    if (
-        baseline_transcription_id is not None
-        and baseline_transcription_id == comparison_transcription_id
-    ):
-        raise ReconciliationValidationError(
-            "Choose two distinct comparison sources."
-        )
-
     # Lock only the schedule row. The graph queryset joins nullable relations,
     # which PostgreSQL cannot include in an unrestricted FOR UPDATE clause.
     CensusSchedule.objects.select_for_update(of=("self",)).get(pk=schedule_id)
     schedule = schedule_graph_queryset().get(pk=schedule_id)
-    baseline_transcription = _reconciliation_transcription(
-        schedule, baseline_transcription_id, "baseline"
-    )
-    comparison_transcription = _reconciliation_transcription(
-        schedule, comparison_transcription_id, "comparison"
-    )
+    transcriptions = _reconciliation_transcriptions(schedule, transcription_ids)
     preview = build_reconciliation_preview(
         schedule,
-        comparison_transcription,
-        baseline_transcription=baseline_transcription,
+        transcriptions,
         decisions=decisions,
         mixed=True,
     )
@@ -429,10 +418,7 @@ def apply_reconciliation(
             "The canonical record changed after this preview. Refresh and review "
             "it again."
         )
-    source_refs = {
-        "baseline": _source_ref(baseline_transcription),
-        "comparison": _source_ref(comparison_transcription),
-    }
+    source_refs = [_source_ref(transcription) for transcription in transcriptions]
     operations = preview["operations"]
     if not allow_removals and any(
         operations[group]["removed"]
@@ -483,14 +469,12 @@ def apply_reconciliation(
             ],
         },
     )
-    source_snapshots = (
-        (baseline_transcription, preview["baseline"]),
-        (comparison_transcription, preview["comparison_source"]),
-    )
-    for transcription, snapshot in source_snapshots:
-        if transcription is None:
-            continue
-        if _source_content(preview["proposed"]) == _source_content(snapshot):
+    for transcription in transcriptions:
+        snapshot = preview["sources"].get(str(transcription.pk))
+        if snapshot is None:
+            # Unusable (e.g. an unsupported contract); reviewed all the same.
+            disposition = ReconciliationSource.Disposition.REJECTED
+        elif _source_content(preview["proposed"]) == _source_content(snapshot):
             disposition = ReconciliationSource.Disposition.ACCEPTED
         elif outcome == ScheduleReconciliation.Outcome.MIXED:
             disposition = ReconciliationSource.Disposition.INCORPORATED
@@ -611,27 +595,20 @@ def rollback_reconciliation(
     return reversal
 
 
-def _reconciliation_transcription(schedule, transcription_id, label):
-    if transcription_id is None:
-        return None
-    transcription = (
-        ScheduleTranscription.objects.select_related("run")
-        .filter(census_schedule=schedule, pk=transcription_id)
-        .first()
-    )
-    if transcription is None:
+def _reconciliation_transcriptions(schedule, transcription_ids):
+    ids = [int(pk) for pk in transcription_ids]
+    found = ScheduleTranscription.objects.select_related("run").filter(
+        census_schedule=schedule, pk__in=ids
+    ).in_bulk()
+    if len(found) != len(set(ids)):
         raise ReconciliationValidationError(
-            f"The selected {label} source does not belong to this schedule."
+            "A selected source does not belong to this schedule."
         )
-    return transcription
+    return [found[pk] for pk in dict.fromkeys(ids)]
 
 
 def _source_ref(transcription):
-    return (
-        f"transcription:{transcription.pk}"
-        if transcription is not None
-        else "canonical"
-    )
+    return f"transcription:{transcription.pk}"
 
 
 def _source_content(value):
@@ -754,263 +731,117 @@ def decisions_fingerprint(decisions):
     return hashlib.sha256(payload).hexdigest()
 
 
-def _schedule_group_section(
-    title, fields, before, candidate, decisions, used_decisions, proposed_fields
-):
-    rows = []
-    for field, label in fields:
-        key = f"schedule.{field}"
-        current_value = before["schedule_fields"].get(field)
-        candidate_value = candidate["schedule_fields"].get(field)
-        proposed_fields[field] = _selected_value(
-            decisions,
-            used_decisions,
-            key,
-            current_value,
-            candidate_value,
-        )
-        row = comparison_row(
-            label,
-            current_value,
-            candidate_value,
-            decision_key=key,
-            edit_type=_edit_type(key),
-            field=field,
-            **_decision_row_options(used_decisions[key]),
-        )
-        if field == "populated_place_id":
-            _annotate_place_names(row, current_value, candidate_value)
-        rows.append(row)
-    return {
-        "title": title,
-        "note": "Select a source value, or type a reviewer correction.",
-        "rows": rows,
-        "decision_scope": "field",
-        "kind": "schedule",
-    }
+def build_mixed_review(sources, decisions):
+    """Align every source against the current record into one mixed draft.
 
-
-def _annotate_place_names(row, *place_ids):
-    """Show the place name and state after a bare Apiary place ID."""
-    ids = {value for value in place_ids if isinstance(value, int)}
-    if not ids:
-        return
-    names = {}
-    for place in PopulatedPlace.objects.filter(place_id__in=ids).select_related(
-        "county__state"
-    ):
-        names.setdefault(place.place_id, f"{place.name}, {place.county.state.code}")
-    for side, value in (("left", place_ids[0]), ("right", place_ids[1])):
-        if value in names:
-            row[side]["text"] = f"{value} ({names[value]})"
-
-
-def build_mixed_review(before, candidate, decisions):
-    """Align entities explicitly and construct a field-level mixed draft.
+    ``sources`` maps source refs to drafts, primary first, and includes the
+    canonical record. A field decision names the source ref whose value is
+    kept (or an edit based on one); a row that is not in every source also
+    takes a keep/skip decision. Undecided fields and rows follow the primary.
 
     Section order follows the physical 1926 schedule form: Schedule fields,
     then religious bodies/clergy (the body of the form), then Respondent and
     Census Bureau processing (the form's footer), then AI context last.
     """
-    used_decisions = {}
-    sections = []
+    review = _Review(sources, decisions)
     proposed_fields = {}
+    sections = []
     schedule_title, schedule_fields = SCHEDULE_FIELD_GROUPS[0]
-    trailing_schedule_groups = SCHEDULE_FIELD_GROUPS[1:]
     sections.append(
-        _schedule_group_section(
-            schedule_title,
-            schedule_fields,
-            before,
-            candidate,
-            decisions,
-            used_decisions,
-            proposed_fields,
-        )
+        review.schedule_section(schedule_title, schedule_fields, proposed_fields)
     )
 
     proposed_bodies = []
-    body_matches, current_only_bodies, candidate_only_bodies = (
-        _match_snapshot_rows(
-            before["religious_bodies"],
-            candidate["religious_bodies"],
-            signature_fields=("address", "census_code"),
+    bodies = _align(
+        review.order,
+        lambda ref: _source_rows(ref, sources[ref]["religious_bodies"]),
+        lambda anchors, rows: _match_snapshot_rows(
+            anchors, rows, signature_fields=("address", "census_code"),
             match_single=True,
-        )
+        ),
+        "body",
+        "body",
     )
-    for index, (current_body, candidate_body) in enumerate(
-        sorted(body_matches, key=lambda pair: _snapshot_sort_key(pair[0]))
-    ):
-        token = _snapshot_token("body", current_body, index)
-        proposed_body, body_sections = _mixed_body(
-            token,
-            current_body,
-            candidate_body,
-            decisions,
-            used_decisions,
+    for number, (token, entry) in enumerate(bodies, start=1):
+        title = f"Religious body: {_snapshot_label(_anchor(entry), number)}"
+        body, section = review.entity(
+            token, title, entry, BODY_FIELDS, BODY_LABELS, "body", "religious body"
         )
-        proposed_bodies.append(proposed_body)
-        sections.extend(body_sections)
-
-    for index, current_body in enumerate(
-        sorted(current_only_bodies, key=_snapshot_sort_key)
-    ):
-        token = _snapshot_token("body", current_body, index)
-        key = f"entity.{token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "baseline":
-            proposed_bodies.append(deepcopy(current_body))
-        sections.append(
-            _entity_section(
-                f"Religious body: "
-                f"{_snapshot_label(current_body, index + 1)}",
-                current_body,
-                None,
-                BODY_FIELDS,
-                BODY_LABELS,
-                key,
-                selected,
-                "Retain baseline body",
-                "Remove body",
-                "body",
-                note=(
-                    f"Baseline-only body with "
-                    f"{len(current_body.get('membership', []))} membership row(s)."
-                ),
+        sections.append(section)
+        memberships = _align(
+            list(entry),
+            lambda ref: _source_rows(ref, entry[ref].get("membership", [])),
+            lambda anchors, rows: _match_snapshot_rows(
+                anchors, rows, signature_fields=MEMBERSHIP_FIELDS,
+                match_single=True,
+            ),
+            "membership",
+            f"{token}.membership",
+        )
+        kept_memberships = []
+        for member_number, (member_token, member_entry) in enumerate(
+            memberships, start=1
+        ):
+            membership, section = review.entity(
+                member_token,
+                f"{title}: membership {member_number}",
+                member_entry,
+                MEMBERSHIP_FIELDS,
+                MEMBERSHIP_LABELS,
+                "membership",
+                "membership",
+                scope=list(entry),
             )
-        )
+            sections.append(section)
+            if membership is not None:
+                kept_memberships.append(membership)
+        if body is not None:
+            body["membership"] = kept_memberships
+            proposed_bodies.append(body)
 
-    candidate_body_indices = {
-        id(row): index for index, row in enumerate(candidate["religious_bodies"])
-    }
-    for candidate_body in candidate_only_bodies:
-        index = candidate_body_indices[id(candidate_body)]
-        token = f"body.new.{index}"
-        key = f"entity.{token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "comparison":
-            proposed_body = deepcopy(candidate_body)
-            proposed_body["_force_create"] = candidate_body.get("id") is None
-            proposed_bodies.append(proposed_body)
-        sections.append(
-            _entity_section(
-                f"Comparison religious body: "
-                f"{candidate_body.get('name') or index + 1}",
-                None,
-                candidate_body,
-                BODY_FIELDS,
-                BODY_LABELS,
-                key,
-                selected,
-                "Do not add body",
-                "Add comparison body",
-                "body",
-                note=(
-                    f"Comparison-only body with "
-                    f"{len(candidate_body.get('membership', []))} membership row(s)."
-                ),
-            )
-        )
-
-    # Clergy pairs by position: a schedule holds at most one canonical pastor,
-    # and the comparison lists the pastor first, so row n meets row n. Extra
-    # comparison rows are new; the reviewer can skip any of them. A nameless
-    # row is the model reading the blank assistant lines as a person; drop it.
+    # Clergy pair by position: a schedule holds at most one canonical pastor,
+    # and sources list the pastor first, so row n meets row n. Extra rows are
+    # new. A nameless source row is the model reading the blank assistant
+    # lines as a person; drop it.
     proposed_clergy = []
-    current_clergy = sorted(before["clergy"], key=_snapshot_sort_key)
-    candidate_clergy = sorted(
-        (row for row in candidate["clergy"] if row.get("name")),
-        key=lambda row: bool(row.get("is_assistant")),
+    clergy = _align(
+        review.order,
+        lambda ref: (
+            _source_rows(ref, sources[ref]["clergy"])
+            if ref == CANONICAL
+            else sorted(
+                (row for row in sources[ref]["clergy"] if row.get("name")),
+                key=lambda row: bool(row.get("is_assistant")),
+            )
+        ),
+        _match_by_position,
+        "clergy",
+        "clergy",
     )
-    for index, candidate_person in enumerate(candidate_clergy):
-        current_person = (
-            current_clergy[index] if index < len(current_clergy) else {}
-        )
-        if current_person:
-            token = _snapshot_token("clergy", current_person, index)
-            title = f"Clergy: {_snapshot_label(current_person, index + 1)}"
-        else:
-            token = f"clergy.new.{index}"
-            title = f"Clergy: {candidate_person.get('name') or index + 1}"
-        proposed_person, section = _mixed_matched_entity(
+    for number, (token, entry) in enumerate(clergy, start=1):
+        person, section = review.entity(
             token,
-            title,
-            current_person,
-            candidate_person,
+            f"Clergy: {_snapshot_label(_anchor(entry), number)}",
+            entry,
             CLERGY_FIELDS,
             CLERGY_LABELS,
-            decisions,
-            used_decisions,
             "clergy",
+            "clergy row",
         )
-        if current_person:
-            proposed_clergy.append(proposed_person)
-        else:
-            key = f"entity.{token}"
-            selected = _selected_source(decisions, used_decisions, key)
-            section["skip_decision"] = {"key": key, "selected": selected}
-            if selected == "comparison":
-                proposed_person["_force_create"] = candidate_person.get("id") is None
-                proposed_clergy.append(proposed_person)
         sections.append(section)
+        if person is not None:
+            proposed_clergy.append(person)
 
-    for index, current_person in enumerate(current_clergy):
-        if index < len(candidate_clergy):
-            continue
-        token = _snapshot_token("clergy", current_person, index)
-        key = f"entity.{token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "baseline":
-            proposed_clergy.append(deepcopy(current_person))
-        sections.append(
-            _entity_section(
-                f"Clergy: {_snapshot_label(current_person, index + 1)}",
-                current_person,
-                None,
-                CLERGY_FIELDS,
-                CLERGY_LABELS,
-                key,
-                selected,
-                "Retain baseline clergy row",
-                "Remove clergy row",
-                "clergy",
-            )
-        )
-
-    for title, fields in trailing_schedule_groups:
-        sections.append(
-            _schedule_group_section(
-                title,
-                fields,
-                before,
-                candidate,
-                decisions,
-                used_decisions,
-                proposed_fields,
-            )
-        )
+    for title, fields in SCHEDULE_FIELD_GROUPS[1:]:
+        sections.append(review.schedule_section(title, fields, proposed_fields))
 
     for title, fields in AI_CONTEXT_FIELD_GROUPS:
-        rows = []
-        for field, label in fields:
-            current_value = before["schedule_fields"].get(field)
-            candidate_value = candidate["schedule_fields"].get(field)
-            proposed_fields[field] = deepcopy(candidate_value)
-            rows.append(
-                comparison_row(label, current_value, candidate_value, field=field)
-            )
-        sections.append(
-            {
-                "title": title,
-                "note": (
-                    "AI transcription context is carried from the comparison "
-                    "evidence automatically."
-                ),
-                "rows": rows,
-                "decision_scope": "automatic",
-                "automatic_source": "comparison",
-            }
-        )
+        section = review.schedule_section(title, fields, proposed_fields)
+        for row in section["rows"]:
+            row["can_edit"] = False
+        section["decision_scope"] = "context"
+        section["note"] = "Transcription notes, not form fields. Choose which to keep."
+        sections.append(section)
 
     return {
         "proposed": {
@@ -1020,249 +851,197 @@ def build_mixed_review(before, candidate, decisions):
             "clergy": proposed_clergy,
         },
         "sections": sections,
-        "decisions": used_decisions,
+        "decisions": review.used,
     }
 
 
-def _mixed_body(
-    token,
-    current_body,
-    candidate_body,
-    decisions,
-    used_decisions,
-):
-    proposed_body, body_section = _mixed_matched_entity(
-        token,
-        f"Religious body: {_snapshot_label(current_body, 1)}",
-        current_body,
-        candidate_body,
-        BODY_FIELDS,
-        BODY_LABELS,
-        decisions,
-        used_decisions,
-        "body",
-    )
-    memberships = []
-    membership_sections = []
-    matches, current_only, candidate_only = _match_snapshot_rows(
-        current_body.get("membership", []),
-        candidate_body.get("membership", []),
-        signature_fields=MEMBERSHIP_FIELDS,
-        match_single=True,
-    )
-    for index, (current_membership, candidate_membership) in enumerate(
-        sorted(matches, key=lambda pair: _snapshot_sort_key(pair[0]))
-    ):
-        member_token = (
-            f"membership.{current_membership['id']}"
-            if current_membership.get("id") is not None
-            else f"{token}.membership.baseline.{index}"
-        )
-        member_label = current_membership.get("id") or index + 1
-        proposed_membership, section = _mixed_matched_entity(
-            member_token,
-            f"{body_section['title']}: membership {member_label}",
-            current_membership,
-            candidate_membership,
-            MEMBERSHIP_FIELDS,
-            MEMBERSHIP_LABELS,
-            decisions,
-            used_decisions,
-            "membership",
-        )
-        memberships.append(proposed_membership)
-        membership_sections.append(section)
-    for index, current_membership in enumerate(
-        sorted(current_only, key=_snapshot_sort_key)
-    ):
-        member_token = (
-            f"membership.{current_membership['id']}"
-            if current_membership.get("id") is not None
-            else f"{token}.membership.baseline.{index}"
-        )
-        member_label = current_membership.get("id") or index + 1
-        key = f"entity.{member_token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "baseline":
-            memberships.append(deepcopy(current_membership))
-        membership_sections.append(
-            _entity_section(
-                f"{body_section['title']}: membership {member_label}",
-                current_membership,
-                None,
-                MEMBERSHIP_FIELDS,
-                MEMBERSHIP_LABELS,
-                key,
-                selected,
-                "Retain baseline membership",
-                "Remove membership",
-                "membership",
-            )
-        )
-    candidate_indices = {
-        id(row): index
-        for index, row in enumerate(candidate_body.get("membership", []))
-    }
-    for candidate_membership in candidate_only:
-        index = candidate_indices[id(candidate_membership)]
-        member_token = f"{token}.membership.new.{index}"
-        key = f"entity.{member_token}"
-        selected = _selected_source(decisions, used_decisions, key)
-        if selected == "comparison":
-            proposed_membership = deepcopy(candidate_membership)
-            proposed_membership["_force_create"] = (
-                candidate_membership.get("id") is None
-            )
-            memberships.append(proposed_membership)
-        membership_sections.append(
-            _entity_section(
-                f"{body_section['title']}: comparison membership {index + 1}",
-                None,
-                candidate_membership,
-                MEMBERSHIP_FIELDS,
-                MEMBERSHIP_LABELS,
-                key,
-                selected,
-                "Do not add membership",
-                "Add comparison membership",
-                "membership",
-            )
-        )
-    proposed_body["membership"] = memberships
-    return proposed_body, [body_section, *membership_sections]
+class _Review:
+    """Resolve reviewer decisions against sources in preference order."""
 
+    def __init__(self, sources, decisions):
+        self.sources = sources
+        self.decisions = decisions
+        self.used = {}
+        self.primary = next(iter(sources))
+        # Shown with the current record first, then the transcriptions.
+        self.order = [CANONICAL, *(ref for ref in sources if ref != CANONICAL)]
 
-def _mixed_matched_entity(
-    token,
-    title,
-    current,
-    candidate,
-    fields,
-    labels,
-    decisions,
-    used_decisions,
-    kind,
-):
-    proposed = {}
-    if current.get("id") is not None:
-        proposed["id"] = current["id"]
-    rows = []
-    for field in fields:
-        key = f"{token}.{field}"
-        if kind == "body" and field == "address" and key not in decisions:
-            # Line d as written is not shown on the review form; it follows
-            # the source the reviewer chose for line d's matched place.
-            place = used_decisions.get("schedule.populated_place_id")
-            if place is not None:
-                source = place["base"] if isinstance(place, dict) else place
-                decisions = {**decisions, key: source}
-        # An absent current row shows "Not captured" but proposes None.
-        current_value = current.get(field, MISSING)
-        proposed[field] = _selected_value(
-            decisions,
-            used_decisions,
-            key,
-            None if current_value is MISSING else current_value,
-            candidate.get(field),
-        )
-        rows.append(
-            comparison_row(
-                labels[field],
-                current_value,
-                candidate.get(field),
-                decision_key=key,
-                edit_type=_edit_type(key),
-                field=field,
-                **_decision_row_options(used_decisions[key]),
-            )
-        )
-    return proposed, {
-        "title": title,
-        "note": "Select a source value, or type a reviewer correction.",
-        "rows": rows,
-        "decision_scope": "field",
-        "kind": kind,
-    }
+    def default(self, refs, preferred=None):
+        if preferred in refs:
+            return preferred
+        return next(ref for ref in self.sources if ref in refs)
 
-
-def _entity_section(
-    title,
-    current,
-    candidate,
-    fields,
-    labels,
-    key,
-    selected,
-    current_label,
-    candidate_label,
-    kind,
-    note="",
-):
-    current = current or {}
-    candidate = candidate or {}
-    return {
-        "title": title,
-        "note": note or "Choose explicitly whether this unmatched row is retained.",
-        "rows": [
-            comparison_row(
-                labels[field],
-                current.get(field, MISSING),
-                candidate.get(field, MISSING),
-                field=field,
-            )
-            for field in fields
-        ],
-        "decision_scope": "entity",
-        "kind": kind,
-        "entity_decision": {
-            "key": key,
-            "selected": selected,
-            "current_label": current_label,
-            "candidate_label": candidate_label,
-        },
-    }
-
-
-def _selected_source(decisions, used_decisions, key):
-    selected = decisions.get(key, "comparison")
-    if selected not in {"baseline", "comparison"}:
-        raise ReconciliationValidationError(
-            f"Invalid source decision for {key!r}."
-        )
-    used_decisions[key] = selected
-    return selected
-
-
-def _selected_value(
-    decisions,
-    used_decisions,
-    key,
-    current_value,
-    candidate_value,
-):
-    decision = decisions.get(key, "comparison")
-    if isinstance(decision, dict):
-        if decision.get("source") != "edited":
+    def choose(self, key, values, preferred=None):
+        """Return the value chosen for ``key`` from ``{ref: value}``."""
+        decision = self.decisions.get(key, self.default(values, preferred))
+        if isinstance(decision, dict):
+            if decision.get("source") != "edited":
+                raise ReconciliationValidationError(
+                    f"Invalid source decision for {key!r}."
+                )
+            if decision.get("base") not in values:
+                raise ReconciliationValidationError(
+                    f"Choose the source value used to edit {key!r}."
+                )
+            value = _coerce_edited_value(key, decision.get("value", ""))
+            self.used[key] = {
+                "source": "edited",
+                "base": decision["base"],
+                "value": value,
+            }
+            return deepcopy(value)
+        if decision not in values:
             raise ReconciliationValidationError(
                 f"Invalid source decision for {key!r}."
             )
-        base = decision.get("base")
-        if base not in {"baseline", "comparison"}:
-            raise ReconciliationValidationError(
-                f"Choose the source value used to edit {key!r}."
-            )
-        value = _coerce_edited_value(key, decision.get("value", ""))
-        used_decisions[key] = {
-            "source": "edited",
-            "base": base,
-            "value": value,
-        }
-        return deepcopy(value)
+        self.used[key] = decision
+        value = values[decision]
+        return None if value is MISSING else deepcopy(value)
 
-    selected = _selected_source(decisions, used_decisions, key)
-    return deepcopy(
-        current_value if selected == "baseline" else candidate_value
-    )
+    def row(self, label, key, field, values, complete=True):
+        return choice_row(
+            label,
+            values,
+            decision_key=key,
+            complete=complete,
+            edit_type=_edit_type(key),
+            field=field,
+            **_decision_row_options(self.used[key]),
+        )
+
+    def schedule_section(self, title, fields, proposed_fields):
+        rows = []
+        for field, label in fields:
+            key = f"schedule.{field}"
+            values = {
+                ref: self.sources[ref]["schedule_fields"].get(field)
+                for ref in self.order
+            }
+            proposed_fields[field] = self.choose(key, values)
+            row = self.row(label, key, field, values)
+            if field == "populated_place_id":
+                _annotate_place_names(row)
+            rows.append(row)
+        return {
+            "title": title,
+            "note": "Select a source value, or type a reviewer correction.",
+            "rows": rows,
+            "decision_scope": "field",
+            "kind": "schedule",
+        }
+
+    def entity(self, token, title, entry, fields, labels, kind, noun, scope=None):
+        """Build one aligned row; return (proposed row or None, section).
+
+        ``scope`` lists the sources the row could appear in (default: all).
+        """
+        scope = scope or list(self.sources)
+        complete = all(ref in entry for ref in scope)
+        anchor = _anchor(entry)
+        proposed = {}
+        if anchor.get("id") is not None:
+            proposed["id"] = anchor["id"]
+        rows = []
+        for field in fields:
+            key = f"{token}.{field}"
+            preferred = None
+            if kind == "body" and field == "address":
+                # Line d as written is not shown on the review form; it follows
+                # the source the reviewer chose for line d's matched place.
+                place = self.used.get("schedule.populated_place_id")
+                preferred = place["base"] if isinstance(place, dict) else place
+            values = {ref: row.get(field, MISSING) for ref, row in entry.items()}
+            proposed[field] = self.choose(key, values, preferred)
+            rows.append(self.row(labels[field], key, field, values, complete))
+        section = {
+            "title": title,
+            "note": "Select a source value, or type a reviewer correction.",
+            "rows": rows,
+            "decision_scope": "field",
+            "kind": kind,
+        }
+        if complete:
+            return proposed, section
+
+        key = f"entity.{token}"
+        selected = self.decisions.get(
+            key, "keep" if self.default(scope) in entry else "skip"
+        )
+        if selected not in {"keep", "skip"}:
+            raise ReconciliationValidationError(
+                f"Invalid source decision for {key!r}."
+            )
+        self.used[key] = selected
+        existing = CANONICAL in entry
+        section["entity_decision"] = {
+            "key": key,
+            "selected": selected,
+            "refs": list(entry),
+            "keep_label": f"{'Keep' if existing else 'Add'} {noun}",
+            "skip_label": f"{'Remove' if existing else 'Do not add'} {noun}",
+        }
+        if selected == "skip":
+            return None, section
+        if not existing:
+            proposed["_force_create"] = anchor.get("id") is None
+        return proposed, section
+
+
+def _align(order, rows_of, match, canonical_prefix, new_prefix):
+    """Group each source's rows into entities anchored on the current record.
+
+    Returns ``[(token, {ref: row})]``. Canonical rows come first; a source row
+    that matches no earlier entity starts a new one that later sources can
+    match, so two models reading the same new row meet in one entity.
+    """
+    entities = []
+    for ref in order:
+        rows = rows_of(ref)
+        indices = {id(row): index for index, row in enumerate(rows)}
+        anchors = [_anchor(entry) for _, entry in entities]
+        position = {id(row): index for index, row in enumerate(anchors)}
+        matches, _, unmatched = match(anchors, rows)
+        for anchor, row in matches:
+            entities[position[id(anchor)]][1][ref] = row
+        for row in unmatched:
+            token = (
+                f"{canonical_prefix}.{row['id']}"
+                if ref == CANONICAL
+                else f"{new_prefix}.new.{ref}.{indices[id(row)]}"
+            )
+            entities.append((token, {ref: row}))
+    return entities
+
+
+def _source_rows(ref, rows):
+    return sorted(rows, key=_snapshot_sort_key) if ref == CANONICAL else list(rows)
+
+
+def _match_by_position(anchors, rows):
+    return list(zip(anchors, rows)), anchors[len(rows):], rows[len(anchors):]
+
+
+def _anchor(entry):
+    return next(iter(entry.values()))
+
+
+def _annotate_place_names(row):
+    """Show the place name and state after a bare Apiary place ID."""
+    ids = {
+        option["value"]
+        for option in row["options"]
+        if isinstance(option["value"], int)
+    }
+    if not ids:
+        return
+    names = {}
+    for place in PopulatedPlace.objects.filter(place_id__in=ids).select_related(
+        "county__state"
+    ):
+        names.setdefault(place.place_id, f"{place.name}, {place.county.state.code}")
+    for option in row["options"]:
+        if option["value"] in names:
+            option["display"]["text"] = f"{option['value']} ({names[option['value']]})"
 
 
 def _decision_row_options(decision):
@@ -1678,14 +1457,6 @@ def _snapshot_sort_key(row):
         row_id if row_id is not None else 0,
         json.dumps(_source_content(row), sort_keys=True, default=str),
     )
-
-
-def _snapshot_token(prefix, row, index):
-    """Build a stable decision key for canonical or ID-free evidence rows."""
-    row_id = row.get("id")
-    if row_id is not None:
-        return f"{prefix}.{row_id}"
-    return f"{prefix}.baseline.{index}"
 
 
 def _snapshot_label(row, fallback):
