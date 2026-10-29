@@ -353,12 +353,12 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
         mixed=True,
     )
     assert preview["decisions"]["schedule.marginalia"] == str(source.pk)
-    assert preview["decisions"]["schedule.ai_notes"] == str(source.pk)
+    assert "schedule.ai_notes" not in preview["decisions"]
     context_sections = {
         section["title"]: section for section in preview["review_sections"]
     }
     assert context_sections["Marginalia"]["decision_scope"] == "context"
-    assert context_sections["Agent notes"]["decision_scope"] == "context"
+    assert "Agent notes" not in context_sections
     assert infer_reconciliation_outcome(preview) == (
         ScheduleReconciliation.Outcome.MIXED
     )
@@ -382,7 +382,10 @@ def test_reviewer_can_mix_current_and_candidate_fields_with_provenance(reviewer)
             "marginalia_transcription": "Copy",
         }
     ]
-    assert schedule.ai_notes == "Candidate-only review context"
+    assert schedule.ai_notes == (
+        f"[test-model, {source.created_at:%b %d, %Y}]\n"
+        "Candidate-only review context"
+    )
     assert body.name == "Human Church"
     assert body.address == "New Town"
     assert body.geocode_status == "pending"
@@ -404,10 +407,10 @@ def test_context_sections_render_last():
     source = agent_source(schedule)
     preview = build_reconciliation_preview(schedule, [source], mixed=True)
     titles = [section["title"] for section in preview["review_sections"]]
-    assert titles[-2:] == ["Marginalia", "Agent notes"]
+    assert titles[-1] == "Marginalia"
     assert all(
         section["decision_scope"] != "context"
-        for section in preview["review_sections"][:-2]
+        for section in preview["review_sections"][:-1]
     )
 
 
@@ -425,7 +428,6 @@ def test_review_section_order_follows_schedule_form():
         "Respondent",
         "Census Bureau processing",
         "Marginalia",
-        "Agent notes",
     ]
 
 
@@ -1189,7 +1191,7 @@ def test_schedule_form_layout_places_every_decision_row_once():
     assert form["other"] == []
     assert sorted(placed) == sorted(expected)
     assert len(placed) == len(set(placed))
-    assert [s["title"] for s in form["context"]] == ["Marginalia", "Agent notes"]
+    assert [s["title"] for s in form["context"]] == ["Marginalia"]
     # Form question numbers follow the printed 1926 schedule.
     membership_numbers = [
         row["number"] for row in form["bodies"][0]["membership"][0]["rows"]
@@ -1463,3 +1465,24 @@ def test_review_offers_every_source_and_merges_rows_they_share(reviewer):
         newer.pk: ReconciliationSource.Disposition.REJECTED,
         older.pk: ReconciliationSource.Disposition.ACCEPTED,
     }
+
+
+@pytest.mark.django_db
+def test_agent_notes_merge_every_source_labelled_by_model():
+    schedule = canonical_schedule()
+    schedule.ai_notes = "Earlier note"
+    schedule.save()
+    newer = agent_source(schedule, deepcopy(agent_candidate(ai_notes="Newer note")))
+    older = agent_source(schedule, deepcopy(agent_candidate(ai_notes="Earlier note")))
+
+    preview = build_reconciliation_preview(schedule, [newer, older], mixed=True)
+
+    assert "schedule.ai_notes" not in preview["decisions"]
+    assert preview["proposed"]["schedule_fields"]["ai_notes"] == (
+        "Earlier note\n\n"
+        f"[test-model, {newer.created_at:%b %d, %Y}]\nNewer note"
+    )
+    # Notes alone never stop a source from counting as promoted whole.
+    assert infer_reconciliation_outcome(
+        build_reconciliation_preview(schedule, [newer])
+    ) == ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
