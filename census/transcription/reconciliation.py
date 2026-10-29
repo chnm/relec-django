@@ -157,7 +157,6 @@ SCHEDULE_FIELD_GROUPS = (
 )
 AI_CONTEXT_FIELD_GROUPS = (
     ("Marginalia", (("marginalia", "Transcribed marginalia"),)),
-    ("Agent notes", (("ai_notes", "Notes"),)),
 )
 BODY_LABELS = dict(DISPLAY_BODY_FIELDS)
 MEMBERSHIP_LABELS = dict(DISPLAY_MEMBERSHIP_FIELDS)
@@ -332,7 +331,11 @@ def build_reconciliation_preview(
         raise ReconciliationValidationError(next(iter(source_errors.values())))
     sources[CANONICAL] = before
     review = build_mixed_review(sources, decisions or {})
-    proposed = review["proposed"] if mixed else next(iter(sources.values()))
+    proposed = deepcopy(
+        review["proposed"] if mixed else next(iter(sources.values()))
+    )
+    ai_notes = _merged_ai_notes(before, transcriptions, sources)
+    proposed["schedule_fields"]["ai_notes"] = ai_notes
     if validate:
         _validate_draft(schedule, proposed)
     operations = _operation_summary(before, proposed)
@@ -351,6 +354,7 @@ def build_reconciliation_preview(
         "operations": operations,
         "warnings": warnings,
         "has_changes": _source_content(before) != _source_content(proposed),
+        "ai_notes": ai_notes,
         "review_sections": review["sections"],
         "decisions": review["decisions"],
         "decisions_fingerprint": decisions_fingerprint(review["decisions"]),
@@ -374,10 +378,11 @@ def infer_reconciliation_outcome(preview):
         for decision in preview["decisions"].values()
     ):
         return ScheduleReconciliation.Outcome.MIXED
-    if _source_content(preview["proposed"]) == _source_content(preview["before"]):
+    proposed = _without_notes(preview["proposed"])
+    if proposed == _without_notes(preview["before"]):
         return ScheduleReconciliation.Outcome.RETAINED_CURRENT
     if any(
-        _source_content(preview["proposed"]) == _source_content(source)
+        proposed == _without_notes(source)
         for source in preview["sources"].values()
     ):
         return ScheduleReconciliation.Outcome.PROMOTED_CANDIDATE
@@ -474,7 +479,7 @@ def apply_reconciliation(
         if snapshot is None:
             # Unusable (e.g. an unsupported contract); reviewed all the same.
             disposition = ReconciliationSource.Disposition.REJECTED
-        elif _source_content(preview["proposed"]) == _source_content(snapshot):
+        elif _without_notes(preview["proposed"]) == _without_notes(snapshot):
             disposition = ReconciliationSource.Disposition.ACCEPTED
         elif outcome == ScheduleReconciliation.Outcome.MIXED:
             disposition = ReconciliationSource.Disposition.INCORPORATED
@@ -621,6 +626,33 @@ def _source_content(value):
     if isinstance(value, list):
         return [_source_content(item) for item in value]
     return value
+
+
+def _merged_ai_notes(before, transcriptions, sources):
+    """Keep every source's agent notes, each labelled with its model and date.
+
+    Notes are commentary, not choices: the current record's notes come first,
+    then each transcription's, skipping any already carried over.
+    """
+    merged = (before["schedule_fields"].get("ai_notes") or "").strip()
+    for transcription in transcriptions:
+        draft = sources.get(str(transcription.pk))
+        note = str((draft or {}).get("schedule_fields", {}).get("ai_notes") or "")
+        note = note.strip()
+        if not note or note in merged:
+            continue
+        run = transcription.run
+        label = (run.metadata or {}).get("model") or run.key
+        block = f"[{label}, {transcription.created_at:%b %d, %Y}]\n{note}"
+        merged = f"{merged}\n\n{block}" if merged else block
+    return merged
+
+
+def _without_notes(draft):
+    """Draft content for provenance checks; merged notes never count."""
+    content = _source_content(draft)
+    content.get("schedule_fields", {}).pop("ai_notes", None)
+    return content
 
 
 def _candidate_draft(schedule, transcription, before):

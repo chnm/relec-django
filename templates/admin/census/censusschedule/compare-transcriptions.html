@@ -195,6 +195,16 @@
           </section>
         {% endfor %}
 
+        {% if preview.ai_notes %}
+          <section class="comparison-card overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
+              <h2 class="font-semibold text-gray-800 dark:text-gray-100">Agent notes</h2>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Every source's notes are kept, labelled by model and date.</p>
+            </div>
+            <div class="p-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-200">{{ preview.ai_notes }}</div>
+          </section>
+        {% endif %}
+
         <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {% for source in sources %}
             {% include "admin/census/censusschedule/includes/raw-source.html" with title=source.heading|add:" raw JSON" %}
@@ -389,6 +399,12 @@
       color: #6b7280;
       font-size: .72rem;
       margin-left: auto;
+    }
+
+    /* Fits either label, so toggling never re-wraps the toolbar. */
+    #layout-toggle {
+      min-width: 18ch;
+      text-align: center;
     }
 
     .source-dots {
@@ -761,6 +777,27 @@
       const form = document.getElementById("schedule-form");
       const panels = Array.from(document.querySelectorAll("[data-decision-section]"));
 
+      // Schedule layout or single column, remembered per browser. Set up first
+      // so an error further down cannot leave the button dead.
+      const layoutToggle = document.getElementById("layout-toggle");
+      if (layoutToggle) {
+        const setLayout = (single) => {
+          form.classList.toggle("is-single-column", single);
+          layoutToggle.setAttribute("aria-pressed", single ? "true" : "false");
+          layoutToggle.textContent = single ? "Schedule layout" : "Single column";
+        };
+        try {
+          setLayout(localStorage.getItem("reconcile-layout") === "single");
+        } catch (error) {}
+        layoutToggle.addEventListener("click", () => {
+          const single = !form.classList.contains("is-single-column");
+          setLayout(single);
+          try {
+            localStorage.setItem("reconcile-layout", single ? "single" : "schedule");
+          } catch (error) {}
+        });
+      }
+
       const rowChoiceFor = (row, panel) => {
         const own = row.querySelector('input[name^="choice__"]:checked');
         if (own) return own.value;
@@ -887,26 +924,6 @@
         input.addEventListener("change", () => refresh(input));
       });
 
-
-      // Schedule layout or single column, remembered per browser.
-      const layoutToggle = document.getElementById("layout-toggle");
-      if (layoutToggle) {
-        const setLayout = (single) => {
-          form.classList.toggle("is-single-column", single);
-          layoutToggle.setAttribute("aria-pressed", single ? "true" : "false");
-          layoutToggle.textContent = single ? "Schedule layout" : "Single column";
-        };
-        try {
-          setLayout(localStorage.getItem("reconcile-layout") === "single");
-        } catch (error) {}
-        layoutToggle.addEventListener("click", () => {
-          const single = !form.classList.contains("is-single-column");
-          setLayout(single);
-          try {
-            localStorage.setItem("reconcile-layout", single ? "single" : "schedule");
-          } catch (error) {}
-        });
-      }
 
       panels.forEach(updateSectionSelection);
       updateFormStatus();
