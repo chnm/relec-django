@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from collections import Counter
 from copy import deepcopy
 from datetime import date
@@ -786,7 +787,12 @@ def build_mixed_review(sources, decisions):
     proposed_bodies = []
     bodies = _align(
         review.order,
-        lambda ref: _source_rows(ref, sources[ref]["religious_bodies"]),
+        lambda ref: _source_rows(
+            ref,
+            sources[ref]["religious_bodies"]
+            if ref == CANONICAL
+            else _without_junk_bodies(sources[ref]["religious_bodies"]),
+        ),
         lambda anchors, rows: _match_snapshot_rows(
             anchors, rows, signature_fields=("address", "census_code"),
             match_single=True,
@@ -1043,6 +1049,17 @@ def _align(order, rows_of, match, canonical_prefix, new_prefix):
             )
             entities.append((token, {ref: row}))
     return entities
+
+
+def _without_junk_bodies(rows):
+    """Drop a source's extra body rows whose name has no letters or digits.
+
+    A model sometimes emits a second, placeholder body (name ": "), which
+    would otherwise stop its real body from pairing with the current one.
+    A source's only body is kept even when unnamed, so no reading is lost.
+    """
+    named = [row for row in rows if re.search(r"\w", str(row.get("name") or ""))]
+    return named or list(rows)
 
 
 def _source_rows(ref, rows):
