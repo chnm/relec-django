@@ -1281,6 +1281,29 @@ def test_nameless_comparison_clergy_rows_are_dropped():
     assert [row["name"] for row in preview["proposed"]["clergy"]] == ["Rev. Agent"]
 
 
+@pytest.mark.django_db
+def test_placeholder_extra_body_is_dropped_so_real_body_pairs():
+    """Schedule 217420: a model's junk second body (name ": ") split the form."""
+    schedule = canonical_schedule()
+    candidate = agent_candidate()
+    junk = deepcopy(candidate["religious_bodies"][0])
+    junk.update({"name": ": ", "address": ": "})
+    candidate["religious_bodies"].append(junk)
+    source = agent_source(schedule, candidate)
+    preview = build_reconciliation_preview(schedule, [source], mixed=True)
+    bodies = [
+        s for s in preview["review_sections"]
+        if s.get("kind") == "body"
+    ]
+    assert len(bodies) == 1
+    assert "entity_decision" not in bodies[0]
+    name_row = next(r for r in bodies[0]["rows"] if r["field"] == "name")
+    assert [o["display"]["text"] for o in name_row["options"]] == [
+        "Human Church",
+        "Agent Church",
+    ]
+
+
 def test_agent_verbatim_place_replaces_body_address(reviewer):
     """The form's only church location is line d, so it becomes the body address."""
     schedule = canonical_schedule()
