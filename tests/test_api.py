@@ -3,7 +3,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from census.models import Denomination, ReligiousBody
+from census.models import Denomination, ReligiousBody, ScheduleReconciliation
 from tests.factories import (
     CensusScheduleFactory,
     ClergyFactory,
@@ -27,7 +27,7 @@ def test_religious_body_list_uses_bounded_queries(client):
         response = client.get(reverse("religiousbody-list"), {"page_size": 100})
 
     assert response.status_code == 200
-    assert len(queries) <= 6
+    assert len(queries) <= 7
 
 
 @pytest.mark.django_db
@@ -103,6 +103,51 @@ def test_religious_body_transcriptions_are_empty_when_unavailable(client):
     assert result["transcriptions"] == []
 
 
+def _reconcile(schedule, outcome, overrides=()):
+    return ScheduleReconciliation.objects.create(
+        census_schedule=schedule,
+        outcome=outcome,
+        canonical_before={},
+        canonical_after={},
+        before_fingerprint="before",
+        after_fingerprint="after",
+        decisions={"reviewer_overrides": [{"field": f} for f in overrides]},
+    )
+
+
+@pytest.mark.django_db
+def test_religious_body_reports_latest_reconciliation_and_corrected_filter(client):
+    untouched = ReligiousBodyFactory(census_record=CensusScheduleFactory())
+    corrected = ReligiousBodyFactory(census_record=CensusScheduleFactory())
+    _reconcile(
+        corrected.census_record,
+        ScheduleReconciliation.Outcome.MIXED,
+        overrides=["schedule.respondent_name"],
+    )
+    rolled_back = ReligiousBodyFactory(census_record=CensusScheduleFactory())
+    _reconcile(rolled_back.census_record, ScheduleReconciliation.Outcome.MIXED)
+    _reconcile(rolled_back.census_record, ScheduleReconciliation.Outcome.ROLLED_BACK)
+
+    results = {
+        r["id"]: r["reconciliation"]
+        for r in client.get(reverse("religiousbody-list")).json()["results"]
+    }
+    assert results[untouched.pk] is None
+    assert results[corrected.pk]["outcome"] == "mixed"
+    assert results[corrected.pk]["corrected"] is True
+    assert "reviewer" not in results[corrected.pk]
+    assert results[corrected.pk]["edited_fields"] == ["schedule.respondent_name"]
+    assert results[rolled_back.pk]["outcome"] == "rolled_back"
+    assert results[rolled_back.pk]["corrected"] is False
+
+    def ids(value):
+        response = client.get(reverse("religiousbody-list"), {"corrected": value})
+        return {r["id"] for r in response.json()["results"]}
+
+    assert ids("true") == {corrected.pk}
+    assert ids("false") == {untouched.pk, rolled_back.pk}
+
+
 @pytest.mark.django_db
 def test_map_view_uses_smaller_payload_and_fewer_queries(client):
     schedule = CensusScheduleFactory()
@@ -123,6 +168,7 @@ def test_map_view_uses_smaller_payload_and_fewer_queries(client):
     assert "membership_details" in result
     assert "pastors" not in result
     assert "transcriptions" not in result
+    assert "reconciliation" not in result
 
 
 @pytest.mark.django_db

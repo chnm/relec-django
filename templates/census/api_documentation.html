@@ -541,6 +541,11 @@
                                 <td>Filter by the presence of a populated place (<code>true</code> or <code>false</code>)</td>
                             </tr>
                             <tr>
+                                <td><span class="param-name">corrected</span></td>
+                                <td><span class="param-type">boolean</span></td>
+                                <td>Filter by whether the latest reconciliation saved a person's correction rather than one source as-is (<code>true</code> or <code>false</code>)</td>
+                            </tr>
+                            <tr>
                                 <td><span class="param-name">search</span></td>
                                 <td><span class="param-type">string</span></td>
                                 <td>Search name, address, or census code</td>
@@ -572,6 +577,7 @@
                     <p class="text-content-secondary text-sm mb-2">The response envelope includes <code>count</code>, <code>next</code>, <code>previous</code> (pagination), <code>denominations</code> (array of denomination names matched by your query), and <code>results</code> (array of records).</p>
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
                         <li><code>transcriptions</code> - Array of immutable candidate outputs containing a run <code>key</code>, a <code>kind</code>, and raw JSON <code>data</code>; agent notes are stored inside <code>data</code></li>
+                        <li><code>reconciliation</code> - Latest reviewer reconciliation, or <code>null</code>: <code>outcome</code> (<code>retained_current</code>, <code>promoted_candidate</code>, <code>mixed</code>, or <code>rolled_back</code>), <code>corrected</code> (true when the saved result matches no single transcription), <code>applied_at</code>, and <code>edited_fields</code> (fields the reviewer typed by hand). The saved result itself is the record's own fields, never an entry in <code>transcriptions</code></li>
                         <li><code>schedule_id</code> - Census schedule identifier (string)</li>
                         <li><code>has_location</code> - Whether the schedule has a populated place</li>
                         <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>map_name</code>, <code>place_id</code>, <code>county_ahcb</code>, <code>county_name</code>, <code>state_name</code>, <code>address</code>, and <code>urban_rural_code</code></li>
@@ -585,7 +591,7 @@
                         <li><code>urls</code> - Schedule detail, image, and filtered data-table links</li>
                         <li><code>denominations</code> (pagination envelope) - Array of distinct denomination names in the filtered results</li>
                     </ul>
-                    <p class="text-content-secondary text-sm mt-3"><code>view=map</code> omits <code>transcriptions</code>, <code>pastors</code>, <code>num_assistant_pastors</code>, <code>respondent</code>, <code>processing</code>, and <code>marginalia</code>.</p>
+                    <p class="text-content-secondary text-sm mt-3"><code>view=map</code> omits <code>transcriptions</code>, <code>reconciliation</code>, <code>pastors</code>, <code>num_assistant_pastors</code>, <code>respondent</code>, <code>processing</code>, and <code>marginalia</code>.</p>
 
                     <div class="response-example">
                         <h5>Example Response (single record)</h5>
@@ -611,6 +617,11 @@
       }
     }
   ],
+  "reconciliation": {
+    "outcome": "mixed", "corrected": true,
+    "applied_at": "2026-10-08T16:29:00Z",
+    "edited_fields": ["schedule.respondent_name"]
+  },
   "has_location": true,
   "location_details": {
     "lat": 38.9072, "lon": -77.0369,

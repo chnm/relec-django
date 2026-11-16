@@ -142,6 +142,7 @@ def test_religious_body_detail_returns_complete_contract(client):
                 "data": ai,
             },
         ],
+        "reconciliation": None,
         "has_location": True,
         "location_details": {
             "lat": 41.7658,
