@@ -5,6 +5,7 @@ from .models import (
     Denomination,
     Membership,
     ReligiousBody,
+    ScheduleReconciliation,
     ScheduleTranscription,
 )
 
@@ -68,8 +69,28 @@ class ScheduleTranscriptionSerializer(serializers.ModelSerializer):
         fields = ["key", "kind", "data"]
 
 
+class ScheduleReconciliationSerializer(serializers.ModelSerializer):
+    corrected = serializers.SerializerMethodField()
+    edited_fields = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScheduleReconciliation
+        fields = ["outcome", "corrected", "applied_at", "edited_fields"]
+
+    def get_corrected(self, obj):
+        # Mixed means the saved result matches no single source as a whole.
+        return obj.outcome == ScheduleReconciliation.Outcome.MIXED
+
+    def get_edited_fields(self, obj):
+        return [
+            override["field"]
+            for override in (obj.decisions or {}).get("reviewer_overrides", [])
+        ]
+
+
 class ReligiousBodySerializer(serializers.ModelSerializer):
     transcriptions = serializers.SerializerMethodField()
+    reconciliation = serializers.SerializerMethodField()
     location_details = serializers.SerializerMethodField()
     denomination_details = DenominationSerializer(source="denomination", read_only=True)
     membership_details = serializers.SerializerMethodField()
@@ -93,6 +114,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "division",
             "schedule_id",
             "transcriptions",
+            "reconciliation",
             "has_location",
             "location_details",
             "denomination_details",
@@ -123,6 +145,13 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     def get_transcriptions(self, obj):
         transcriptions = getattr(obj.census_record, "_api_transcriptions", [])
         return ScheduleTranscriptionSerializer(transcriptions, many=True).data
+
+    def get_reconciliation(self, obj):
+        # Prefetched newest first; only the latest event describes the saved data.
+        reconciliations = getattr(obj.census_record, "_api_reconciliations", [])
+        if not reconciliations:
+            return None
+        return ScheduleReconciliationSerializer(reconciliations[0]).data
 
     def get_schedule_id(self, obj):
         if obj.census_record:

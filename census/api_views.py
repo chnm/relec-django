@@ -18,6 +18,7 @@ from .models import (
     Denomination,
     Membership,
     ReligiousBody,
+    ScheduleReconciliation,
     ScheduleTranscription,
 )
 from .serializers import (
@@ -158,6 +159,8 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         - urban_rural: Filter by 'urban' or 'rural'
         - bounds: Geographic bounding box as 'south,west,north,east'
         - has_location: Filter by the presence of a populated place
+        - corrected: Filter by whether the latest reconciliation saved a
+          person's correction rather than one source as-is
         - search: Search by name, address, or census code
         - page: Page number (default page size 100)
         - page_size: Number of records per page (maximum 5000 JSON, 100 HTML)
@@ -216,6 +219,13 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
                         "run"
                     ).order_by("created_at", "pk"),
                     to_attr="_api_transcriptions",
+                ),
+                Prefetch(
+                    "census_record__reconciliations",
+                    queryset=ScheduleReconciliation.objects.only(
+                        "census_schedule", "outcome", "applied_at", "decisions"
+                    ).order_by("-applied_at", "-pk"),
+                    to_attr="_api_reconciliations",
                 ),
             )
         return queryset

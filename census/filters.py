@@ -1,7 +1,7 @@
 import django_filters
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 
-from .models import ReligiousBody
+from .models import ReligiousBody, ScheduleReconciliation
 
 
 class ReligiousBodyFilter(django_filters.FilterSet):
@@ -17,6 +17,24 @@ class ReligiousBodyFilter(django_filters.FilterSet):
     urban_rural = django_filters.CharFilter(method="filter_urban_rural")
     bounds = django_filters.CharFilter(method="filter_bounds")
     has_location = django_filters.BooleanFilter(method="filter_has_location")
+    corrected = django_filters.BooleanFilter(method="filter_corrected")
+
+    def filter_corrected(self, queryset, name, value):
+        """Filter by whether the latest reconciliation outcome is mixed."""
+        latest_outcome = (
+            ScheduleReconciliation.objects.filter(
+                census_schedule=OuterRef("census_record")
+            )
+            .order_by("-applied_at", "-pk")
+            .values("outcome")[:1]
+        )
+        queryset = queryset.annotate(_latest_outcome=Subquery(latest_outcome))
+        mixed = ScheduleReconciliation.Outcome.MIXED
+        if value:
+            return queryset.filter(_latest_outcome=mixed)
+        return queryset.filter(
+            Q(_latest_outcome__isnull=True) | ~Q(_latest_outcome=mixed)
+        )
 
     def filter_has_location(self, queryset, name, value):
         """Filter by whether the congregation has location data."""
@@ -82,4 +100,5 @@ class ReligiousBodyFilter(django_filters.FilterSet):
             "urban_rural",
             "bounds",
             "has_location",
+            "corrected",
         ]
