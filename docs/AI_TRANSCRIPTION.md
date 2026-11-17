@@ -57,13 +57,20 @@ CLAUDE_TRANSCRIPTION_LARGE_RUN_THRESHOLD=100
 CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS=10000
 CLAUDE_TRANSCRIPTION_BATCH_SIZE=25
 CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES=1
-CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES=209715200
+CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES=67108864
 CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=10485760
 CLAUDE_TRANSCRIPTION_LEASE_SECONDS=300
 CLAUDE_TRANSCRIPTION_POLL_SECONDS=60
 CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT=120
 CLAUDE_TRANSCRIPTION_PRICING=<optional validated JSON catalog override>
 ```
+
+`CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES` bounds the worker's memory, not just the
+provider request: a batch is held about three times over while it is serialized
+and sent. Keep three times this value plus about 256 MiB under the worker pod's
+memory limit (512Mi in `k8s/transcription-worker.yaml`), or the pod is OOM-killed
+mid-submission and the batch lands in `needs_recovery` as a `stale_submission`.
+A run larger than one batch is split into more batches automatically.
 
 The application includes a version-controlled Batch pricing catalog for its default
 Claude model. `CLAUDE_TRANSCRIPTION_PRICING` can replace that catalog with a
