@@ -15,6 +15,7 @@ from census.admin import (
 from census.models import (
     CensusSchedule,
     ReconciliationSource,
+    ReligiousBody,
     ScheduleReconciliation,
 )
 from census.transcription import reconciliation as reconciliation_service
@@ -1436,6 +1437,21 @@ def test_schema_version_change_alone_is_not_a_human_edit(reviewer):
     schedule.save()
     graph = schedule_graph_queryset().get(pk=schedule.pk)
     assert not canonical_unchanged_since(graph, event)
+
+
+@pytest.mark.django_db
+def test_urban_rural_word_in_an_old_snapshot_is_not_a_human_edit(reviewer):
+    schedule = canonical_schedule()
+    event = promote(reviewer, schedule, agent_source(schedule))
+    body = ReligiousBody.objects.get(census_record=schedule)
+    body.urban_rural_code = "Rural"
+    body.save()
+    assert body.urban_rural_code == "R"
+    event.canonical_after = deepcopy(event.canonical_after)
+    event.canonical_after["religious_bodies"][0]["urban_rural_code"] = "Rural"
+    graph = schedule_graph_queryset().get(pk=schedule.pk)
+
+    assert canonical_unchanged_since(graph, event)
 
 
 @pytest.mark.django_db

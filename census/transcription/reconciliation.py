@@ -19,6 +19,7 @@ from census.models import (
     ReligiousBody,
     ScheduleReconciliation,
     ScheduleTranscription,
+    normalize_urban_rural_code,
 )
 from census.transcription.comparison import CLERGY_FIELDS as DISPLAY_CLERGY_FIELDS
 from census.transcription.comparison import (
@@ -254,6 +255,10 @@ def _normalize_snapshot(snapshot):
     for body in snapshot["religious_bodies"]:
         for field in DECIMAL_FIELDS:
             body[field] = _decimal_text(body.get(field))
+        if "urban_rural_code" in body:
+            body["urban_rural_code"] = normalize_urban_rural_code(
+                body["urban_rural_code"]
+            )
     return snapshot
 
 
@@ -273,9 +278,14 @@ def canonical_unchanged_since(schedule, reconciliation):
     in both snapshots are compared and ``schema_version`` is ignored, so a
     serializer change alone never reads as a human edit.
     """
-    return _same_shared_fields(
-        serialize_canonical(schedule), reconciliation.canonical_after
-    )
+    stored = deepcopy(reconciliation.canonical_after)
+    # Snapshots taken before urban/rural was stored as U/R may hold Urban/Rural.
+    for body in stored.get("religious_bodies") or []:
+        if "urban_rural_code" in body:
+            body["urban_rural_code"] = normalize_urban_rural_code(
+                body["urban_rural_code"]
+            )
+    return _same_shared_fields(serialize_canonical(schedule), stored)
 
 
 def _same_shared_fields(current, stored):

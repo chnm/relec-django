@@ -12,7 +12,7 @@ The constrained provider schema uses transport sentinels so it remains within th
 - A blank or illegible field is null. Never guess an illegible value; explain the problem in `ai_notes`. In numeric fields, an explicit "None", "No", zero, or dash is integer zero.
 - Preserve spelling, capitalization, abbreviations, and personal names as written. For a populated place, select only an ID from the supplied candidates. Preserve the form's spelling in `populated_place_verbatim` even when a candidate matches.
 - Remove commas and currency symbols from numbers. Dollar values are whole dollars; drop cents. Boolean Yes is true, No/None is false, and blank is null.
-- `marginalia` contains human-applied marks that have no structured field. It does not contain replaced crossouts, stamps, or transcriber observations. Describe a mark's location and transcribe its text or briefly describe a non-textual mark.
+- `marginalia` contains human-applied marks that have no structured field. It does not contain replaced crossouts, stamps, transcriber observations, or marks that belong in a structured field, such as the red-pencil `census_code` or the circled `U`/`R` urban/rural code. Describe a mark's location and transcribe its text or briefly describe a non-textual mark.
 - Use `ai_notes` for illegibility, damage, anomalies, unresolved interpretations, and arithmetic or logical inconsistencies. Otherwise use null.
 
 ## Identifying fields
@@ -20,7 +20,7 @@ The constrained provider schema uses transport sentinels so it remains within th
 - Division and local church name are literal transcriptions. Do not add or remove the word "Church". Strip only surrounding/trailing punctuation.
 - Transcribe county and state as written. State is the two-letter abbreviation when it can be determined. Set `populated_place_id` only when one supplied candidate is supported by the image and county context; otherwise use null.
 - `census_code` is the handwritten red-pencil two-part code (for example `0-1` or '01'). The separate handwritten three-part code that is in blue or red or black ink (for example '1-2-3' or '123') belongs in `processing.denomination_code_stamp`. Hyphenate the three number `denomination_code_stamp` in the output field.
-- `urban_rural_code` is a handwritten alphabetic code (letter-code is written in either print or cursive styles) in red-pencil. `U` denotes 'urban' and `R` denotes 'rural'. If present on schedule, 'U' or 'R' should be inserted in `urban_rural_code` as 'Urban' or 'Rural' and 'null' if no handwritten 'U' or 'R' letter is present.
+- `urban_rural_code` is a single handwritten red-pencil letter, `U` (urban) or `R` (rural), in print or cursive. It is usually circled and sits in the left margin beside line d (city, town, village), but it may appear elsewhere near the identifying fields. Emit exactly `U` or `R`, never the words 'Urban' or 'Rural'. Emit null only when no such letter appears anywhere on the schedule. This letter is the urban/rural code, not marginalia: never record it in `marginalia`, even when it is circled or written in the margin.
 
 ## Membership, buildings, and expenditures
 
@@ -39,7 +39,7 @@ Fields 16–24 map in order to Sunday school officers/teachers and scholars; vac
 
 - Field 25 is the principal pastor's name, including titles. "None" or "No" is null; a bare "Yes" is literal `YES`; `Supply` is meaningful and must be preserved.
 - Field 26 is the raw number of assistant pastors. Preserve it even if no assistant name or education appears. Field 27 is the principal pastor's number of other churches served. Fields 28–31 are principal/assistant college and seminary.
-- The principal clergy object has `is_assistant: false`. Add an assistant object only when the form supplies assistant details. School fields containing No/None/zero or blank are null. Capture unexplained red-pencil numerals nearby as marginalia.
+- The principal clergy object has `is_assistant: false`. Add an assistant object only when the form supplies assistant details. School fields containing No/None/zero or blank are null. Capture unexplained red-pencil numerals near the clergy fields as marginalia.
 - Independently transcribe the bottom signature, official title, date, and P.O. address. Dates should be ISO `YYYY-MM-DD` when complete; a year alone may be `YYYY`. Do not use the respondent's address as the church address.
 
 ## Bureau processing
@@ -50,4 +50,4 @@ Fields 16–24 map in order to Sunday school officers/teachers and scholars; vac
 
 ## Final checks
 
-Check membership and expenditure arithmetic, pastor-residence consistency, selected place/county consistency, and assistant-pastor count consistency. Never alter a written value merely to make a check pass; explain the discrepancy in `ai_notes`.
+Check membership and expenditure arithmetic, pastor-residence consistency, selected place/county consistency, and assistant-pastor count consistency. Before finishing, confirm that no circled `U` or `R` and no red-pencil census code appears in `marginalia`; if one does, move it to its field. Never alter a written value merely to make a check pass; explain the discrepancy in `ai_notes`.

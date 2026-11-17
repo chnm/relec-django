@@ -168,9 +168,9 @@ def census_browser_view(request, state_code=None, county_name=None):
         queryset = queryset.filter(membership_details__isnull=True)
 
     if urban_rural == "urban":
-        queryset = queryset.filter(church_details__urban_rural_code="Urban")
+        queryset = queryset.filter(church_details__urban_rural_code="U")
     elif urban_rural == "rural":
-        queryset = queryset.filter(church_details__urban_rural_code="Rural")
+        queryset = queryset.filter(church_details__urban_rural_code="R")
 
     # Pagination
     paginator = Paginator(queryset.distinct(), 20)  # Show 20 records per page

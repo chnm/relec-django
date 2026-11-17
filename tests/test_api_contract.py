@@ -154,7 +154,7 @@ def test_religious_body_detail_returns_complete_contract(client):
             "county_name": "Hartford",
             "state_name": "CT",
             "address": "1 Main Street",
-            "urban_rural_code": "Urban",
+            "urban_rural_code": "U",
         },
         "denomination_details": {
             "id": denomination.pk,

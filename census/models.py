@@ -10,6 +10,17 @@ from simple_history.models import HistoricalRecords
 
 from location.models import County, PopulatedPlace
 
+URBAN_RURAL_CODES = {"u": "U", "urban": "U", "r": "R", "rural": "R"}
+
+
+def normalize_urban_rural_code(value):
+    """Store urban/rural as U, R, or null; leave unrecognized values as-is."""
+    if not isinstance(value, str):
+        return value
+    if not value.strip():
+        return None
+    return URBAN_RURAL_CODES.get(value.strip().casefold(), value)
+
 logger = logging.getLogger(__name__)
 
 
@@ -1052,8 +1063,9 @@ class ReligiousBody(models.Model):
         # if name return name, otherwise "no name provided"
         return self.name if self.name is not None else "No name provided"
 
-    # def save(self, *args, **kwargs):
-    #    super().save(*args, **kwargs)
+    def save(self, *args, **kwargs):
+        self.urban_rural_code = normalize_urban_rural_code(self.urban_rural_code)
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Religious Body"
