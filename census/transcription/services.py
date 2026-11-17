@@ -240,3 +240,79 @@ def launch_transcription_run(
         batch_size=1000,
     )
     return run
+
+
+class BatchRecoveryError(ValueError):
+    pass
+
+
+def _claim_recovery_batch(batch_id):
+    batch = TranscriptionBatch.objects.select_for_update().get(pk=batch_id)
+    if batch.state != TranscriptionBatch.State.NEEDS_RECOVERY:
+        raise BatchRecoveryError("This batch no longer needs recovery.")
+    return batch
+
+
+def _resolution(batch, action, user, **extra):
+    return {
+        **(batch.error or {}),
+        "resolution": {
+            "action": action,
+            "by": user.get_username(),
+            "at": timezone.now().isoformat(),
+            **extra,
+        },
+    }
+
+
+@transaction.atomic
+def attach_provider_batch(batch_id, provider_batch_id, user):
+    """Point a quarantined submission at the provider batch found in the console.
+
+    The worker then polls and collects it as usual. A wrong ID is harmless:
+    no result matches these jobs' custom IDs, so they return to needs_recovery.
+    """
+    provider_batch_id = provider_batch_id.strip()
+    if not provider_batch_id.startswith("msgbatch_"):
+        raise BatchRecoveryError("Anthropic batch IDs start with msgbatch_.")
+    batch = _claim_recovery_batch(batch_id)
+    if batch.provider_batch_id:
+        raise BatchRecoveryError("This batch already has a provider batch ID.")
+    if TranscriptionBatch.objects.filter(provider_batch_id=provider_batch_id).exists():
+        raise BatchRecoveryError("Another batch already uses that provider batch ID.")
+    now = timezone.now()
+    batch.error = _resolution(
+        batch, "attached_provider_batch", user, provider_batch_id=provider_batch_id
+    )
+    batch.provider_batch_id = provider_batch_id
+    batch.state = TranscriptionBatch.State.IN_PROGRESS
+    batch.submitted_at = batch.submitted_at or now
+    batch.lease_token = None
+    batch.lease_expires_at = None
+    batch._change_reason = "Provider batch attached during manual recovery"
+    batch.save()
+    TranscriptionJob.objects.filter(
+        batch=batch, state=TranscriptionJob.State.NEEDS_RECOVERY
+    ).update(state=TranscriptionJob.State.SUBMITTED, submitted_at=now)
+    return batch
+
+
+@transaction.atomic
+def fail_recovery_batch(batch_id, user):
+    """Give up on a quarantined batch so its schedules can join a new run."""
+    batch = _claim_recovery_batch(batch_id)
+    now = timezone.now()
+    batch.error = _resolution(batch, "marked_failed", user)
+    batch.state = TranscriptionBatch.State.FAILED
+    batch.lease_token = None
+    batch.lease_expires_at = None
+    batch._change_reason = "Marked failed during manual recovery"
+    batch.save()
+    return TranscriptionJob.objects.filter(
+        batch=batch, state=TranscriptionJob.State.NEEDS_RECOVERY
+    ).update(
+        state=TranscriptionJob.State.FAILED,
+        error_type="manual_recovery_failed",
+        error_message="A reviewer marked this batch failed during manual recovery.",
+        completed_at=now,
+    )

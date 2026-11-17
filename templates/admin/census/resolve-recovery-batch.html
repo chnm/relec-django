@@ -1,0 +1,53 @@
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col flex-1 p-6">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        Batch <strong>{{ batch.pk }}</strong> for run <strong>{{ batch.run.key }}</strong>:
+        {{ batch.request_count }} request{{ batch.request_count|pluralize }}, {{ job_count }} job{{ job_count|pluralize }} waiting.
+        {% if batch.error.message %}<br>Reason: {{ batch.error.message }}{% endif %}
+      </p>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        Look in the Anthropic Console's Batches page for a batch created around
+        {{ batch.updated_at|date:"Y-m-d H:i" }} with {{ batch.request_count }} request{{ batch.request_count|pluralize }}.
+        Its results were already paid for if it exists.
+      </p>
+    </div>
+
+    {% include "unfold/helpers/messages.html" %}
+
+    <form method="post" class="p-5 space-y-5 bg-white border border-gray-200 rounded-lg dark:bg-gray-900 dark:border-gray-700">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resolve_recovery_batch">
+      <input type="hidden" name="_selected_action" value="{{ batch.pk }}">
+
+      {% if not batch.provider_batch_id %}
+        <div>
+          <label for="provider_batch_id" class="block mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Found it: Anthropic batch ID</label>
+          <div class="flex flex-wrap gap-2">
+            <input id="provider_batch_id" name="provider_batch_id" value="{{ provider_batch_id }}" placeholder="msgbatch_…" class="w-full p-2 text-sm bg-white border border-gray-300 rounded-md sm:w-96 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100">
+            <button type="submit" name="attach" value="1" class="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary-600 hover:bg-primary-700">Attach and collect</button>
+          </div>
+          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">The worker collects it on its next pass. A wrong ID is safe: its results won't match these jobs, and they return to needs recovery.</p>
+        </div>
+      {% endif %}
+
+      <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+        <p class="mb-2 text-sm text-gray-600 dark:text-gray-300">
+          {% if batch.provider_batch_id %}This batch was collected but some results never matched.{% else %}No such batch in the console?{% endif %}
+          Mark it failed to release the waiting jobs, so their schedules can be queued in a new run.
+        </p>
+        {# The theme paints every submit button primary blue; use its delete red instead. #}
+        <button type="submit" name="fail" value="1" class="px-4 py-2 text-sm font-semibold text-white rounded-md" style="background-color: #dc2626; border-color: #dc2626;">Mark failed</button>
+      </div>
+
+      <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+        <a href="{% url 'admin:census_transcriptionbatch_changelist' %}" class="text-sm font-medium text-gray-600 hover:underline dark:text-gray-300">← Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

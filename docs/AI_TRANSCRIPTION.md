@@ -452,6 +452,17 @@ contract, create a new immutable run rather than editing or resubmitting the fai
 one. Do not automatically retry `needs_recovery` work until provider acceptance is
 resolved; doing so can duplicate paid requests.
 
+To resolve one, select it on the Batches page and choose **Resolve a batch that
+needs recovery**. First look in the Anthropic Console's Batches page for a batch
+created around the same time with the same request count. If it exists, paste its
+`msgbatch_…` ID and choose **Attach and collect**: the worker polls and collects it
+like any other batch, and a wrong ID is harmless because no result matches the
+jobs' custom IDs, so they return to `needs_recovery`. If it does not exist, choose
+**Mark failed**: the batch and its waiting jobs become `failed`, which frees their
+schedules to be queued in a new run. Either choice is recorded under `resolution`
+in the batch's `error`, with the reviewer and time. The web process holds no API
+key, so it cannot check the console for you.
+
 A provider result with `stop_reason=max_tokens` is retained and marked `invalid`;
 truncated JSON never becomes a candidate. Once the Sonnet 5 disabled-thinking fix is
 deployed, affected terminal schedules are eligible for intentional retranscription
