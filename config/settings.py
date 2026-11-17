@@ -76,8 +76,13 @@ CLAUDE_TRANSCRIPTION_BATCH_SIZE = env.int("CLAUDE_TRANSCRIPTION_BATCH_SIZE", def
 CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_ACTIVE_BATCHES", default=1
 )
+# The worker holds a batch about three times over while serializing and sending
+# it, so this is sized to its pod memory limit (k8s/transcription-worker.yaml),
+# not to the provider's 256 MB request limit.
+DEFAULT_CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES = 64 * 1024 * 1024
 CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES = env.int(
-    "CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES", default=200 * 1024 * 1024
+    "CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES",
+    default=DEFAULT_CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES,
 )
 CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES = env.int(
     "CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES", default=10 * 1024 * 1024
