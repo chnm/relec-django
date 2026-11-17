@@ -64,7 +64,10 @@ from .transcription.reconciliation import (
 )
 from .transcription.schedule_form import schedule_form_layout
 from .transcription.services import (
+    BatchRecoveryError,
     LaunchError,
+    attach_provider_batch,
+    fail_recovery_batch,
     launch_transcription_run,
     transcription_selection_summary,
     worker_status,
@@ -693,6 +696,68 @@ class TranscriptionBatchAdmin(ReviewerReadOnlyModelAdmin):
     list_filter = ["state", "provider"]
     search_fields = ["provider_batch_id", "run__key"]
     readonly_fields = [field.name for field in TranscriptionBatch._meta.fields]
+    actions = ["resolve_recovery_batch"]
+
+    @admin.action(description="Resolve a batch that needs recovery", permissions=["view"])
+    def resolve_recovery_batch(self, request, queryset):
+        """Attach the console's batch ID, or mark the batch failed."""
+        if not is_reviewer(request.user):
+            self.message_user(
+                request,
+                "Only reviewers can resolve transcription batches.",
+                level=messages.ERROR,
+            )
+            return None
+        batches = list(queryset[:2])
+        if len(batches) != 1:
+            self.message_user(
+                request, "Select exactly one batch to resolve.", level=messages.ERROR
+            )
+            return None
+        batch = batches[0]
+        if batch.state != TranscriptionBatch.State.NEEDS_RECOVERY:
+            self.message_user(
+                request, "That batch does not need recovery.", level=messages.ERROR
+            )
+            return None
+
+        try:
+            if request.POST.get("attach"):
+                attach_provider_batch(
+                    batch.pk, request.POST.get("provider_batch_id", ""), request.user
+                )
+                self.message_user(
+                    request,
+                    "Provider batch attached; the worker will collect its results.",
+                    level=messages.SUCCESS,
+                )
+                return None
+            if request.POST.get("fail"):
+                count = fail_recovery_batch(batch.pk, request.user)
+                self.message_user(
+                    request,
+                    f"Batch marked failed; {count} job{'s' if count != 1 else ''} "
+                    "released; their schedules can be queued in a new run.",
+                    level=messages.SUCCESS,
+                )
+                return None
+        except BatchRecoveryError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+
+        return render(
+            request,
+            "admin/census/resolve-recovery-batch.html",
+            {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": "Resolve a batch that needs recovery",
+                "batch": batch,
+                "job_count": batch.jobs.filter(
+                    state=TranscriptionJob.State.NEEDS_RECOVERY
+                ).count(),
+                "provider_batch_id": request.POST.get("provider_batch_id", ""),
+            },
+        )
 
 
 @admin.register(TranscriptionJob)

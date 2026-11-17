@@ -2,9 +2,11 @@ import json
 from datetime import timedelta
 
 import pytest
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from census.models import (
@@ -22,7 +24,11 @@ from census.transcription.contracts import (
 )
 from census.transcription.payloads import build_batch_request
 from census.transcription.services import (
+    BatchRecoveryError,
     LaunchError,
+    attach_provider_batch,
+    eligible_transcription_schedules,
+    fail_recovery_batch,
     launch_transcription_run,
     worker_status,
 )
@@ -838,6 +844,115 @@ def test_stale_submission_lease_requires_manual_recovery():
     job.refresh_from_db()
     assert batch.state == TranscriptionBatch.State.NEEDS_RECOVERY
     assert job.state == TranscriptionJob.State.NEEDS_RECOVERY
+
+
+def recovery_batch(tmp_path, settings):
+    """A quarantined submission whose provider acceptance is unknown."""
+    settings.MEDIA_ROOT = tmp_path
+    run = TranscriptionRunFactory(metadata=frozen_run_metadata())
+    batch = TranscriptionBatchFactory(
+        run=run,
+        state=TranscriptionBatch.State.NEEDS_RECOVERY,
+        request_count=1,
+        error={"type": "stale_submission", "message": "Lease expired."},
+    )
+    schedule = CensusScheduleFactory(
+        original_image=SimpleUploadedFile(
+            "schedule.jpg", b"image bytes", content_type="image/jpeg"
+        )
+    )
+    job = TranscriptionJobFactory(
+        census_schedule=schedule,
+        run=run,
+        batch=batch,
+        state=TranscriptionJob.State.NEEDS_RECOVERY,
+    )
+    return batch, job
+
+
+@pytest.mark.django_db
+def test_attached_provider_batch_is_collected_by_the_worker(tmp_path, settings):
+    batch, job = recovery_batch(tmp_path, settings)
+    user = User.objects.create_user(username="recoverer")
+    client = SuccessfulBatchClient(candidate())
+    client.custom_ids = [job.custom_id]
+
+    with pytest.raises(BatchRecoveryError):
+        attach_provider_batch(batch.pk, "not-a-batch-id", user)
+    attach_provider_batch(batch.pk, " msgbatch_test ", user)
+    batch.refresh_from_db()
+    assert batch.state == TranscriptionBatch.State.IN_PROGRESS
+    assert batch.provider_batch_id == "msgbatch_test"
+    assert batch.error["type"] == "stale_submission"
+    assert batch.error["resolution"]["action"] == "attached_provider_batch"
+    assert batch.error["resolution"]["by"] == "recoverer"
+
+    assert ClaudeTranscriptionWorker(client=client).run_once()
+    batch.refresh_from_db()
+    job.refresh_from_db()
+    assert batch.state == TranscriptionBatch.State.ENDED
+    assert job.state == TranscriptionJob.State.SUCCEEDED
+    with pytest.raises(BatchRecoveryError):
+        attach_provider_batch(batch.pk, "msgbatch_other", user)
+
+
+@pytest.mark.django_db
+def test_wrong_provider_batch_returns_jobs_to_recovery(tmp_path, settings):
+    batch, job = recovery_batch(tmp_path, settings)
+    client = SuccessfulBatchClient(candidate())
+    client.custom_ids = ["job_from_some_other_batch"]
+
+    attach_provider_batch(batch.pk, "msgbatch_test", User.objects.create_user("u"))
+    ClaudeTranscriptionWorker(client=client).run_once()
+
+    batch.refresh_from_db()
+    job.refresh_from_db()
+    assert batch.state == TranscriptionBatch.State.NEEDS_RECOVERY
+    assert job.state == TranscriptionJob.State.NEEDS_RECOVERY
+    assert job.raw_result is None
+
+
+@pytest.mark.django_db
+def test_failed_recovery_batch_frees_schedules_for_a_new_run(tmp_path, settings):
+    batch, job = recovery_batch(tmp_path, settings)
+    schedules = CensusSchedule.objects.filter(pk=job.census_schedule_id)
+    assert not eligible_transcription_schedules(schedules).exists()
+
+    assert fail_recovery_batch(batch.pk, User.objects.create_user("u")) == 1
+
+    batch.refresh_from_db()
+    job.refresh_from_db()
+    assert batch.state == TranscriptionBatch.State.FAILED
+    assert batch.error["resolution"]["action"] == "marked_failed"
+    assert job.state == TranscriptionJob.State.FAILED
+    assert job.error_type == "manual_recovery_failed"
+    assert eligible_transcription_schedules(schedules).exists()
+    with pytest.raises(BatchRecoveryError):
+        fail_recovery_batch(batch.pk, User.objects.create_user("v"))
+
+
+@pytest.mark.django_db
+def test_resolve_action_attaches_or_fails_from_the_batch_admin(
+    client, tmp_path, settings
+):
+    batch, job = recovery_batch(tmp_path, settings)
+    user = User.objects.create_user("reviewer", is_staff=True)
+    user.groups.add(Group.objects.get_or_create(name="Reviewers")[0])
+    client.force_login(user)
+    url = reverse("admin:census_transcriptionbatch_changelist")
+    selection = {"action": "resolve_recovery_batch", "_selected_action": [batch.pk]}
+
+    page = client.post(url, selection)
+    assert page.status_code == 200
+    assert "Attach and collect" in page.content.decode()
+
+    page = client.post(url, {**selection, "attach": "1", "provider_batch_id": "x"})
+    assert "Anthropic batch IDs start with msgbatch_." in page.content.decode()
+
+    response = client.post(url, {**selection, "fail": "1"})
+    assert response.status_code == 302
+    batch.refresh_from_db()
+    assert batch.state == TranscriptionBatch.State.FAILED
 
 
 @pytest.mark.django_db
