@@ -226,7 +226,8 @@ defaults to the newest human snapshot and newest agent output, while allowing
 model-to-model review. Reviewers choose values by clicking cells, may make typed
 corrections, and apply the highlighted result only after checking the confirmation.
 Legacy human representations such as decimal strings and `Rural`/`Urban` labels
-are normalized for display. Repeated religious bodies, memberships, and clergy are
+are normalized for display; canonical `urban_rural_code` is stored as `U`, `R`,
+or null (migration 0031), so human snapshots keep the labels but records do not. Repeated religious bodies, memberships, and clergy are
 matched by owned IDs or unique signatures rather than array order. Applying a
 decision updates canonical data atomically and preserves both sources, field-level
 choices, edits, and before/after snapshots as append-only provenance. Any other

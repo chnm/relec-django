@@ -445,10 +445,15 @@ GET /census/api/
 
 GET /census/api/religious-bodies/
 GET /census/api/religious-bodies/<id>/
-    → ReligiousBody list/detail
-    → Filters: denomination, county, populated_place, geocode_status
-    → Search: name, denomination name
-    → Order: name, denomination
+    → ReligiousBody list/detail with location, denomination, membership,
+      finances, pastors, candidate `transcriptions`, and the latest
+      `reconciliation` (outcome, corrected, applied_at, edited_fields)
+    → Filters: denomination, family_census, family_relec, transcription_status,
+      exclude_families, urban_rural (urban|rural), bounds, has_location, corrected
+    → Search: name, address, census_code
+    → Order: name, census_record__schedule_id
+    → `view=map` returns a reduced payload; `urban_rural_code` is U, R, or null
+    → Full reference: /census/api/docs/
 
 GET /census/api/denominations/
 GET /census/api/denominations/<id>/
