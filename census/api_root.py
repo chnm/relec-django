@@ -69,7 +69,7 @@ def api_root(request, format=None):
                     },
                     "response_notes": {
                         "denominations": "Array of denomination names matched by the current query filters, included alongside pagination metadata",
-                        "location_details": "Nested object with lat, lon, city_name, map_name, place_id, county_ahcb, county_name, state_name, address, urban_rural_code",
+                        "location_details": "Nested object with lat, lon, city_name, map_name, place_id, county_ahcb, county_name, state_name, address, urban_rural_code (U, R, or null)",
                         "membership_details": "Full membership breakdown including education program data; null values indicate blank fields (not zero)",
                         "finances": "Financial data (expenditures, benevolences, edifice/residence values and debts)",
                         "pastors": "Array of clergy objects (principal pastor first, then assistants) with name, is_assistant, college, theological_seminary, num_other_churches_served, serving_congregation",
