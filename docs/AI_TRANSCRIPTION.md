@@ -30,7 +30,6 @@ environment variables, never through an admin form:
 
 ```text
 CLAUDE_TRANSCRIPTION_ENABLED=True
-CLAUDE_TRANSCRIPTION_MODELS=claude-sonnet-4-6,claude-sonnet-5
 ANTHROPIC_API_KEY=...   # transcription-worker environment only
 ```
 
@@ -62,7 +61,6 @@ CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES=10485760
 CLAUDE_TRANSCRIPTION_LEASE_SECONDS=300
 CLAUDE_TRANSCRIPTION_POLL_SECONDS=60
 CLAUDE_TRANSCRIPTION_REQUEST_TIMEOUT=120
-CLAUDE_TRANSCRIPTION_PRICING=<optional validated JSON catalog override>
 ```
 
 `CLAUDE_TRANSCRIPTION_MAX_BATCH_BYTES` bounds the worker's memory, not just the
@@ -72,35 +70,39 @@ memory limit (512Mi in `k8s/transcription-worker.yaml`), or the pod is OOM-kille
 mid-submission and the batch lands in `needs_recovery` as a `stale_submission`.
 A run larger than one batch is split into more batches automatically.
 
-The application includes a version-controlled Batch pricing catalog for its default
-Claude model. `CLAUDE_TRANSCRIPTION_PRICING` can replace that catalog with a
-deployment-approved JSON object when models or prices change. Before queueing, the
-selected model must have nonnegative decimal rates for ordinary input, output,
-5-minute cache creation, 1-hour cache creation, and cache reads, plus currency,
-service tier, effective date, and source metadata. A normalized model-specific copy
-is frozen in the run; current prices are never applied retroactively. Existing runs
-created before validated snapshots remain explicitly unpriced. An absent or empty
-environment override uses the version-controlled default, which keeps deployments
-that previously set the old `{}` placeholder from blocking new runs.
+### Models and pricing
 
-Temporary rates may include `valid_through` in `YYYY-MM-DD` form. The launch path
+The models reviewers can choose, their Batch rates, and any per-model request
+settings live in the **Transcription Models** admin table (sidebar under AI
+transcription). Reviewers can view it; only superusers can add or change rows.
+Only enabled rows appear on the launch form, and the lowest `sort_order` is the
+default. Before queueing, the selected model must have nonnegative rates for
+ordinary input, output, 5-minute cache creation, 1-hour cache creation, and cache
+reads, plus an effective date and source. A normalized copy is frozen in the run;
+editing a row never changes existing runs. Runs created before validated snapshots
+remain explicitly unpriced.
+
+To add a model: create a row with the exact Anthropic model ID and the rates from
+the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing),
+then launch a small pilot. A wrong model ID fails at the provider, not at launch.
+`inference_config` accepts only `thinking` and `output_effort`, the two keys the
+batch payload builder sends; anything else needs a code change.
+
+Migration `0033_seed_transcription_models` created the initial rows from the
+former `CLAUDE_TRANSCRIPTION_MODELS` / `CLAUDE_TRANSCRIPTION_PRICING` environment
+variables when set, otherwise from the previous defaults. Those variables are no
+longer read and can be removed from deployment config.
+
+Temporary rates may set `pricing_valid_through`. The launch path
 rejects an expired rate rather than silently estimating new work with an obsolete
 price. Cost reporting also leaves a job unpriced if its submission timestamp falls
-after the frozen rate's validity window. Model entries can override catalog-level
-dates and other metadata.
+after the frozen rate's validity window.
 
-The version-controlled default uses Anthropic's published Claude Sonnet 4.6 Batch
-rates effective 2026-08-11: $1.50 ordinary input, $7.50 output, $1.875 5-minute
-cache writes, $3.00 1-hour cache writes, and $0.15 cache reads per million tokens.
-It also records Claude Sonnet 5's Batch rates: $1.00 input, $5.00 output, $1.25
-5-minute cache writes, $2.00 1-hour cache writes, and $0.10 cache reads per
-million tokens. These launched as introductory rates through 2026-08-31, but
-Anthropic made them the standard price and cancelled the planned 2026-09-01
-increase, so the entry no longer carries `valid_through`. Deployments that copied
-the earlier `CLAUDE_TRANSCRIPTION_PRICING` override with that date must remove it
-(or unset the override), or Sonnet 5 launches are rejected as expired.
-Confirm the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing)
-before changing the catalog.
+The seeded rows use Anthropic's published Batch rates effective 2026-08-11 for
+Claude Sonnet 4.6 ($1.50 input, $7.50 output, $1.875 / $3.00 cache writes, $0.15
+cache reads per million tokens) and Claude Sonnet 5 ($1.00, $5.00, $1.25 / $2.00,
+$0.10). Sonnet 5's rates launched as introductory but became standard, so its row
+has no valid-through date.
 `CLAUDE_TRANSCRIPTION_MAX_IMAGE_BYTES` applies to the base64-encoded image, matching
 the direct Claude API's image-size definition.
 
@@ -110,9 +112,9 @@ omits `thinking`. Thinking tokens and structured response text share the hard
 `thinking: {"type": "disabled"}` to stop thinking from exhausting that budget, but
 disabling thinking degrades Sonnet 5's reading of schedule images: some legible,
 fully filled schedules came back as near-empty candidates rejected by validation
-(`religious_bodies: [] should be non-empty`). New Sonnet 5 runs therefore freeze
-`thinking: {"type": "adaptive"}` together with `output_config.effort: "low"` in
-their immutable metadata, and the worker copies both into every provider request.
+(`religious_bodies: [] should be non-empty`). The seeded Sonnet 5 row's `inference_config` therefore freezes
+`thinking: {"type": "adaptive"}` together with `output_effort: "low"` into each
+run's immutable metadata, and the worker copies both into every provider request.
 Low effort keeps thinking brief enough that the structured JSON fits within the
 raised default ceiling (8192). Historical runs without frozen `thinking` or
 `output_effort` keys retain their original request behavior; a deployment never

@@ -13,7 +13,7 @@ from django.test import RequestFactory
 from django.utils import timezone
 
 from census.admin import TranscriptionRunAdmin
-from census.models import TranscriptionJob, TranscriptionRun
+from census.models import TranscriptionJob, TranscriptionModel, TranscriptionRun
 from census.transcription.usage import (
     PricingConfigurationError,
     historical_cost_estimates,
@@ -120,18 +120,16 @@ def test_pricing_snapshot_rejects_expired_temporary_rates():
         pricing_snapshot_for_model(catalog, "test-model", as_of=date(2026, 8, 11))
 
 
-def test_configured_sonnet_5_batch_rates_are_standard_and_unexpiring():
+@pytest.mark.django_db
+def test_seeded_sonnet_5_batch_rates_are_standard_and_unexpiring():
     # Anthropic made the $2/$10 introductory price permanent; the planned
-    # 2026-09-01 increase did not happen, so the catalog must not expire.
-    # Test the version-controlled default, not a local .env override.
-    from config.settings import DEFAULT_CLAUDE_TRANSCRIPTION_PRICING
-
+    # 2026-09-01 increase did not happen, so the seeded row must not expire.
     snapshot = pricing_snapshot_for_model(
-        DEFAULT_CLAUDE_TRANSCRIPTION_PRICING, "claude-sonnet-5"
+        TranscriptionModel.pricing_catalog(), "claude-sonnet-5"
     )
 
-    assert snapshot["rates"]["input_tokens"] == "1.00"
-    assert snapshot["rates"]["output_tokens"] == "5.00"
+    assert Decimal(snapshot["rates"]["input_tokens"]) == Decimal("1.00")
+    assert Decimal(snapshot["rates"]["output_tokens"]) == Decimal("5.00")
     assert "valid_through" not in snapshot
 
 
