@@ -19,7 +19,7 @@ The constrained provider schema uses transport sentinels so it remains within th
 
 - Division and local church name are literal transcriptions. Do not add or remove the word "Church". Strip only surrounding/trailing punctuation.
 - Transcribe county and state as written. State is the two-letter abbreviation when it can be determined. Set `populated_place_id` only when one supplied candidate is supported by the image and county context; otherwise use null.
-- `census_code` is the handwritten red-pencil two-part code (for example `0-1` or '01'). The separate handwritten three-part code that is in blue or red or black ink (for example '1-2-3' or '123') belongs in `processing.denomination_code_stamp`. Hyphenate the three number `denomination_code_stamp` in the output field.
+- `census_code` is the handwritten red-pencil code on the left-hand side of the schedule. It is usually two numbers (for example `0-1` or `01`), but larger denominations use three (for example `0-0-0`), so identify it by its position, never by how many numbers it has. The separate handwritten code on the right-hand side of the schedule, in blue, red, or black ink, is the denomination code and belongs in `processing.denomination_code_stamp` (for example `1-2-3` or `123`). Hyphenate the numbers of `denomination_code_stamp` in the output field.
 - `urban_rural_code` is a single handwritten red-pencil letter, `U` (urban) or `R` (rural), in print or cursive. It is usually circled and sits in the left margin beside line d (city, town, village), but it may appear elsewhere near the identifying fields. Emit exactly `U` or `R`, never the words 'Urban' or 'Rural'. Emit null only when no such letter appears anywhere on the schedule. This letter is the urban/rural code, not marginalia: never record it in `marginalia`, even when it is circled or written in the margin.
 
 ## Membership, buildings, and expenditures
@@ -46,7 +46,7 @@ Fields 16–24 map in order to Sunday school officers/teachers and scholars; vac
 
 - Convert a legible date-received stamp to ISO `YYYY-MM-DD`.
 - Transcribe the district stamp's visible text.
-- Transcribe the cursive full denomination code with hyphens.
+- Transcribe the cursive full denomination code on the right-hand side of the schedule with hyphens.
 
 ## Final checks
 
