@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import cache_page
 
 from location.models import County, State
-from .models import CensusSchedule, Denomination
+from .models import URBAN_CODES, CensusSchedule, Denomination
 
 
 def _get_census_browser_filter_data():
@@ -168,7 +168,7 @@ def census_browser_view(request, state_code=None, county_name=None):
         queryset = queryset.filter(membership_details__isnull=True)
 
     if urban_rural == "urban":
-        queryset = queryset.filter(church_details__urban_rural_code="U")
+        queryset = queryset.filter(church_details__urban_rural_code__in=URBAN_CODES)
     elif urban_rural == "rural":
         queryset = queryset.filter(church_details__urban_rural_code="R")
 

@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import OuterRef, Q, Subquery
 
-from .models import ReligiousBody, ScheduleReconciliation
+from .models import URBAN_CODES, ReligiousBody, ScheduleReconciliation
 
 
 class ReligiousBodyFilter(django_filters.FilterSet):
@@ -71,7 +71,7 @@ class ReligiousBodyFilter(django_filters.FilterSet):
     def filter_urban_rural(self, queryset, name, value):
         """Filter by urban/rural status."""
         if value.lower() == "urban":
-            return queryset.filter(urban_rural_code="U")
+            return queryset.filter(urban_rural_code__in=URBAN_CODES)
         elif value.lower() == "rural":
             return queryset.filter(urban_rural_code="R")
         return queryset

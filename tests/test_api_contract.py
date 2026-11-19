@@ -267,7 +267,7 @@ def test_religious_body_filters_return_only_matching_records(client):
         name="Alpha Target Church",
         address="123 Match Street",
         census_code="MATCH-1",
-        urban_rural_code="Urban",
+        urban_rural_code="U +",  # normalized to U+, still urban
     )
     decoy = ReligiousBodyFactory(
         census_record=CensusScheduleFactory(
