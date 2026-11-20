@@ -290,6 +290,7 @@ def test_religious_body_filters_return_only_matching_records(client):
         ),
         denomination=methodist,
         name="No Location Church",
+        urban_rural_code="U+",
     )
 
     cases = [
@@ -298,7 +299,7 @@ def test_religious_body_filters_return_only_matching_records(client):
         ({"family_relec": "Baptist"}, {target.pk}),
         ({"transcription_status": "approved"}, {target.pk}),
         ({"exclude_families": "Methodist bodies"}, {target.pk}),
-        ({"urban_rural": "urban"}, {target.pk}),
+        ({"urban_rural": "urban"}, {target.pk, no_location.pk}),
         ({"urban_rural": "rural"}, {decoy.pk}),
         ({"bounds": "38,-78,40,-75"}, {target.pk}),
         ({"has_location": "false"}, {no_location.pk}),

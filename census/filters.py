@@ -71,7 +71,8 @@ class ReligiousBodyFilter(django_filters.FilterSet):
     def filter_urban_rural(self, queryset, name, value):
         """Filter by urban/rural status."""
         if value.lower() == "urban":
-            return queryset.filter(urban_rural_code="U")
+            # "U+" is a U the enumerator marked with a plus; still urban.
+            return queryset.filter(urban_rural_code__in=["U", "U+"])
         elif value.lower() == "rural":
             return queryset.filter(urban_rural_code="R")
         return queryset
