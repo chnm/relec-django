@@ -45,6 +45,23 @@ def test_dashboard_metrics_distinguish_approval_and_review_readiness():
 
 
 @pytest.mark.django_db
+def test_ai_ready_count_uses_the_latest_job_not_any_success():
+    schedule = CensusScheduleFactory()
+    earlier = TranscriptionJobFactory(
+        census_schedule=schedule, state=TranscriptionJob.State.SUCCEEDED
+    )
+    ScheduleTranscriptionFactory(census_schedule=schedule, run=earlier.run)
+    TranscriptionJobFactory(
+        census_schedule=schedule, state=TranscriptionJob.State.FAILED
+    )
+    CensusScheduleFactory()  # no agent job at all
+
+    context = _get_dashboard_data_sync(include_ai_usage=True)
+
+    assert context["ai_ready_review_count"] == 0
+
+
+@pytest.mark.django_db
 def test_admin_overview_renders_operational_layout_and_accessible_charts(client):
     user = User.objects.create_superuser(
         username="dashboard-admin",

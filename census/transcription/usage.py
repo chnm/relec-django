@@ -190,6 +190,10 @@ def _run_snapshot(run):
 
 def job_cost_breakdown(job):
     """Estimate one job from its run's frozen rates and provider token usage."""
+    return _job_cost(job, _run_snapshot(job.run))
+
+
+def _job_cost(job, snapshot):
     if not any(
         value is not None
         for value in (
@@ -201,7 +205,6 @@ def job_cost_breakdown(job):
     ):
         return None
 
-    snapshot = _run_snapshot(job.run)
     if snapshot is None:
         return None
     valid_through = snapshot.get("valid_through")
@@ -253,7 +256,8 @@ def _percentile(values, percentile):
     return ordered[index]
 
 
-def _summarize_jobs(jobs):
+def _summarize_jobs(jobs, costs):
+    """Summarize jobs; ``costs`` maps job pk to its precomputed cost breakdown."""
     terminal_failure_states = {
         TranscriptionJob.State.FAILED,
         TranscriptionJob.State.EXPIRED,
@@ -274,7 +278,7 @@ def _summarize_jobs(jobs):
     for job in jobs:
         if job.usage is None:
             continue
-        cost = job_cost_breakdown(job)
+        cost = costs[job.pk]
         if cost is None:
             unpriced_jobs += 1
             continue
@@ -372,7 +376,9 @@ def usage_report():
         TranscriptionRun.objects.filter(kind="agent").prefetch_related(
             models.Prefetch(
                 "transcription_jobs",
-                queryset=TranscriptionJob.objects.select_related("run").only(
+                # The prefetch already points each job's run at its parent;
+                # select_related would load a duplicate run row per job.
+                queryset=TranscriptionJob.objects.only(
                     "id",
                     "run_id",
                     "state",
@@ -388,11 +394,15 @@ def usage_report():
         )
     )
     all_jobs = []
+    costs = {}
     run_summaries = []
     for run in runs:
         jobs = list(run.transcription_jobs.all())
         all_jobs.extend(jobs)
-        summary = _summarize_jobs(jobs)
+        snapshot = _run_snapshot(run)
+        # Price each job once; the overall summary below reuses these.
+        costs.update((job.pk, _job_cost(job, snapshot)) for job in jobs)
+        summary = _summarize_jobs(jobs, costs)
         summary.update(
             {
                 "run": run,
@@ -403,7 +413,7 @@ def usage_report():
         )
         run_summaries.append(summary)
 
-    overall = _summarize_jobs(all_jobs)
+    overall = _summarize_jobs(all_jobs, costs)
     overall["total_runs"] = len(runs)
     return {
         "overall": overall,

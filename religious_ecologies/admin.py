@@ -1,9 +1,9 @@
 import asyncio
 
 from django.contrib import admin
-from django.db.models import Count
+from django.db.models import Count, Exists, OuterRef
 
-from census.models import CensusSchedule
+from census.models import CensusSchedule, TranscriptionJob
 from census.transcription.status import with_ai_status
 from census.transcription.usage import usage_report
 from census.workflow import is_reviewer
@@ -40,8 +40,17 @@ def _get_dashboard_data_sync(include_ai_usage=False):
     approval_percentage = round(
         (approved_count / total_records * 100) if total_records > 0 else 0, 1
     )
+    # "transcribed" needs a succeeded agent job, so skip the per-schedule
+    # status subqueries for the many schedules that have none.
+    has_succeeded_agent_job = Exists(
+        TranscriptionJob.objects.filter(
+            census_schedule=OuterRef("pk"),
+            run__kind="agent",
+            state=TranscriptionJob.State.SUCCEEDED,
+        )
+    )
     ai_ready_review_count = (
-        with_ai_status(CensusSchedule.objects.all())
+        with_ai_status(CensusSchedule.objects.filter(has_succeeded_agent_job))
         .filter(_ai_status="transcribed")
         .count()
         if include_ai_usage
