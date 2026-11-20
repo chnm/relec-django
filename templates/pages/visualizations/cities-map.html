@@ -4,7 +4,7 @@
 {% block title %}Urban American Congregations - Religious Ecologies{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{% static 'vendor/leaflet-1.9.4/leaflet.css' %}" />
     <style>
     /* Match original styling */
         .viz-container {
@@ -343,7 +343,7 @@
 {% endblock %}
 
 {% block extra_js %}
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{% static 'vendor/leaflet-1.9.4/leaflet.js' %}"></script>
     <script>
 // Initialize map - light gray basemap like original
         let map = L.map('map').setView([39.8283, -98.5795], 4);

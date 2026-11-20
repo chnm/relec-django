@@ -87,7 +87,7 @@ Python 3.12+ Django application with PostgreSQL, served by Gunicorn over WSGI. A
 - **CSS framework**: Foundation (via `foundation.js`, `what-input.js`)
 - **Tailwind CSS**: Available via `django-tailwind` with `theme` app; used in some views
 - **Maps**: Leaflet.js for interactive choropleth and marker maps
-- **Visualizations**: Observable Plot 0.6 + D3 v7 loaded from jsDelivr CDN via ES6 import maps (no bundler required)
+- **Visualizations**: Observable Plot 0.6 + D3 v7 loaded from local copies in `static/vendor/` via ES6 import maps (no bundler required)
 - **Admin**: Django Unfold with custom Religious Ecologies blue theme (`#0060b1`)
 - **No JavaScript framework** — vanilla JS with Django template rendering
 
@@ -277,7 +277,7 @@ graph TD
     DjangoAdmin --> DjangoViews
 
     Templates -->|Static assets| WhiteNoise[WhiteNoise\nStatic Files]
-    Templates -->|CDN modules| CDN[jsDelivr CDN\nObservable Plot / D3]
+    Templates -->|local modules| Vendor[static/vendor\nObservable Plot / D3]
     Templates -->|Tile maps| Leaflet[Leaflet.js\nOpenStreetMap tiles]
 
     DjangoViews --> ORM[Django ORM]
@@ -641,7 +641,7 @@ docker-compose up
 
 **Visualizations:**
 - Observable Plot visualizations use wrapper scripts (hardcoded div IDs, no params system)
-- Import maps in `blog_detail.html` resolve `@observablehq/plot` and `d3` from CDN
+- Import maps in `blog_detail.html` resolve `@observablehq/plot` and `d3` from `static/vendor/`
 - Each visualization is a standalone ES6 module — no global state
 
 ---

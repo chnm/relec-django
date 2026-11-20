@@ -387,7 +387,7 @@ Provides a publication venue for the research team's findings, co-located with t
 **User Interactions:**
 - Reviewer logs into admin → creates blog post → sets `is_draft=False` → post appears on `/blog/`
 - User visits `/blog/` → sees list of published posts → clicks through to detail
-- Detail page loads Observable Plot visualizations via CDN import maps (no page reload)
+- Detail page loads Observable Plot visualizations via import maps pointing at `static/vendor/` (no page reload)
 
 ---
 

@@ -4,7 +4,7 @@ This guide explains how to add interactive visualizations using Observable Plot 
 
 ## Overview
 
-Interactive visualizations use [Observable Plot](https://observablehq.com/plot/) for data visualization and are embedded directly in blog posts. The system uses ES6 modules with import maps to load Plot.js from CDN.
+Interactive visualizations use [Observable Plot](https://observablehq.com/plot/) for data visualization and are embedded directly in blog posts. The system uses ES6 modules with import maps to load Plot and D3 from local copies in `static/vendor/`.
 
 ## Creating a New Interactive Visualization
 

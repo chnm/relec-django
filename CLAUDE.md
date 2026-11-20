@@ -86,7 +86,7 @@ const plot = Plot.plot({ ... });
 document.getElementById(TARGET_DIV).appendChild(plot);
 ```
 
-Import maps in `templates/pages/blog_detail.html` resolve `@observablehq/plot` (0.6) and `d3` (v7) from jsDelivr CDN — no bundler needed.
+Import maps in `templates/pages/blog_detail.html` resolve `@observablehq/plot` (0.6) and `d3` (v7) from local copies in `static/vendor/` (versions and update steps in `static/vendor/README.md`) — no bundler needed. Don't load libraries from a CDN in site templates.
 
 **Adding new visualizations:** See `docs/INTERACTIVE_VISUALIZATIONS.md`.
 

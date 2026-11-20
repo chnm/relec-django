@@ -1,6 +1,9 @@
 default_stages: [pre-commit]
 minimum_pre_commit_version: "3.2.0"
 
+# Third-party files, kept byte-identical to upstream (Leaflet tags carry integrity hashes).
+exclude: ^static/vendor/
+
 default_language_version:
   python: python3.12
 

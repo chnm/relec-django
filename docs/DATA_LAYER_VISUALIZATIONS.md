@@ -98,7 +98,7 @@ Create `templates/datalayers/<source>.html` (e.g., `templates/datalayers/dc-chur
 {% block title %}{{ display_title }} | American Religious Ecologies{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    <link rel="stylesheet" href="{% static 'vendor/leaflet-1.9.4/leaflet.css' %}"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin=""/>
     <style>
@@ -119,7 +119,7 @@ Create `templates/datalayers/<source>.html` (e.g., `templates/datalayers/dc-chur
 {% endblock %}
 
 {% block extra_js %}
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    <script src="{% static 'vendor/leaflet-1.9.4/leaflet.js' %}"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
     <script>

@@ -4,7 +4,7 @@
 {% block title %}{{ visualization.title }} - Religious Ecologies{% endblock %}
 
 {% block extra_css %}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{% static 'vendor/leaflet-1.9.4/leaflet.css' %}" />
 
   <style>
     #spiritualist-map {
@@ -127,7 +127,7 @@
   </article>
 
 <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{% static 'vendor/leaflet-1.9.4/leaflet.js' %}"></script>
 
   <script>
 // GeoJSON data
