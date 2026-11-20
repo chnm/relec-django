@@ -14,6 +14,7 @@ from census.models import (
     ScheduleTranscription,
     TranscriptionBatch,
     TranscriptionJob,
+    TranscriptionModel,
 )
 from census.transcription.client import AmbiguousSubmissionError
 from census.transcription.contracts import (
@@ -204,31 +205,20 @@ def test_transport_schema_avoids_nullable_unions_and_normalizes_sentinels():
 @override_settings(
     CLAUDE_TRANSCRIPTION_ENABLED=True,
     ANTHROPIC_API_KEY="",
-    CLAUDE_TRANSCRIPTION_MODELS=["test-model"],
-    CLAUDE_TRANSCRIPTION_MAX_TOKENS=2048,
-    CLAUDE_TRANSCRIPTION_PRICING={
-        "schema_version": 1,
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "service_tier": "batch",
-        "effective_date": "2026-08-11",
-        "source": "https://example.test/pricing",
-        "models": {
-            "test-model": {
-                "rates": {
-                    "input_tokens": "1.00",
-                    "output_tokens": "2.00",
-                    "cache_creation_input_tokens": "1.25",
-                    "cache_creation_1h_input_tokens": "2.00",
-                    "cache_read_input_tokens": "0.10",
-                }
-            }
-        },
-    },
     APPLICATION_REVISION="0123456789abcdef0123456789abcdef01234567",
 )
 def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
     settings.MEDIA_ROOT = tmp_path
+    TranscriptionModel.objects.create(
+        model_id="test-model",
+        input_rate="1.00",
+        output_rate="2.00",
+        cache_creation_rate="1.25",
+        cache_creation_1h_rate="2.00",
+        cache_read_rate="0.10",
+        pricing_effective_date="2026-08-11",
+        pricing_source="https://example.test/pricing",
+    )
     schedules = [
         CensusScheduleFactory(
             original_image=SimpleUploadedFile(
@@ -273,20 +263,17 @@ def test_launch_freezes_contract_and_honors_pilot_size(tmp_path, settings):
         "source": "https://example.test/pricing",
         "model": "test-model",
         "rates": {
-            "input_tokens": "1.00",
-            "output_tokens": "2.00",
-            "cache_creation_input_tokens": "1.25",
-            "cache_creation_1h_input_tokens": "2.00",
-            "cache_read_input_tokens": "0.10",
+            "input_tokens": "1.0000",
+            "output_tokens": "2.0000",
+            "cache_creation_input_tokens": "1.2500",
+            "cache_creation_1h_input_tokens": "2.0000",
+            "cache_read_input_tokens": "0.1000",
         },
     }
 
 
 @pytest.mark.django_db
-@override_settings(
-    CLAUDE_TRANSCRIPTION_ENABLED=True,
-    CLAUDE_TRANSCRIPTION_MODELS=["claude-sonnet-5"],
-)
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
 def test_sonnet_5_run_freezes_low_effort_adaptive_thinking_in_payload(monkeypatch):
     monkeypatch.setattr(
         "census.transcription.services.pricing_snapshot_for_model",
@@ -1023,3 +1010,49 @@ def test_successful_transcription_moves_unapproved_schedules_to_needs_review(
     assert schedules["in_progress"].transcription_status == "needs_review"
     assert schedules["approved"].transcription_status == "approved"
     assert run.key in schedules["in_progress"].history.first().history_change_reason
+
+
+@pytest.mark.django_db
+@override_settings(CLAUDE_TRANSCRIPTION_ENABLED=True)
+def test_disabled_transcription_model_cannot_launch():
+    TranscriptionModel.objects.filter(model_id="claude-sonnet-5").update(enabled=False)
+    schedule = CensusScheduleFactory(
+        original_image=SimpleUploadedFile(
+            "schedule.jpg", b"image bytes", content_type="image/jpeg"
+        )
+    )
+
+    with pytest.raises(LaunchError, match="not allowed"):
+        launch_transcription_run(
+            queryset=CensusSchedule.objects.filter(pk=schedule.pk),
+            key="disabled-model",
+            model="claude-sonnet-5",
+        )
+
+
+@pytest.mark.django_db
+def test_transcription_model_rejects_unknown_inference_config_keys():
+    row = TranscriptionModel.objects.get(model_id="claude-sonnet-5")
+    row.inference_config = {"temperature": 0}
+
+    with pytest.raises(ValidationError, match="temperature"):
+        row.clean()
+
+
+@pytest.mark.django_db
+def test_reviewers_view_transcription_models_but_only_superusers_change_them():
+    from django.contrib import admin
+    from django.test import RequestFactory
+
+    model_admin = admin.site._registry[TranscriptionModel]
+    reviewer = User.objects.create_user("model-reviewer")
+    reviewer.groups.add(Group.objects.get_or_create(name="Reviewers")[0])
+    superuser = User.objects.create_superuser("model-admin")
+    request = RequestFactory().get("/")
+
+    request.user = reviewer
+    assert model_admin.has_view_permission(request)
+    assert not model_admin.has_change_permission(request)
+    assert not model_admin.has_add_permission(request)
+    request.user = superuser
+    assert model_admin.has_change_permission(request)

@@ -43,6 +43,7 @@ from .models import (
     ScheduleTranscription,
     TranscriptionBatch,
     TranscriptionJob,
+    TranscriptionModel,
     TranscriptionRun,
 )
 from .resources import CensusScheduleResource, DenominationResource
@@ -1135,6 +1136,62 @@ def bulk_assign_users(modeladmin, request, queryset):
 bulk_assign_users.short_description = "Bulk assign users/status to selected records"
 
 
+def enabled_transcription_model_ids():
+    return list(
+        TranscriptionModel.objects.filter(enabled=True).values_list(
+            "model_id", flat=True
+        )
+    )
+
+
+@admin.register(TranscriptionModel)
+class TranscriptionModelAdmin(ModelAdmin):
+    """Reviewers can see the model catalog; only superusers can change it."""
+
+    list_display = [
+        "model_id",
+        "enabled",
+        "sort_order",
+        "input_rate",
+        "output_rate",
+        "pricing_effective_date",
+    ]
+    list_editable = ["enabled", "sort_order"]
+    fieldsets = [
+        (None, {"fields": ["model_id", "enabled", "sort_order", "inference_config"]}),
+        (
+            "Batch pricing (USD per million tokens)",
+            {
+                "fields": [
+                    "input_rate",
+                    "output_rate",
+                    "cache_creation_rate",
+                    "cache_creation_1h_rate",
+                    "cache_read_rate",
+                    "pricing_effective_date",
+                    "pricing_valid_through",
+                    "pricing_source",
+                ]
+            },
+        ),
+    ]
+
+    def has_module_permission(self, request):
+        return is_reviewer(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return is_reviewer(request.user)
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
 class ClaudeTranscriptionRunForm(forms.Form):
     run_key = forms.SlugField(
         max_length=120,
@@ -1168,7 +1225,7 @@ class ClaudeTranscriptionRunForm(forms.Form):
         self.eligible_count = kwargs.pop("eligible_count", 0)
         super().__init__(*args, **kwargs)
         self.fields["model"].choices = [
-            (model, model) for model in settings.CLAUDE_TRANSCRIPTION_MODELS
+            (model, model) for model in enabled_transcription_model_ids()
         ]
         self.fields["pilot_size"].max_value = settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS
 
@@ -1207,7 +1264,7 @@ def queue_claude_transcription(modeladmin, request, queryset):
     selection = transcription_selection_summary(queryset)
     initial = {
         "run_key": timezone.now().strftime("claude-%Y%m%d-%H%M%S"),
-        "model": settings.CLAUDE_TRANSCRIPTION_MODELS[0],
+        "model": next(iter(enabled_transcription_model_ids()), None),
     }
     form = ClaudeTranscriptionRunForm(
         request.POST if request.POST.get("apply") else None,
@@ -1237,8 +1294,8 @@ def queue_claude_transcription(modeladmin, request, queryset):
 
     selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
     pricing_snapshots, pricing_errors = configured_pricing_snapshots(
-        settings.CLAUDE_TRANSCRIPTION_PRICING,
-        settings.CLAUDE_TRANSCRIPTION_MODELS,
+        TranscriptionModel.pricing_catalog(),
+        enabled_transcription_model_ids(),
     )
     return render(
         request,

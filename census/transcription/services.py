@@ -7,7 +7,12 @@ from django.db import connection, models, transaction
 from django.utils import timezone
 from simple_history.utils import bulk_create_with_history
 
-from census.models import TranscriptionBatch, TranscriptionJob, TranscriptionRun
+from census.models import (
+    TranscriptionBatch,
+    TranscriptionJob,
+    TranscriptionModel,
+    TranscriptionRun,
+)
 
 from .contracts import load_contract
 from .usage import PricingConfigurationError, pricing_snapshot_for_model
@@ -18,7 +23,6 @@ STALE_LEASE_PERIODS = 2
 # Serialize launch eligibility checks so two reviewers cannot queue the same
 # schedule concurrently in separate runs.
 LAUNCH_ADVISORY_LOCK_ID = 6401927
-SONNET_5_MODEL = "claude-sonnet-5"
 
 
 class LaunchError(ValueError):
@@ -31,18 +35,6 @@ ACTIVE_JOB_STATES = (
     TranscriptionJob.State.SUBMITTED,
     TranscriptionJob.State.NEEDS_RECOVERY,
 )
-
-
-def inference_config_for_model(model):
-    """Return the request behavior that must be frozen for this model."""
-    if model == SONNET_5_MODEL:
-        # Sonnet 5 otherwise enables high-effort adaptive thinking by default,
-        # and thinking shares max_tokens with the structured response. Disabling
-        # thinking entirely (the previous approach) degraded reading quality and
-        # produced near-empty candidates on legible schedules; low effort keeps
-        # thinking brief enough that the JSON still fits within the budget.
-        return {"thinking": {"type": "adaptive"}, "output_effort": "low"}
-    return {}
 
 
 def eligible_transcription_schedules(queryset):
@@ -153,7 +145,8 @@ def launch_transcription_run(
     # the web process must never require it.
     if not settings.CLAUDE_TRANSCRIPTION_ENABLED:
         raise LaunchError("Claude transcription is disabled by configuration.")
-    if model not in settings.CLAUDE_TRANSCRIPTION_MODELS:
+    model_row = TranscriptionModel.objects.filter(model_id=model, enabled=True).first()
+    if model_row is None:
         raise LaunchError("The selected Claude model is not allowed.")
     if pilot_size is not None and (
         pilot_size < 1 or pilot_size > settings.CLAUDE_TRANSCRIPTION_MAX_RUN_JOBS
@@ -164,7 +157,7 @@ def launch_transcription_run(
         )
     try:
         pricing_snapshot = pricing_snapshot_for_model(
-            settings.CLAUDE_TRANSCRIPTION_PRICING, model
+            TranscriptionModel.pricing_catalog(), model
         )
     except PricingConfigurationError as exc:
         raise LaunchError(str(exc)) from exc
@@ -232,7 +225,7 @@ def launch_transcription_run(
         "launched_at": timezone.now().isoformat(),
         "launched_by": user.get_username() if user and user.is_authenticated else None,
     }
-    metadata.update(inference_config_for_model(model))
+    metadata.update(model_row.inference_config)
     run = TranscriptionRun.objects.create(key=key, kind="agent", metadata=metadata)
     bulk_create_with_history(
         [TranscriptionJob(census_schedule=schedule, run=run) for schedule in schedules],

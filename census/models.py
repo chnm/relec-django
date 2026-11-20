@@ -500,6 +500,106 @@ class TranscriptionRun(models.Model):
         return usage
 
 
+class TranscriptionModel(models.Model):
+    """A Claude model reviewers may pick for a run, with its Batch API rates.
+
+    Runs freeze a copy of these values at launch, so editing a row only
+    affects runs launched afterwards.
+    """
+
+    #: Run metadata keys the batch payload builder knows how to send.
+    INFERENCE_CONFIG_KEYS = ("thinking", "output_effort")
+
+    model_id = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Exact Anthropic model ID, such as claude-sonnet-5.",
+    )
+    enabled = models.BooleanField(
+        default=True, help_text="Only enabled models appear on the launch form."
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0, help_text="Lowest number is the launch form's default."
+    )
+    input_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, help_text="USD per million input tokens."
+    )
+    output_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, help_text="USD per million output tokens."
+    )
+    cache_creation_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, help_text="USD per million 5-minute cache writes."
+    )
+    cache_creation_1h_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, help_text="USD per million 1-hour cache writes."
+    )
+    cache_read_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, help_text="USD per million cache reads."
+    )
+    pricing_effective_date = models.DateField()
+    pricing_valid_through = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Optional. Launches are refused after this date.",
+    )
+    pricing_source = models.URLField(
+        default="https://platform.claude.com/docs/en/about-claude/pricing"
+    )
+    inference_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Optional request settings frozen into each run, e.g. {"thinking": '
+            '{"type": "adaptive"}, "output_effort": "low"}. Allowed keys: '
+            "thinking, output_effort."
+        ),
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["sort_order", "model_id"]
+
+    def __str__(self):
+        return self.model_id
+
+    def clean(self):
+        if not isinstance(self.inference_config, dict):
+            raise ValidationError({"inference_config": "Must be a JSON object."})
+        unknown = set(self.inference_config) - set(self.INFERENCE_CONFIG_KEYS)
+        if unknown:
+            raise ValidationError(
+                {"inference_config": "Unknown key(s): " + ", ".join(sorted(unknown))}
+            )
+
+    def pricing_entry(self):
+        """Return this model's rates in the pricing catalog's schema."""
+        entry = {
+            "effective_date": self.pricing_effective_date.isoformat(),
+            "source": self.pricing_source,
+            "rates": {
+                "input_tokens": str(self.input_rate),
+                "output_tokens": str(self.output_rate),
+                "cache_creation_input_tokens": str(self.cache_creation_rate),
+                "cache_creation_1h_input_tokens": str(self.cache_creation_1h_rate),
+                "cache_read_input_tokens": str(self.cache_read_rate),
+            },
+        }
+        if self.pricing_valid_through:
+            entry["valid_through"] = self.pricing_valid_through.isoformat()
+        return entry
+
+    @classmethod
+    def pricing_catalog(cls):
+        """Build the catalog `pricing_snapshot_for_model` validates, from enabled rows."""
+        return {
+            "schema_version": 1,
+            "currency": "USD",
+            "unit": "per_million_tokens",
+            "service_tier": "batch",
+            "models": {row.model_id: row.pricing_entry() for row in cls.objects.filter(enabled=True)},
+        }
+
+
 class ScheduleTranscription(models.Model):
     """Immutable transcription output for one schedule in one run."""
 
