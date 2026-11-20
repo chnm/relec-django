@@ -10,16 +10,17 @@ from simple_history.models import HistoricalRecords
 
 from location.models import County, PopulatedPlace
 
-URBAN_RURAL_CODES = {"u": "U", "urban": "U", "r": "R", "rural": "R"}
+URBAN_RURAL_CODES = {"u": "U", "u+": "U+", "urban": "U", "r": "R", "rural": "R"}
+URBAN_CODES = ("U", "U+")
 
 
 def normalize_urban_rural_code(value):
-    """Store urban/rural as U, R, or null; leave unrecognized values as-is."""
+    """Store urban/rural as U, U+, R, or null; leave unrecognized values as-is."""
     if not isinstance(value, str):
         return value
     if not value.strip():
         return None
-    return URBAN_RURAL_CODES.get(value.strip().casefold(), value)
+    return URBAN_RURAL_CODES.get("".join(value.split()).casefold(), value)
 
 logger = logging.getLogger(__name__)
 

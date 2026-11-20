@@ -129,7 +129,7 @@
         "census_code": {"type": ["string", "null"]},
         "division": {"type": ["string", "null"]},
         "address": {"type": ["string", "null"]},
-        "urban_rural_code": {"type": ["string", "null"], "enum": ["U", "R", null]},
+        "urban_rural_code": {"type": ["string", "null"], "enum": ["U", "U+", "R", null]},
         "membership": {"$ref": "#/$defs/membership"},
         "num_edifices": {"type": ["integer", "null"], "minimum": 0},
         "edifice_value": {"type": ["integer", "null"], "minimum": 0},
