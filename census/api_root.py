@@ -38,7 +38,13 @@ def api_root(request, format=None):
                     "families": f"{base_url}denominations/families/",
                     "by_family": f"{base_url}denominations/by_family/?family_relec=Adventist",
                     "description": "Denomination taxonomy and family classifications",
-                    "filters": ["family_census", "family_relec", "search", "page"],
+                    "filters": [
+                        "family_census",
+                        "family_relec",
+                        "search",
+                        "page",
+                        "page_size (integer, maximum 1000)",
+                    ],
                 },
                 "religious_bodies": {
                     "list": f"{base_url}religious-bodies/?page_size=10",
@@ -57,7 +63,7 @@ def api_root(request, format=None):
                         "search (string, name/address/census code)",
                         "page (integer, default page size 100)",
                         "page_size (integer, maximum 5000)",
-                        "ordering ('name' or 'census_record__schedule_id'; prefix '-' for descending)",
+                        "ordering ('name', 'id', or 'census_record__schedule_id', which sorts as a string; prefix '-' for descending)",
                         "view ('map' for a reduced high-volume response)",
                     ],
                     "examples": {
@@ -69,7 +75,7 @@ def api_root(request, format=None):
                     },
                     "response_notes": {
                         "denominations": "Array of denomination names matched by the current query filters, included alongside pagination metadata",
-                        "location_details": "Nested object with lat, lon, city_name, map_name, place_id, county_ahcb, county_name, state_name, address, urban_rural_code (U, U+, R, or null)",
+                        "location_details": "Nested object with lat, lon, city_name, map_name, place_id, county_ahcb, county_name, state_name, address, urban_rural_code (U, U+, R, or null; transcribed from the schedule, so it does not depend on has_location)",
                         "membership_details": "Full membership breakdown including education program data; null values indicate blank fields (not zero)",
                         "finances": "Financial data (expenditures, benevolences, edifice/residence values and debts)",
                         "pastors": "Array of clergy objects (principal pastor first, then assistants) with name, is_assistant, college, theological_seminary, num_other_churches_served, serving_congregation",
@@ -79,9 +85,12 @@ def api_root(request, format=None):
                         "marginalia": "Array of {page_location, marginalia_transcription} for handwritten marks on the form (null if none)",
                         "transcriptions": "Array of immutable candidate outputs with a run key, kind, and raw JSON data; agent notes are stored inside data",
                         "reconciliation": "Latest reviewer reconciliation (outcome, corrected, applied_at, edited_fields), or null; the record's own fields hold the saved result",
-                        "schedule_id": "Census schedule identifier",
+                        "id": "Stable API key for the congregation; use it for the detail endpoint",
+                        "schedule_id": "Schedule number as written on the form (string). Not unique (many schedules share a number), and a few values are not numbers",
+                        "record_id": "Unique ID of the census schedule record; the number in urls.self",
+                        "has_location": "True when the schedule is matched to a populated place with coordinates. Records without one usually still have county_ahcb, county_name, and state_name",
                         "urls.image": "Direct URL to the original census schedule image in object storage (null if not yet fetched)",
-                        "view=map": "Omits transcriptions, pastors, num_assistant_pastors, respondent, processing, and marginalia",
+                        "view=map": "Omits transcriptions, reconciliation, pastors, num_assistant_pastors, respondent, processing, and marginalia",
                     },
                 },
                 "denomination_families": {
@@ -92,6 +101,7 @@ def api_root(request, format=None):
             },
             "usage_tips": [
                 "Always use filters to limit results",
+                "Unknown query parameters on list endpoints return 400",
                 "Add ?page_size=10 to test queries before running full requests",
                 "Use bounds filter for geographic queries",
                 "Use transcription_status=approved for verified data only",

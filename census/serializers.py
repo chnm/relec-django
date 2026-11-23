@@ -98,6 +98,10 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
     finances = serializers.SerializerMethodField()
     urls = serializers.SerializerMethodField()
     schedule_id = serializers.SerializerMethodField()
+    # The number in urls.self (/census/record/N/); unique, unlike schedule_id.
+    record_id = serializers.IntegerField(
+        source="census_record.resource_id", read_only=True, allow_null=True
+    )
     has_location = serializers.SerializerMethodField()
 
     num_assistant_pastors = serializers.SerializerMethodField()
@@ -113,6 +117,7 @@ class ReligiousBodySerializer(serializers.ModelSerializer):
             "census_code",
             "division",
             "schedule_id",
+            "record_id",
             "transcriptions",
             "reconciliation",
             "has_location",
@@ -291,6 +296,7 @@ class ReligiousBodyMapSerializer(ReligiousBodySerializer):
             "census_code",
             "division",
             "schedule_id",
+            "record_id",
             "has_location",
             "location_details",
             "denomination_details",

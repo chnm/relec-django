@@ -130,6 +130,7 @@ def test_religious_body_detail_returns_complete_contract(client):
         "census_code": "B-12",
         "division": "Northern",
         "schedule_id": "CT-7",
+        "record_id": 7007,
         "transcriptions": [
             {
                 "key": "human-snapshot",
@@ -344,6 +345,7 @@ def test_religious_body_pagination_ordering_and_map_contract(client):
         "census_code",
         "division",
         "schedule_id",
+        "record_id",
         "has_location",
         "location_details",
         "denomination_details",
@@ -392,3 +394,30 @@ def test_denomination_list_detail_filter_search_and_pagination(client):
         "family_census": "Baptist bodies",
         "family_relec": "Baptist",
     }
+
+
+@pytest.mark.django_db
+def test_list_endpoints_reject_unknown_params_and_page_stably(client):
+    DenominationFactory.create_batch(3)
+    for body in ReligiousBodyFactory.create_batch(3):
+        body.census_record.schedule_id = "1"
+        body.census_record.save()
+
+    for name in ("religiousbody-list", "denomination-list"):
+        response = client.get(reverse(name), {"famly_relec": "Baptist"})
+        assert response.status_code == 400
+        assert "famly_relec" in response.json()
+        # The site maps send "_" as a cache-buster.
+        assert client.get(reverse(name), {"_": "1"}).status_code == 200
+
+    denominations = client.get(reverse("denomination-list"), {"page_size": 2}).json()
+    assert len(denominations["results"]) == 2
+
+    # Identical schedule_ids still page in a fixed order.
+    ids = [
+        client.get(reverse("religiousbody-list"), {"page_size": 1, "page": page}).json()[
+            "results"
+        ][0]["id"]
+        for page in (1, 2, 3)
+    ]
+    assert ids == sorted(ids)

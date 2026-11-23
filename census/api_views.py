@@ -6,6 +6,7 @@ from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
@@ -28,10 +29,35 @@ from .serializers import (
 )
 
 
+class RejectUnknownParamsMixin:
+    """400 on unknown list params, so a misspelled filter can't return everything."""
+
+    # "format" is DRF's renderer override; "_" is the site maps' cache-buster.
+    allowed_params = frozenset({"page", "page_size", "search", "format", "_"})
+
+    def list(self, request, *args, **kwargs):
+        unknown = sorted(set(request.query_params) - self.allowed_params)
+        if unknown:
+            raise ValidationError(
+                {name: ["Unknown query parameter."] for name in unknown}
+            )
+        return super().list(request, *args, **kwargs)
+
+
+class DenominationPagination(PageNumberPagination):
+    page_size_query_param = "page_size"
+    max_page_size = 1000
+
+
 @method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
-class DenominationViewSet(viewsets.ReadOnlyModelViewSet):
+class DenominationViewSet(RejectUnknownParamsMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Denomination.objects.all().order_by("name")
     serializer_class = DenominationSerializer
+    pagination_class = DenominationPagination
+    allowed_params = RejectUnknownParamsMixin.allowed_params | {
+        "family_census",
+        "family_relec",
+    }
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["family_census", "family_relec"]
     search_fields = ["name"]
@@ -143,7 +169,7 @@ class ReligiousBodyPagination(PageNumberPagination):
 
 
 @method_decorator(cache_page(API_CACHE_TTL), name="dispatch")
-class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
+class ReligiousBodyViewSet(RejectUnknownParamsMixin, viewsets.ReadOnlyModelViewSet):
     """
     Consolidated congregation-level endpoint.
 
@@ -164,7 +190,8 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
         - search: Search by name, address, or census code
         - page: Page number (default page size 100)
         - page_size: Number of records per page (maximum 5000 JSON, 100 HTML)
-        - ordering: Order by name or census_record__schedule_id
+        - ordering: Order by name, id, or census_record__schedule_id
+          (a string, so it sorts lexically)
         - view: Use "map" for a reduced high-volume response
     """
 
@@ -191,8 +218,19 @@ class ReligiousBodyViewSet(viewsets.ReadOnlyModelViewSet):
     ]
     filterset_class = ReligiousBodyFilter
     search_fields = ["name", "address", "census_code"]
-    ordering_fields = ["census_record__schedule_id", "name"]
+    ordering_fields = ["census_record__schedule_id", "name", "id"]
     ordering = ["census_record__schedule_id"]
+    allowed_params = (
+        RejectUnknownParamsMixin.allowed_params
+        | {"ordering", "view"}
+        | set(ReligiousBodyFilter.base_filters)
+    )
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        # schedule_id and name repeat; without a unique tiebreaker, pages can
+        # repeat or skip records.
+        return queryset.order_by(*queryset.query.order_by, "pk")
 
     def get_queryset(self):
         queryset = (

@@ -385,7 +385,12 @@
                             <tr>
                                 <td><span class="param-name">page</span></td>
                                 <td><span class="param-type">integer</span></td>
-                                <td>Page number (100 results per page)</td>
+                                <td>Page number (100 results per page by default)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">page_size</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>Number of results per page (maximum 1,000)</td>
                             </tr>
                         </tbody>
                     </table>
@@ -528,7 +533,7 @@
                             <tr>
                                 <td><span class="param-name">urban_rural</span></td>
                                 <td><span class="param-type">string</span></td>
-                                <td>Filter by "urban" or "rural"</td>
+                                <td>Filter by "urban" or "rural". The code is transcribed from the schedule itself, so it is present on many records where <code>has_location</code> is false</td>
                             </tr>
                             <tr>
                                 <td><span class="param-name">bounds</span></td>
@@ -538,7 +543,7 @@
                             <tr>
                                 <td><span class="param-name">has_location</span></td>
                                 <td><span class="param-type">boolean</span></td>
-                                <td>Filter by the presence of a populated place (<code>true</code> or <code>false</code>)</td>
+                                <td>Filter by whether the schedule is matched to a populated place with coordinates (<code>true</code> or <code>false</code>). Records where this is false usually still have county and state data</td>
                             </tr>
                             <tr>
                                 <td><span class="param-name">corrected</span></td>
@@ -563,7 +568,7 @@
                             <tr>
                                 <td><span class="param-name">ordering</span></td>
                                 <td><span class="param-type">string</span></td>
-                                <td>Order by <code>name</code> or <code>census_record__schedule_id</code>; prefix with <code>-</code> for descending order</td>
+                                <td>Order by <code>name</code>, <code>id</code>, or <code>census_record__schedule_id</code>; prefix with <code>-</code> for descending order. <code>schedule_id</code> is a string, so it sorts lexically (<code>"10"</code> before <code>"2"</code>)</td>
                             </tr>
                             <tr>
                                 <td><span class="param-name">view</span></td>
@@ -578,8 +583,10 @@
                     <ul class="list-disc list-inside text-content-secondary text-sm space-y-1 mt-2">
                         <li><code>transcriptions</code> - Array of immutable candidate outputs containing a run <code>key</code>, a <code>kind</code>, and raw JSON <code>data</code>; agent notes are stored inside <code>data</code></li>
                         <li><code>reconciliation</code> - Latest reviewer reconciliation, or <code>null</code>: <code>outcome</code> (<code>retained_current</code>, <code>promoted_candidate</code>, <code>mixed</code>, or <code>rolled_back</code>), <code>corrected</code> (true when the saved result matches no single transcription), <code>applied_at</code>, and <code>edited_fields</code> (fields the reviewer typed by hand). The saved result itself is the record's own fields, never an entry in <code>transcriptions</code></li>
-                        <li><code>schedule_id</code> - Census schedule identifier (string)</li>
-                        <li><code>has_location</code> - Whether the schedule has a populated place</li>
+                        <li><code>id</code> - Stable API key for the congregation; use it for the detail endpoint</li>
+                        <li><code>schedule_id</code> - Schedule number as written on the form (string). Not unique (many schedules share a number), and a few values are not numbers</li>
+                        <li><code>record_id</code> - Unique ID of the census schedule record; the number in <code>urls.self</code></li>
+                        <li><code>has_location</code> - Whether the schedule is matched to a populated place with coordinates. When false, <code>lat</code>, <code>lon</code>, and <code>city_name</code> are null, but <code>county_ahcb</code>, <code>county_name</code>, and <code>state_name</code> are usually still present</li>
                         <li><code>location_details</code> - Nested object with <code>lat</code>, <code>lon</code>, <code>city_name</code>, <code>map_name</code>, <code>place_id</code>, <code>county_ahcb</code>, <code>county_name</code>, <code>state_name</code>, <code>address</code>, and <code>urban_rural_code</code> (<code>U</code>, <code>U+</code>, <code>R</code>, or <code>null</code>)</li>
                         <li><code>denomination_details</code> - Nested object with <code>id</code>, <code>denomination_id</code>, name, and family classifications</li>
                         <li><code>membership_details</code> - Full membership breakdown: sex/age demographics, Sunday school, VBS, weekday school, and parochial school data</li>
@@ -602,6 +609,7 @@
   "census_code": "003",
   "division": null,
   "schedule_id": "1234",
+  "record_id": 8370,
   "transcriptions": [
     {
       "key": "human-snapshot",
@@ -665,7 +673,7 @@
   "processing": {"date_received": "1926-05-10", "district_stamp": "1", "denomination_code_stamp": "003"},
   "marginalia": null,
   "urls": {
-    "self": "https://religiousecologies.org/census/record/1234/",
+    "self": "https://religiousecologies.org/census/record/8370/",
     "image": "https://example.org/census-images/1234.jpg",
     "family_census": "https://religiousecologies.org/census/browser/?family=Adventist+bodies",
     "family_relec": "https://religiousecologies.org/census/browser/?family=Adventist&denomination=2"
@@ -754,6 +762,7 @@
                     <h4 class="font-semibold mb-3">Best Practices</h4>
                     <ul class="list-disc list-inside text-content-secondary space-y-2">
                         <li><strong>Always use filters</strong> to limit results and improve response times</li>
+                        <li>List endpoints return <code>400</code> for query parameters they don't recognize, so a misspelled filter fails instead of returning every record</li>
                         <li>Add <code>?page_size=10</code> to test queries before running full requests</li>
                         <li>Use <code>bounds</code> filter for geographic queries</li>
                         <li>Use <code>transcription_status=approved</code> for verified data only</li>
